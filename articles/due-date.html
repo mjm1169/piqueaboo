@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What is a due date? — Piqueaboo</title>
+<meta name="description" content="An interactive explainer on why a pregnancy due date is a median rather than a prediction — and why it keeps drifting later the longer you wait.">
+<link rel="icon" type="image/svg+xml" href="../assets/logos/piqueaboo-logo.svg">
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+  body{ -webkit-font-smoothing:antialiased; }
+
+  /* ---------- layout ---------- */
+
+  .wrapper{
+    max-width:1200px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns: 46% 54%;
+  }
+
+  .visual-col{
+    position:sticky;
+    top:var(--header-h, 0px);
+    height:calc(100vh - var(--header-h, 0px));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+
+  .visual-inner{
+    position:relative;
+    width:100%;
+    max-width:520px;
+  }
+
+  .chart{
+    width:100%;
+    height:auto;
+    display:block;
+    position:absolute;
+    top:0; left:0;
+    opacity:0;
+    transition:opacity .6s ease;
+  }
+  .chart.visible{ opacity:1; position:relative; }
+
+  /* Live "+N days vs. original" readout for the day-by-day scrub — off
+     the chart itself (as plain text below it) so it can never collide
+     with the on-chart Today / New due date labels. */
+  .scrub-readout{
+    position:absolute;
+    left:0; right:0;
+    bottom:-30px;
+    text-align:center;
+    font-size:13px;
+    font-weight:300;
+    color:var(--muted);
+    opacity:0;
+    transition:opacity .3s ease;
+  }
+  .scrub-readout.visible{ opacity:1; }
+
+  .text-col{
+    padding: 0 40px;
+  }
+
+  .intro, .outro{
+    padding: 24px 0 48px 0;
+    max-width:640px;
+  }
+
+  .intro{ padding-top:18vh; }
+  .outro{ padding-bottom:24vh; }
+
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:12px;
+    font-weight:500;
+    color:var(--accent-step);
+    margin-bottom:12px;
+  }
+
+  .step{
+    min-height:80vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    max-width:560px;
+    padding: 8vh 0;
+  }
+
+  .step p, .step h2, .step h3{
+    opacity:.35;
+    transition:opacity .4s ease;
+  }
+  .step.active p, .step.active h2, .step.active h3{
+    opacity:1;
+  }
+
+  .step h2{ font-size:26px; }
+
+  /* 'return' is pinned (sticky) for a stretch of scroll so the reader
+     watches the chart tick from 35w with the text held still, rather than
+     scrolling the text away over blank space. Its wrapper's real height
+     is calculated and set in JS (calibratePin()) to match the same pace
+     as the rest of the scrub — this value is just a pre-JS fallback. */
+  .pin-wrap{ position:relative; min-height:60vh; }
+
+  .step.pin-step{
+    position:sticky;
+    top:var(--header-h, 0px);
+    height:calc(100vh - var(--header-h, 0px));
+    min-height:0;
+  }
+
+  /* Short unpinned run-up from where the pin releases (~37w) to the 38w
+     milestone below — both chart and (once there's something to show)
+     text scroll normally through here. Height set in JS alongside the pin. */
+  .scrub-lead{ min-height:30vh; }
+
+  .card{
+    background:var(--surface);
+    border-left:3px solid var(--accent);
+    border-radius:0 8px 8px 0;
+    padding: 16px 20px 16px 17px;
+    margin: 8px 0 16px 0;
+    font-size:15px;
+  }
+  .card.note{ border-left-color:var(--muted); color:var(--muted); font-weight:300; }
+  .card.aside{ border-left-color:var(--accent); color:var(--ink); font-style:italic; }
+
+  /* ---------- info icon / tooltip ---------- */
+
+  .meta-line{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    position:relative;
+  }
+
+  .info-icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    border:1px solid var(--muted);
+    color:var(--muted);
+    background:none;
+    font-family:'Poppins', sans-serif;
+    font-size:10px;
+    font-weight:500;
+    line-height:1;
+    cursor:pointer;
+    padding:0;
+    flex:none;
+  }
+
+  .info-icon:hover,
+  .info-icon:focus-visible,
+  .info-icon.open{
+    border-color:var(--accent-step);
+    color:var(--accent-step);
+    outline:none;
+  }
+
+  .info-tooltip{
+    position:absolute;
+    top:calc(100% + 8px);
+    left:0;
+    z-index:5;
+    width:260px;
+    background:var(--surface);
+    border-left:3px solid var(--muted);
+    border-radius:0 8px 8px 0;
+    padding:12px 16px 12px 13px;
+    font-size:13px;
+    font-weight:300;
+    color:var(--muted);
+    line-height:1.5;
+    box-shadow:0 6px 20px rgba(0,0,0,.12);
+    opacity:0;
+    transform:translateY(-4px);
+    pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+  }
+
+  .info-icon:hover + .info-tooltip,
+  .info-icon:focus-visible + .info-tooltip,
+  .info-tooltip.open{
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+  }
+
+  /* ---------- svg chart elements ---------- */
+
+  .axis text{
+    font-family:'Poppins', sans-serif;
+    font-weight:300;
+    font-size:13px;
+    fill:var(--muted);
+  }
+  .axis line{ stroke:var(--muted); stroke-width:1; opacity:.4; }
+
+  .curve-outline{ fill:none; stroke:var(--ink); stroke-width:2; }
+
+  .region{ opacity:0; transition:opacity .5s ease; }
+  .region.visible{ opacity:.55; }
+
+  .modeline{
+    fill:var(--positive-step);
+    opacity:0;
+    transition:opacity .5s ease; /* position never eases in — it should just appear */
+  }
+  .modeline.visible{ opacity:1; }
+
+  .fade-overlay{
+    fill:var(--canvas);
+    opacity:0;
+    transition:opacity .6s ease, width .6s ease, x .6s ease;
+  }
+  .fade-overlay.visible{ opacity:.82; }
+
+  .refline{
+    fill:var(--muted);
+    opacity:0;
+    transition:opacity .5s ease; /* position never eases in — it should just appear */
+  }
+  .refline.visible{ opacity:.5; }
+
+  .curline{
+    fill:var(--ink);
+    opacity:0;
+    transition:opacity .5s ease; /* position never eases in — it should just appear */
+  }
+  .curline.visible{ opacity:1; }
+
+  .todayline{
+    fill:var(--ink);
+    opacity:0;
+    transition:opacity .5s ease, x .6s ease;
+  }
+  .todayline.visible{ opacity:1; }
+
+  .chart-label{
+    font-family:'Poppins', sans-serif;
+    font-size:13px;
+    opacity:0;
+    transition:opacity .5s ease, x .5s ease, y .5s ease;
+  }
+  .chart-label.visible{ opacity:1; }
+  .chart-label.strong{ font-weight:500; font-size:15px; }
+
+  /* 50%-area labels: bigger, centered, and sat inside the shaded region */
+  .chart-label.pct{ font-weight:600; font-size:22px; text-anchor:middle; }
+
+  /* whichever of a close pair of labels sits further left grows away to
+     the left instead of growing toward its neighbour */
+  .chart-label.anchor-end{ text-anchor:end; }
+
+  /* "most likely day" label paired with the main green mode region */
+  .chart-label.mode-label{ fill:var(--positive-step); }
+
+  .bar{
+    fill:var(--muted);
+    opacity:.5;
+    transition: y .6s ease, height .6s ease, fill .5s ease, opacity .6s ease;
+  }
+  .bar.on{ fill:var(--accent); opacity:1; }
+  .bar.off{ fill:var(--muted); opacity:1; }
+  .bar.gone{ opacity:0; }
+  .bar.split-a{ fill:var(--accent); opacity:1; }
+  .bar.split-b{ fill:var(--negative); opacity:1; }
+
+  .dice-label{
+    font-family:'Poppins', sans-serif;
+    font-weight:400;
+    font-size:16px;
+    fill:var(--ink);
+  }
+
+  /* ---------- responsive ---------- */
+
+  @media (max-width: 860px){
+    .wrapper{ grid-template-columns: 1fr; }
+    .visual-col{
+      position:sticky;
+      top:var(--header-h, 0px);
+      height:46vh;
+      padding:16px;
+      background:var(--canvas);
+      z-index:2;
+    }
+    .text-col{ padding:0 20px; }
+    .intro{ padding-top:6vh; }
+    .step{ min-height:56vh; padding:6vh 0; }
+    .scrub-lead{ min-height:40vh; }
+
+    /* .visual-col is a 46vh band up top here, not the full viewport, so
+       the pinned text has to stick below it rather than at the very top
+       — otherwise it would sit directly on top of the sticky chart. */
+    .step.pin-step{
+      top:calc(var(--header-h, 0px) + 46vh);
+      height:calc(100vh - var(--header-h, 0px) - 46vh);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body class="article-page">
+
+<div class="wrapper">
+
+  <div class="visual-col">
+    <div class="visual-inner">
+
+      <!-- ===================== gestation chart ===================== -->
+      <svg id="gestation-chart" class="chart" viewBox="0 0 600 440" xmlns="http://www.w3.org/2000/svg">
+        <g class="axis" id="g-axis"></g>
+
+        <!-- shaded probability regions, drawn before the outline so the outline sits on top -->
+        <path id="g-region-left" class="region" fill="var(--accent)"></path>
+        <path id="g-region-right" class="region" fill="var(--negative)"></path>
+
+        <!-- curve outline -->
+        <path id="g-curve-outline" class="curve-outline"></path>
+
+        <!-- overlay that greys out the "ruled out" portion of the curve -->
+        <rect id="g-fade-overlay" class="fade-overlay" y="56" height="324"></rect>
+
+        <!-- reference lines: original due date (dotted), previous updated median (dashed), current (solid) -->
+        <rect id="g-line-original" class="refline" y="20" width="2" height="370"></rect>
+        <rect id="g-line-prev" class="refline" y="20" width="2" height="370"></rect>
+        <rect id="g-line-current" class="curline" y="20" width="2" height="370"></rect>
+        <rect id="g-today-line" class="todayline" y="20" width="2" height="370"></rect>
+        <!-- solid line marker for the mode (most likely day) — a translucent
+             area fill this narrow (~1 day wide) read as muddy blended into
+             the pink beneath it, so it's a crisp opaque line instead,
+             matching how the other single-day markers are drawn -->
+        <rect id="g-mode-line" class="modeline" y="20" width="3" height="370"></rect>
+
+        <g id="g-labels"></g>
+      </svg>
+
+      <!-- ===================== dice chart ===================== -->
+      <svg id="dice-chart" class="chart" viewBox="0 0 600 440" xmlns="http://www.w3.org/2000/svg">
+        <g class="axis" id="d-axis"></g>
+        <g id="d-bars"></g>
+        <g id="d-labels"></g>
+      </svg>
+
+      <div class="scrub-readout" id="scrub-readout" aria-live="polite"></div>
+
+    </div>
+  </div>
+
+  <div class="text-col">
+
+    <div class="intro">
+      <div class="eyebrow">A short explainer</div>
+      <h1>What is a due date?</h1>
+      <p class="muted meta-line">
+        Publish date · Reading time: 3 mins
+        <button type="button" class="info-icon" id="about-data-btn" aria-label="About the data" aria-describedby="about-data-tip">i</button>
+        <span class="info-tooltip" id="about-data-tip" role="tooltip">
+          <strong>About the data.</strong> The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made, so don't take any of this as clinical advice.
+        </span>
+      </p>
+      <p>I didn't know either. But if you think about it for a moment, you'll probably land close to the real answer.</p>
+    </div>
+
+    <!-- ===================== GROUP A: what is a due date ===================== -->
+
+    <section class="step" data-group="gestation" data-step="intro">
+      <h2>The due date is a median</h2>
+      <p>A due date is the date on which the baby is 50% likely to have been born, on or before. In other words, it's the <strong>median</strong> of the distribution of when spontaneous labour begins.</p>
+      <p class="muted">The curve on the left shows that distribution. The higher the line is, the greater chance that the baby will be born on that day.</p>
+    </section>
+
+    <section class="step" data-group="gestation" data-step="regions">
+      <p>We can visualise the due date using this probability curve. The blue area on the left represents the 50% chance of the baby arriving on or before the due date, and the pink area on the right is the other 50% (the chance of it arriving after the due date).</p>
+    </section>
+
+    <section class="step" data-group="gestation" data-step="line">
+      <p>The line between them (the vertical line that splits the area into two equal halves) is the due date.</p>
+    </section>
+
+    <section class="step" data-group="gestation" data-step="mode">
+      <p>Interestingly, the due date isn't the single most likely day for the baby to be born. Because of the skewed shape, the peak of the curve (the mode) falls a couple of days after the due date.</p>
+    </section>
+
+    <!-- ===================== GROUP B: conditional probability / dice ===================== -->
+
+    <section class="step" data-group="dice" data-step="dice-intro">
+      <h2>A quick detour: conditional probability</h2>
+      <p>Before we go further, it's worth being clear on one idea: conditional probability. That's maths-speak for something simple: <span class="muted">how your beliefs change once you have more information.</span></p>
+      <p>Imagine a die has been rolled, and you haven't seen the result yet.</p>
+    </section>
+
+    <section class="step" data-group="dice" data-step="dice-half">
+      <p>Three of the six faces — 4, 5 and 6 — are highlighted. Each face is equally likely, so there's a 50% chance the roll was at least 4.</p>
+    </section>
+
+    <section class="step" data-group="dice" data-step="dice-condition">
+      <p>Now imagine you're told something new: someone tells you the roll wasn't a 1 or a 2. We can rule those two options out entirely.</p>
+    </section>
+
+    <section class="step" data-group="dice" data-step="dice-newhalf">
+      <p>With 1 and 2 ruled out, only 3, 4, 5 and 6 remain, each still equally likely. Now it's 3 and 4 that make up the "lower" half. So we know there's a 50% chance the roll was at least <strong>5</strong>.</p>
+      <p class="muted">The new information changed our perception of the value of the die and shifted where the halfway point sits.</p>
+    </section>
+
+    <!-- ===================== GROUP C: back to due dates ===================== -->
+
+    <!-- Continuous day-by-day scrub zone: as you scroll through this track,
+         "today" advances one day at a time rather than snapping between
+         fixed points. See updateScrub() in the script below. -->
+    <div class="scrub-track" id="today-scrub">
+
+      <!-- 'return's text is pinned in place (sticky) while the reader
+           scrolls through this section — the chart (already showing the
+           blue/pink split, today, and new-due-date from 35w0d) is what
+           moves, until "today" nears 37w and the pin releases into the
+           short unpinned run-up to the 38w milestone below. -->
+      <div class="pin-wrap" id="pin-wrap">
+        <section class="step pin-step" data-group="gestation" data-step="return">
+          <h2>Now, back to the due date</h2>
+          <p>The same logic applies to pregnancy. Let's imagine we're ticking along, day by day.</p>
+          <p>Every day that goes by with no baby coming means we know a little bit more information about when the baby is due — it must be a day in the future.</p>
+        </section>
+      </div>
+
+      <div class="scrub-lead" id="scrub-lead" aria-hidden="true"></div>
+
+      <section class="step" data-group="gestation" data-step="today-38">
+        <p>Say we reach 38 weeks and the baby still hasn't arrived. Just like ruling out the 1 and 2 on the die, we can rule out everything to the left of "today."</p>
+        <p>The halfway point of what's <em>left</em> has shifted slightly later than the original due date.</p>
+      </section>
+
+      <section class="step" data-group="gestation" data-step="today-39">
+        <p>And it keeps moving: progress to 39 weeks, still no baby, and the same thing happens again — rule out more of the curve, and the new 50% mark drifts later still.</p>
+      </section>
+
+      <section class="step" data-group="gestation" data-step="today-41">
+        <p>If the baby still hasn't arrived by the original due date, the "updated due date" is now several days further into the future.</p>
+        <div class="card aside">We'll stop there, since realistically, if you've made it to your due date and the baby hasn't come yet, you'll probably have more pressing things on your mind than conditional probability.</div>
+      </section>
+
+    </div>
+
+    <div class="outro">
+      <h2>So, in summary</h2>
+      <p>If you use the median definition of "due date" throughout a pregnancy and keep recalculating it, it keeps receding. Every day you don't go into labour pushes the "50%-likely date" a little further away.</p>
+      <p>Of course, once the baby arrives, you'll have neither the time, the energy, nor the mental faculty left to think about any of this.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(async function(){
+
+  /* =========================================================
+     1. DATA: precomputed gestational-age probability curve
+     Generated by generate-due-date-pdf.js from the source daily-
+     probability table (35+0 to 42+5 weeks, smoothed with a Gaussian
+     kernel, sigma = 1.3 days) and read here from CSV rather than
+     recomputed on every page load. Re-run that script and this file
+     will pick up the new numbers automatically.
+     ========================================================= */
+
+  // Display range: what the chart actually plots (35+0 to 44+2 weeks).
+  var DISPLAY_MIN = 245, DISPLAY_MAX = 310;
+
+  var grid = [], pdfVals = [], cdfVals = [];
+  var res = await fetch('due-date-pdf.csv');
+  var text = await res.text();
+  var lines = text.trim().split('\n');
+  for(var i=1;i<lines.length;i++){
+    var parts = lines[i].split(',');
+    grid.push(parseFloat(parts[0]));
+    pdfVals.push(parseFloat(parts[1]));
+    cdfVals.push(parseFloat(parts[2]));
+  }
+
+  var GRID_N = grid.length - 1;
+  var DOMAIN_MIN = grid[0], DOMAIN_MAX = grid[grid.length-1];
+
+  var MAX_PDF = Math.max.apply(null, pdfVals);
+
+  function cdfAt(day){
+    if(day<=DOMAIN_MIN) return 0;
+    if(day>=DOMAIN_MAX) return 1;
+    var step=(DOMAIN_MAX-DOMAIN_MIN)/GRID_N;
+    var idx=(day-DOMAIN_MIN)/step;
+    var i0=Math.floor(idx), i1=Math.min(i0+1,GRID_N);
+    var f=idx-i0;
+    return cdfVals[i0]*(1-f)+cdfVals[i1]*f;
+  }
+  function quantile(p){
+    for(var i=1;i<cdfVals.length;i++){
+      if(cdfVals[i]>=p){
+        var c0=cdfVals[i-1], c1=cdfVals[i];
+        var f=(p-c0)/(c1-c0||1);
+        return grid[i-1] + f*(grid[i]-grid[i-1]);
+      }
+    }
+    return DOMAIN_MAX;
+  }
+  function pdfAt(day){
+    if(day<=DOMAIN_MIN || day>=DOMAIN_MAX) return 0;
+    var step=(DOMAIN_MAX-DOMAIN_MIN)/GRID_N;
+    var idx=(day-DOMAIN_MIN)/step;
+    var i0=Math.floor(idx), i1=Math.min(i0+1,GRID_N);
+    var f=idx-i0;
+    return pdfVals[i0]*(1-f)+pdfVals[i1]*f;
+  }
+  var MODE_DAY = grid[pdfVals.indexOf(MAX_PDF)]; // ~282, i.e. 40+2
+
+  // The due date is defined as 40+0 weeks (280 days) by convention
+  // (Naegele's rule) — anchored directly rather than read off the
+  // smoothed curve, whose data-derived median lands a few hours later
+  // (~280.4) than the clinical definition.
+  var MEDIAN_DAY = 280;
+
+  // conditionalMedian() reads its answer off the smoothed curve via
+  // quantile(), so on its own it would report ~280.4 (the curve's own
+  // median) rather than exactly MEDIAN_DAY at the very start of the
+  // scrub (when today is far enough back that ~nothing is ruled out).
+  // Calibrate by that small, constant offset so "today" at the start of
+  // the range reads as exactly 40w + 0d, matching the due date shown
+  // everywhere else, instead of drifting to 40w + 1d on rounding alone.
+  var MEDIAN_CALIBRATION = MEDIAN_DAY - quantile(0.5);
+
+  function conditionalMedian(todayDay){
+    var base = cdfAt(todayDay);
+    var target = base + (1-base)/2;
+    return quantile(target) + MEDIAN_CALIBRATION;
+  }
+
+  function weeksLabel(day){
+    day = Math.round(day); // day may be fractional during continuous scrubbing
+    var w = Math.floor(day/7);
+    var d = day - w*7;
+    if(d===7){ w+=1; d=0; }
+    return w+'w + '+d+'d';
+  }
+
+  /* =========================================================
+     2. CHART GEOMETRY (gestation chart)
+     ========================================================= */
+
+  // top:56 (rather than a tighter 30) leaves permanent headroom above the
+  // curve's tallest possible point for the two-row label stack — without
+  // it, a label landing near the peak (e.g. "New due date" early in the
+  // scrub, when it sits right on the mode) had nowhere clear to sit.
+  var PLOT = { left:50, right:570, top:56, bottom:380 };
+  var PW = PLOT.right-PLOT.left, PH = PLOT.bottom-PLOT.top;
+
+  function xScale(day){ return PLOT.left + (day-DISPLAY_MIN)/(DISPLAY_MAX-DISPLAY_MIN)*PW; }
+  function yScale(p){ return PLOT.bottom - (p/MAX_PDF)*PH; }
+
+  function curvePoints(dMin,dMax){
+    var pts=[];
+    for(var i=0;i<=GRID_N;i++){
+      var day=grid[i];
+      if(day<dMin-1e-9 || day>dMax+1e-9) continue;
+      pts.push([xScale(day), yScale(pdfVals[i])]);
+    }
+    return pts;
+  }
+  function areaPath(dMin,dMax){
+    var pts=curvePoints(dMin,dMax);
+    if(pts.length<2) return '';
+    var d='M'+pts[0][0].toFixed(2)+','+PLOT.bottom;
+    for(var i=0;i<pts.length;i++) d+=' L'+pts[i][0].toFixed(2)+','+pts[i][1].toFixed(2);
+    d+=' L'+pts[pts.length-1][0].toFixed(2)+','+PLOT.bottom+' Z';
+    return d;
+  }
+  function outlinePath(){
+    var pts=curvePoints(DISPLAY_MIN,DISPLAY_MAX);
+    var d='M'+pts[0][0].toFixed(2)+','+pts[0][1].toFixed(2);
+    for(var i=1;i<pts.length;i++) d+=' L'+pts[i][0].toFixed(2)+','+pts[i][1].toFixed(2);
+    return d;
+  }
+
+  // Shared y for a pair of area labels: sits inside both shaded regions
+  // (below whichever of the two curve heights is shallower) and level
+  // with each other, rather than each drifting to its own local height.
+  function pairedAreaLabelY(dayA, dayB){
+    var yA = yScale(pdfAt(dayA)), yB = yScale(pdfAt(dayB));
+    var yShallow = Math.max(yA, yB);
+    return yShallow + (PLOT.bottom-yShallow)*0.45;
+  }
+
+  var LABEL_GAP = 6; // px kept clear between a label and the line/edge it marks
+
+  // The two stacked label rows above the chart. A text baseline this
+  // close to the SVG's own top edge (y=0) still clips — the glyphs'
+  // ascenders reach roughly 12px above the baseline for this font size,
+  // so row 1 needs to sit at y=20 (not y=10-12, which put the ascender
+  // above y=0) to actually stay on-canvas. PLOT.top leaves headroom below
+  // row 2 for exactly this pair.
+  var LABEL_ROW1 = 20;
+  var LABEL_ROW2 = 44;
+
+  // build axis (weeks 35 -> 44)
+  (function buildAxis(){
+    var axis=document.getElementById('g-axis');
+    var html='';
+    html+='<line x1="'+PLOT.left+'" y1="'+PLOT.bottom+'" x2="'+PLOT.right+'" y2="'+PLOT.bottom+'"></line>';
+    for(var wk=35; wk<=44; wk++){
+      var day=wk*7;
+      if(day<DISPLAY_MIN||day>DISPLAY_MAX) continue;
+      var x=xScale(day);
+      html+='<line x1="'+x+'" y1="'+PLOT.bottom+'" x2="'+x+'" y2="'+(PLOT.bottom+6)+'"></line>';
+      html+='<text x="'+x+'" y="'+(PLOT.bottom+24)+'" text-anchor="middle">'+wk+'w</text>';
+    }
+    axis.innerHTML=html;
+  })();
+
+  document.getElementById('g-curve-outline').setAttribute('d', outlinePath());
+
+  var elRegionLeft = document.getElementById('g-region-left');
+  var elRegionRight = document.getElementById('g-region-right');
+  var elModeLine = document.getElementById('g-mode-line');
+  var elOverlay = document.getElementById('g-fade-overlay');
+  var elLineOriginal = document.getElementById('g-line-original');
+  var elLinePrev = document.getElementById('g-line-prev');
+  var elLineCurrent = document.getElementById('g-line-current');
+  var elTodayLine = document.getElementById('g-today-line');
+  var elLabels = document.getElementById('g-labels');
+
+  function setLineX(el, day, dashed){
+    el.setAttribute('x', xScale(day)-1);
+  }
+
+  function label(id, x, y, text, cls){
+    var t = document.getElementById(id);
+    if(!t){
+      t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('id', id);
+      elLabels.appendChild(t);
+    }
+    // Re-applied every call (not just on creation) — the same label id is
+    // reused across steps with different anchoring/colour, e.g. 'lbl-due'
+    // is right-anchored next to the mode label but left-anchored elsewhere.
+    t.setAttribute('class', 'chart-label '+(cls||''));
+    t.setAttribute('x', x);
+    t.setAttribute('y', y);
+    t.textContent = text;
+    return t;
+  }
+  function showLabel(id){ var t=document.getElementById(id); if(t) t.classList.add('visible'); }
+  function hideAllLabels(){
+    var all = elLabels.querySelectorAll('.chart-label');
+    all.forEach(function(t){ t.classList.remove('visible'); });
+  }
+
+  /* =========================================================
+     3. GESTATION CHART: render per step
+     ========================================================= */
+
+  var elScrubReadout = document.getElementById('scrub-readout');
+
+  function clearRegions(){
+    [elRegionLeft, elRegionRight].forEach(function(e){ e.classList.remove('visible'); });
+    [elLineOriginal, elLinePrev, elLineCurrent, elTodayLine, elModeLine].forEach(function(e){ e.classList.remove('visible'); });
+    elOverlay.classList.remove('visible');
+    hideAllLabels();
+    elScrubReadout.classList.remove('visible');
+  }
+
+  function renderGestation(step){
+    clearRegions();
+
+    if(step==='intro'){
+      // just the bare curve, nothing shaded
+    }
+
+    else if(step==='regions'){
+      elRegionLeft.setAttribute('d', areaPath(DISPLAY_MIN, MEDIAN_DAY));
+      elRegionLeft.classList.add('visible');
+      elRegionRight.setAttribute('d', areaPath(MEDIAN_DAY, DISPLAY_MAX));
+      elRegionRight.classList.add('visible');
+      // Label each half at its own centre of mass (the median of that
+      // half), so the "50%" sits inside the fuller part of the shape
+      // rather than floating above a possibly-thin bit of curve — but
+      // level with each other rather than each finding its own height.
+      var leftDay50 = quantile(0.25), rightDay50 = quantile(0.75);
+      var y50 = pairedAreaLabelY(leftDay50, rightDay50);
+      label('lbl-left50', xScale(leftDay50), y50, '50%', 'pct');
+      label('lbl-right50', xScale(rightDay50), y50, '50%', 'pct');
+      showLabel('lbl-left50'); showLabel('lbl-right50');
+    }
+
+    else if(step==='line'){
+      elRegionLeft.setAttribute('d', areaPath(DISPLAY_MIN, MEDIAN_DAY));
+      elRegionLeft.classList.add('visible');
+      elRegionRight.setAttribute('d', areaPath(MEDIAN_DAY, DISPLAY_MAX));
+      elRegionRight.classList.add('visible');
+      setLineX(elLineCurrent, MEDIAN_DAY);
+      elLineCurrent.classList.add('visible');
+      label('lbl-due', xScale(MEDIAN_DAY)+LABEL_GAP, LABEL_ROW1, 'Due date · '+weeksLabel(MEDIAN_DAY), 'strong');
+      showLabel('lbl-due');
+    }
+
+    else if(step==='mode'){
+      elRegionLeft.setAttribute('d', areaPath(DISPLAY_MIN, MEDIAN_DAY));
+      elRegionLeft.classList.add('visible');
+      elRegionRight.setAttribute('d', areaPath(MEDIAN_DAY, DISPLAY_MAX));
+      elRegionRight.classList.add('visible');
+      setLineX(elLineCurrent, MEDIAN_DAY);
+      elLineCurrent.classList.add('visible');
+      setLineX(elModeLine, MODE_DAY);
+      elModeLine.classList.add('visible');
+      // Due date and mode sit only ~2 days apart (~16px), so a row-only
+      // split isn't enough separation — each label also grows in the
+      // opposite direction from the other: due date right, mode left.
+      label('lbl-due', xScale(MEDIAN_DAY)+LABEL_GAP, LABEL_ROW1, 'Due date · '+weeksLabel(MEDIAN_DAY), 'strong');
+      label('lbl-mode', xScale(MODE_DAY)-LABEL_GAP, LABEL_ROW2, 'Most likely day · '+weeksLabel(MODE_DAY), 'strong mode-label anchor-end');
+      showLabel('lbl-due'); showLabel('lbl-mode');
+    }
+
+    // 'return' / 'today-38' / 'today-39' / 'today-41' are all handled
+    // continuously by renderTodayContinuous(), driven by scroll position
+    // — see below.
+  }
+
+  /* =========================================================
+     3b. CONTINUOUS "TODAY" SCRUBBING
+     Rather than snapping between three fixed days (38, 39, 40 weeks),
+     "today" advances one day at a time as the reader scrolls through
+     #today-scrub, so the chart updates in lockstep with the scroll bar.
+     ========================================================= */
+
+  // The counter starts ticking from 35w0d as soon as 'return' is pinned,
+  // runs to ~37w4d over the pinned stretch, continues unpinned through a
+  // short blank run-up to 38w0d, then covers 38w0d -> 40w0d in step with
+  // the three labelled milestones.
+  //
+  // SCRUB_DAY_PIN_END is the one knob for both "pin lasts longer" and
+  // "gap before 38w is shorter": calibrateScrubTiming() below sizes the
+  // pin's height off (PIN_END - START) and the gap's height off
+  // (MILESTONE - PIN_END), so moving PIN_END later grows the first span
+  // and shrinks the second, in lockstep, at the same days-per-pixel rate.
+  var SCRUB_DAY_START = 245;    // 35+0 weeks — pin engages here
+  var SCRUB_DAY_PIN_END = 265;  // 37+6 weeks — pin releases here
+  var SCRUB_DAY_MILESTONE = 266; // 38+0 weeks — where the run-up hands off
+  var SCRUB_DAY_END = 280;      // 40+0 weeks, i.e. MEDIAN_DAY
+
+  function renderTodayContinuous(todayDay){
+    var newMedian = conditionalMedian(todayDay);
+
+    // grey out everything ruled out (left of today)
+    elOverlay.setAttribute('x', PLOT.left);
+    elOverlay.setAttribute('width', Math.max(0, xScale(todayDay)-PLOT.left));
+    elOverlay.classList.add('visible');
+
+    // shade remaining 50/50 split
+    elRegionLeft.setAttribute('d', areaPath(todayDay, newMedian));
+    elRegionLeft.classList.add('visible');
+    elRegionRight.setAttribute('d', areaPath(newMedian, DISPLAY_MAX));
+    elRegionRight.classList.add('visible');
+    elModeLine.classList.remove('visible');
+
+    // reference lines: always show the very original due date as a faint marker
+    setLineX(elLineOriginal, MEDIAN_DAY);
+    elLineOriginal.classList.add('visible');
+
+    // today marker
+    setLineX(elTodayLine, todayDay);
+    elTodayLine.classList.add('visible');
+
+    // current updated median
+    setLineX(elLineCurrent, newMedian);
+    elLineCurrent.classList.add('visible');
+
+    var diff = Math.round(newMedian - MEDIAN_DAY);
+    // "Today" always grows rightward from its line — never left. It's
+    // the leftmost of the two markers here, and "today" never goes past
+    // 40w0d, well short of the chart's right edge, so there's always
+    // room to its right. (This used to flip to a left-growing anchor
+    // when there seemed to be room, to visually separate it from "new
+    // due date" — but detecting "enough room" via a guessed threshold,
+    // then via a measured-width check, both still let it clip off the
+    // left edge in practice. Growing right unconditionally can't clip at
+    // all, and the two labels already sit on separate rows below, which
+    // is what actually keeps them from colliding.)
+    label('lbl-today', xScale(todayDay)+LABEL_GAP, LABEL_ROW1, 'Today · '+weeksLabel(todayDay), 'strong');
+    label('lbl-due', xScale(newMedian)+LABEL_GAP, LABEL_ROW2, 'New due date · '+weeksLabel(newMedian), 'strong');
+    showLabel('lbl-today'); showLabel('lbl-due');
+
+    // "+N days vs. original" lives as plain text below the chart rather
+    // than as a third on-chart label competing for space with the two above.
+    elScrubReadout.textContent = (diff>0 ? '+' : '')+diff+' days vs. the original due date';
+    elScrubReadout.classList.add('visible');
+  }
+
+  // While scrubbing, drop the "x" transition so the marker tracks the
+  // scroll position exactly instead of chasing it on a 0.6s ease.
+  var scrubEls = [elOverlay, elLineOriginal, elLineCurrent, elTodayLine, elRegionLeft, elRegionRight];
+  var isScrubbing = false;
+  function setScrubbing(on){
+    if(on === isScrubbing) return;
+    isScrubbing = on;
+    scrubEls.forEach(function(el){
+      el.style.transitionProperty = on ? 'opacity' : '';
+      el.style.transitionDuration = on ? '.2s' : '';
+    });
+  }
+
+  var scrubTrack = document.getElementById('today-scrub');
+  var scrubLead = document.getElementById('scrub-lead');
+  var scrubPinWrap = document.getElementById('pin-wrap');
+  var scrubRAF = null;
+
+  // Size the pinned 'return' section and the short unpinned run-up after
+  // it so "today" advances at the exact same days-per-pixel rate in both
+  // as it does across the three labelled sections below — otherwise the
+  // line visibly changes speed at each handoff. Measured (not hardcoded)
+  // so it stays correct however tall .step/.pin-wrap/.scrub-lead end up
+  // being, and recalculated on resize since it also depends on viewport
+  // height (the sticky chart "eats" one viewport-height of scroll
+  // distance at the very end of the track).
+  function calibrateScrubTiming(){
+    if(!scrubLead || !scrubTrack) return;
+    var pinHeight0 = scrubPinWrap ? scrubPinWrap.offsetHeight : 0;
+    var milestoneHeight = scrubTrack.offsetHeight - pinHeight0 - scrubLead.offsetHeight;
+    var milestoneScrollable = milestoneHeight - window.innerHeight;
+    if(milestoneScrollable <= 0) return;
+    var milestoneDays = SCRUB_DAY_END - SCRUB_DAY_MILESTONE;
+    var rate = milestoneScrollable / milestoneDays; // px per day
+
+    var pinDays = SCRUB_DAY_PIN_END - SCRUB_DAY_START;
+    var runupDays = SCRUB_DAY_MILESTONE - SCRUB_DAY_PIN_END;
+    if(scrubPinWrap) scrubPinWrap.style.minHeight = (pinDays*rate) + 'px';
+    scrubLead.style.minHeight = (runupDays*rate) + 'px';
+  }
+
+  function updateScrub(){
+    scrubRAF = null;
+    if(!scrubTrack) return;
+
+    var rect = scrubTrack.getBoundingClientRect();
+    var vh = window.innerHeight;
+
+    // Start driving the chart as soon as the track has scrolled up to
+    // roughly where `return` (now the first thing inside this track)
+    // would deactivate — the same -45%/-55% central band the
+    // IntersectionObserver uses for step activation — rather than
+    // waiting for the track to reach dead centre, which left a
+    // noticeable stretch of "nothing happening yet". This has to stay
+    // geometric (not "is `return` the last-activated step") since that
+    // state goes stale while scrolling through unobserved blank space.
+    if(rect.top > vh*0.45 || rect.bottom < 0) return;
+
+    // Work in actual scrolled pixels rather than normalised fractions —
+    // mixing "fraction of raw track height" with "fraction of scrollable
+    // distance" (which is track height minus one viewport height) was
+    // another source of unevenness, subtly misplacing each handoff point.
+    var totalScrollable = rect.height - vh;
+    var scrolled = Math.max(0, Math.min(totalScrollable, 0 - rect.top));
+    var pinHeight = scrubPinWrap ? scrubPinWrap.offsetHeight : 0;
+    var runupHeight = scrubLead ? scrubLead.offsetHeight : 0;
+
+    var day;
+    if(pinHeight > 0 && scrolled <= pinHeight){
+      // 'return' is pinned here — the chart alone moves as the reader scrolls.
+      day = SCRUB_DAY_START + (scrolled/pinHeight) * (SCRUB_DAY_PIN_END - SCRUB_DAY_START);
+    } else if(runupHeight > 0 && scrolled <= pinHeight+runupHeight){
+      // pin has released — normal scroll the rest of the way to 38w0d.
+      var pr = (scrolled-pinHeight)/runupHeight;
+      day = SCRUB_DAY_PIN_END + pr * (SCRUB_DAY_MILESTONE - SCRUB_DAY_PIN_END);
+    } else {
+      var milestoneScrollable = totalScrollable - pinHeight - runupHeight;
+      var p2 = milestoneScrollable > 0 ? (scrolled-pinHeight-runupHeight)/milestoneScrollable : 1;
+      day = SCRUB_DAY_MILESTONE + p2 * (SCRUB_DAY_END - SCRUB_DAY_MILESTONE);
+    }
+
+    setScrubbing(true);
+    showGroup('gestation');
+    renderTodayContinuous(day);
+  }
+
+  function requestScrubUpdate(){
+    if(scrubRAF === null) scrubRAF = requestAnimationFrame(updateScrub);
+  }
+
+  calibrateScrubTiming();
+  window.addEventListener('scroll', requestScrubUpdate, { passive:true });
+  window.addEventListener('resize', function(){ calibrateScrubTiming(); requestScrubUpdate(); });
+
+  // Poppins loads asynchronously (@import in the stylesheet); paragraph
+  // text can reflow to a different height once it swaps in from the
+  // fallback font, which would leave the pin/run-up sizing (measured off
+  // that height) very slightly stale. Recalibrate once it's actually loaded.
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(function(){
+      calibrateScrubTiming();
+      requestScrubUpdate();
+    });
+  }
+
+  /* =========================================================
+     4. DICE CHART
+     ========================================================= */
+
+  var DBAR = { left:60, right:560, top:60, bottom:380 };
+  var DBW = DBAR.right-DBAR.left;
+  var nBars = 6, gap = 14;
+  var barW = (DBW - gap*(nBars-1))/nBars;
+  var barMaxH = DBAR.bottom-DBAR.top;
+
+  (function buildDiceAxis(){
+    var axis=document.getElementById('d-axis');
+    axis.innerHTML='<line x1="'+DBAR.left+'" y1="'+DBAR.bottom+'" x2="'+DBAR.right+'" y2="'+DBAR.bottom+'"></line>';
+  })();
+
+  var diceBars = [];
+  (function buildDiceBars(){
+    var g = document.getElementById('d-bars');
+    var labelsG = document.getElementById('d-labels');
+    var fullH = barMaxH*0.62; // equal-probability height (1/6 each, headroom above)
+    for(var i=0;i<nBars;i++){
+      var x = DBAR.left + i*(barW+gap);
+      var rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('id','dbar-'+(i+1));
+      rect.setAttribute('class','bar');
+      rect.setAttribute('x', x);
+      rect.setAttribute('width', barW);
+      rect.setAttribute('y', DBAR.bottom-fullH);
+      rect.setAttribute('height', fullH);
+      g.appendChild(rect);
+      diceBars.push(rect);
+
+      var txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('class','dice-label');
+      txt.setAttribute('x', x+barW/2);
+      txt.setAttribute('y', DBAR.bottom+28);
+      txt.setAttribute('text-anchor','middle');
+      txt.textContent = (i+1);
+      labelsG.appendChild(txt);
+    }
+  })();
+
+  function diceReset(){
+    diceBars.forEach(function(b,i){
+      b.setAttribute('class','bar');
+      b.setAttribute('y', DBAR.bottom-barMaxH*0.62);
+      b.setAttribute('height', barMaxH*0.62);
+    });
+  }
+
+  function renderDice(step){
+    diceBars.forEach(function(b){ b.setAttribute('class','bar'); });
+    elScrubReadout.classList.remove('visible');
+
+    if(step==='dice-intro'){
+      diceReset();
+    }
+    else if(step==='dice-half'){
+      diceReset();
+      // Blue / pink, same two-colour split used throughout (not grey —
+      // this is a 50/50 split, not a highlighted-vs-muted distinction).
+      // Lower half blue, upper half pink — matches the convention used
+      // everywhere else (e.g. the gestation curve's before/after due date).
+      [0,1,2].forEach(function(i){ diceBars[i].setAttribute('class','bar on'); });
+      [3,4,5].forEach(function(i){ diceBars[i].setAttribute('class','bar split-b'); });
+    }
+    else if(step==='dice-condition'){
+      diceReset();
+      [3,4,5].forEach(function(i){ diceBars[i].setAttribute('class','bar off'); });
+      [0,1].forEach(function(i){
+        diceBars[i].setAttribute('class','bar gone');
+        diceBars[i].setAttribute('height', 0);
+        diceBars[i].setAttribute('y', DBAR.bottom);
+      });
+      diceBars[2].setAttribute('class','bar off');
+    }
+    else if(step==='dice-newhalf'){
+      [0,1].forEach(function(i){
+        diceBars[i].setAttribute('class','bar gone');
+        diceBars[i].setAttribute('height', 0);
+        diceBars[i].setAttribute('y', DBAR.bottom);
+      });
+      diceBars[2].setAttribute('class','bar split-a');
+      diceBars[3].setAttribute('class','bar split-a');
+      diceBars[4].setAttribute('class','bar split-b');
+      diceBars[5].setAttribute('class','bar split-b');
+    }
+  }
+
+  /* =========================================================
+     5. SCROLL-DRIVEN STEP ACTIVATION
+     ========================================================= */
+
+  var gestChart = document.getElementById('gestation-chart');
+  var diceChart = document.getElementById('dice-chart');
+
+  function showGroup(group){
+    if(group==='gestation'){
+      gestChart.classList.add('visible');
+      diceChart.classList.remove('visible');
+    } else {
+      diceChart.classList.add('visible');
+      gestChart.classList.remove('visible');
+    }
+  }
+
+  var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
+  var activeStep = null;
+  var intersecting = new Map(steps.map(function(s){ return [s, false]; }));
+
+  // Pick the intersecting step closest to the vertical center of the
+  // viewport, rather than reacting to individual entries as they arrive.
+  // Fast scrolling can report several steps changing state in the same
+  // callback batch, and acting on each one in array order (rather than
+  // scroll order) was the cause of the chart flashing through the wrong step.
+  function pickActiveStep(){
+    var best = null, bestDist = Infinity;
+    intersecting.forEach(function(isIn, el){
+      if(!isIn) return;
+      var rect = el.getBoundingClientRect();
+      var mid = rect.top + rect.height / 2;
+      var dist = Math.abs(mid - window.innerHeight / 2);
+      if(dist < bestDist){ bestDist = dist; best = el; }
+    });
+    return best;
+  }
+
+  function activateStep(el){
+    if(!el || el === activeStep) return;
+    activeStep = el;
+    steps.forEach(function(s){ s.classList.remove('active'); });
+    el.classList.add('active');
+    var group = el.getAttribute('data-group');
+    var step = el.getAttribute('data-step');
+    var isScrubStep = step==='return' || step==='today-38' || step==='today-39' || step==='today-41';
+    showGroup(group);
+    if(isScrubStep){
+      // Chart visuals for these steps are driven continuously by
+      // updateScrub() on scroll — but still wipe any static-step leftovers
+      // (e.g. "Most likely day" from the earlier 'mode' step) on the way
+      // in, since renderGestation() — the thing that normally clears
+      // them via clearRegions() — is deliberately skipped here.
+      if(group==='gestation') clearRegions();
+    } else if(group==='gestation'){
+      setScrubbing(false);
+      renderGestation(step);
+    } else {
+      renderDice(step);
+    }
+  }
+
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      intersecting.set(entry.target, entry.isIntersecting);
+    });
+    activateStep(pickActiveStep());
+  }, { root:null, rootMargin:'-45% 0px -45% 0px', threshold:0 });
+
+  steps.forEach(function(s){ observer.observe(s); });
+
+  // initial state
+  showGroup('gestation');
+  renderGestation('intro');
+  requestScrubUpdate();
+
+})();
+</script>
+
+<script>
+// "About the data" info icon: hover works via CSS; this adds tap-to-toggle
+// for touch devices, closing again on an outside tap.
+(function(){
+  var btn = document.getElementById('about-data-btn');
+  var tip = document.getElementById('about-data-tip');
+  if(!btn || !tip) return;
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    var open = tip.classList.toggle('open');
+    btn.classList.toggle('open', open);
+  });
+  document.addEventListener('click', function(){
+    tip.classList.remove('open');
+    btn.classList.remove('open');
+  });
+})();
+</script>
+
+<script src="../assets/js/nav.js"></script>
+<script>renderNav('articles');</script>
+
+</body>
+</html>

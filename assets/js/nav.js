@@ -21,8 +21,20 @@ function renderNav(activePage) {
   `;
   document.body.insertBefore(header, document.body.firstChild);
 
+  // Expose the sticky header's rendered height as a CSS var so pages with
+  // their own sticky/fixed elements (e.g. the due-date report's sticky
+  // chart column) can offset below it instead of being covered by it.
+  const setHeaderHeightVar = () => {
+    document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+  };
+  setHeaderHeightVar();
+  window.addEventListener('resize', setHeaderHeightVar);
+
   const footer = document.createElement('footer');
   footer.className = 'site-footer';
-  footer.innerHTML = `<p>Piqueaboo &mdash; data, revealed.</p>`;
+  footer.innerHTML = `
+    <p>Piqueaboo &mdash; data, revealed.</p>
+    <img src="${prefix}assets/logos/piqueaboo-logo.svg" alt="Piqueaboo" class="footer-logo">
+  `;
   document.body.appendChild(footer);
 }

@@ -61,6 +61,9 @@ a:hover {
 /* ---------- Top nav ---------- */
 
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: var(--surface);
   border-bottom: 1px solid #E5E5E5;
 }
@@ -164,9 +167,24 @@ main {
   max-width: 900px;
   margin: 0 auto;
   padding: 24px 24px 48px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 300;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.footer-logo {
+  height: 22px;
+  width: auto;
+  display: block;
+  flex: none;
 }
 
 /* ---------- Responsive ---------- */
