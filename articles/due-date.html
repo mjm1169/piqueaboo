@@ -42,7 +42,7 @@
     position:absolute;
     top:0; left:0;
     opacity:0;
-    transition:opacity .6s ease;
+    transition:opacity .12s ease;
   }
   .chart.visible{ opacity:1; position:relative; }
 
@@ -94,7 +94,7 @@
 
   .step p, .step h2, .step h3{
     opacity:.35;
-    transition:opacity .4s ease;
+    transition:opacity .12s ease;
   }
   .step.active p, .step.active h2, .step.active h3{
     opacity:1;
@@ -291,8 +291,8 @@
     .visual-col{
       position:sticky;
       top:var(--header-h, 0px);
-      height:46vh;
-      padding:16px;
+      height:34vh;
+      padding:12px;
       background:var(--canvas);
       z-index:2;
     }
@@ -301,12 +301,12 @@
     .step{ min-height:56vh; padding:6vh 0; }
     .scrub-lead{ min-height:40vh; }
 
-    /* .visual-col is a 46vh band up top here, not the full viewport, so
+    /* .visual-col is a 34vh band up top here, not the full viewport, so
        the pinned text has to stick below it rather than at the very top
        — otherwise it would sit directly on top of the sticky chart. */
     .step.pin-step{
-      top:calc(var(--header-h, 0px) + 46vh);
-      height:calc(100vh - var(--header-h, 0px) - 46vh);
+      top:calc(var(--header-h, 0px) + 34vh);
+      height:calc(100vh - var(--header-h, 0px) - 34vh);
     }
   }
 
