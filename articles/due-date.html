@@ -217,6 +217,18 @@
   }
   .axis line{ stroke:var(--muted); stroke-width:1; opacity:.4; }
 
+  /* axis titles: same family/weight/colour as the tick labels they sit
+     beside, distinguished as titles (rather than more data) by the
+     uppercase + letter-spacing treatment already used for the eyebrow */
+  .axis-title{
+    font-family:'Poppins', sans-serif;
+    font-weight:300;
+    font-size:11px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    fill:var(--muted);
+  }
+
   .curve-outline{ fill:none; stroke:var(--ink); stroke-width:2; }
 
   .region{ opacity:0; transition:opacity .5s ease; }
@@ -657,6 +669,9 @@
       html+='<line x1="'+x+'" y1="'+PLOT.bottom+'" x2="'+x+'" y2="'+(PLOT.bottom+6)+'"></line>';
       html+='<text x="'+x+'" y="'+(PLOT.bottom+24)+'" text-anchor="middle">'+wk+'w</text>';
     }
+    var xMid = (PLOT.left+PLOT.right)/2, yMid = (PLOT.top+PLOT.bottom)/2;
+    html+='<text class="axis-title" x="'+xMid+'" y="'+(PLOT.bottom+40)+'" text-anchor="middle">Gestational age</text>';
+    html+='<text class="axis-title" x="18" y="'+yMid+'" text-anchor="middle" transform="rotate(-90 18 '+yMid+')">Likelihood of birth</text>';
     axis.innerHTML=html;
   })();
 
@@ -967,7 +982,11 @@
 
   (function buildDiceAxis(){
     var axis=document.getElementById('d-axis');
-    axis.innerHTML='<line x1="'+DBAR.left+'" y1="'+DBAR.bottom+'" x2="'+DBAR.right+'" y2="'+DBAR.bottom+'"></line>';
+    var xMid = (DBAR.left+DBAR.right)/2, yMid = (DBAR.top+DBAR.bottom)/2;
+    var html = '<line x1="'+DBAR.left+'" y1="'+DBAR.bottom+'" x2="'+DBAR.right+'" y2="'+DBAR.bottom+'"></line>';
+    html += '<text class="axis-title" x="'+xMid+'" y="'+(DBAR.bottom+48)+'" text-anchor="middle">Die face</text>';
+    html += '<text class="axis-title" x="18" y="'+yMid+'" text-anchor="middle" transform="rotate(-90 18 '+yMid+')">Likelihood</text>';
+    axis.innerHTML = html;
   })();
 
   var diceBars = [];
