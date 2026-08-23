@@ -8,6 +8,16 @@
 <link rel="icon" type="image/svg+xml" href="../assets/logos/piqueaboo-logo.svg">
 <link rel="stylesheet" href="../assets/css/style.css">
 <style>
+  :root{
+    /* "Most likely day" (the curve's mode) is a distinct third category
+       from the blue/pink before/after-due-date split — not a "positive"
+       value, so the semantic positive/positive-step tokens are the wrong
+       fit. Pulled from the design system's extended palette instead
+       (violet, its first entry with enough contrast to read as text on
+       canvas/surface — the palette's own first-priority yellow fails
+       that at ~1.4:1). */
+    --mode-color:#7B2FFF;
+  }
   body{ -webkit-font-smoothing:antialiased; }
 
   /* ---------- layout ---------- */
@@ -213,7 +223,7 @@
   .region.visible{ opacity:.55; }
 
   .modeline{
-    fill:var(--positive-step);
+    fill:var(--mode-color);
     opacity:0;
     transition:opacity .5s ease; /* position never eases in — it should just appear */
   }
@@ -256,15 +266,19 @@
   .chart-label.visible{ opacity:1; }
   .chart-label.strong{ font-weight:500; font-size:15px; }
 
-  /* 50%-area labels: bigger, centered, and sat inside the shaded region */
-  .chart-label.pct{ font-weight:600; font-size:22px; text-anchor:middle; }
+  /* 50%-area labels: bigger, centered, and sat inside the shaded region.
+     Weight matches every other emphasised chart label (500) — the site
+     only loads Poppins 300/400/500, so the 600 this used to carry had no
+     real weight to render and was being faux-bolded by the browser,
+     reading as a different, heavier typeface next to the rest. */
+  .chart-label.pct{ font-weight:500; font-size:22px; text-anchor:middle; }
 
   /* whichever of a close pair of labels sits further left grows away to
      the left instead of growing toward its neighbour */
   .chart-label.anchor-end{ text-anchor:end; }
 
-  /* "most likely day" label paired with the main green mode region */
-  .chart-label.mode-label{ fill:var(--positive-step); }
+  /* "most likely day" label paired with the mode marker */
+  .chart-label.mode-label{ fill:var(--mode-color); }
 
   .bar{
     fill:var(--muted);
@@ -300,6 +314,20 @@
     .intro{ padding-top:6vh; }
     .step{ min-height:56vh; padding:6vh 0; }
     .scrub-lead{ min-height:40vh; }
+
+    /* Desktop sizes the chart by width (100% / height:auto) because the
+       sticky column there is always taller than the chart needs. Here the
+       column is a fixed 34vh band, which on narrower/shorter phones is
+       shorter than a width-locked chart's aspect ratio produces — the
+       overflow doesn't clip (nothing here sets overflow:hidden), it just
+       extends upward past the column's own top edge, straight into the
+       sticky site header (z-index:10) sitting right above, which paints
+       over it and hides the chart's top label row. Sizing by both
+       dimensions instead lets each chart's own aspect ratio (preserved by
+       its viewBox) contain-fit inside the 34vh band, so it can no longer
+       grow past it in either direction. */
+    .visual-inner{ height:100%; }
+    .chart{ width:100%; height:100%; }
 
     /* .visual-col is a 34vh band up top here, not the full viewport, so
        the pinned text has to stick below it rather than at the very top
@@ -341,11 +369,12 @@
         <rect id="g-line-prev" class="refline" y="20" width="2" height="370"></rect>
         <rect id="g-line-current" class="curline" y="20" width="2" height="370"></rect>
         <rect id="g-today-line" class="todayline" y="20" width="2" height="370"></rect>
-        <!-- solid line marker for the mode (most likely day) — a translucent
-             area fill this narrow (~1 day wide) read as muddy blended into
-             the pink beneath it, so it's a crisp opaque line instead,
-             matching how the other single-day markers are drawn -->
-        <rect id="g-mode-line" class="modeline" y="20" width="3" height="370"></rect>
+        <!-- solid marker for the mode (most likely day), exactly one day
+             wide — a translucent area fill this narrow read as muddy
+             blended into the pink beneath it, so it's a crisp opaque bar
+             instead. width/x set by setModeLineX() rather than fixed here,
+             since "one day wide" depends on the chart's day-to-px scale -->
+        <rect id="g-mode-line" class="modeline" y="20" height="370"></rect>
 
         <g id="g-labels"></g>
       </svg>
@@ -565,6 +594,10 @@
   var PLOT = { left:50, right:570, top:56, bottom:380 };
   var PW = PLOT.right-PLOT.left, PH = PLOT.bottom-PLOT.top;
 
+  // px per single day at this scale — used to size the mode marker to
+  // exactly one day wide, rather than the arbitrary fixed width it had before.
+  var DAY_PX = PW/(DISPLAY_MAX-DISPLAY_MIN);
+
   function xScale(day){ return PLOT.left + (day-DISPLAY_MIN)/(DISPLAY_MAX-DISPLAY_MIN)*PW; }
   function yScale(p){ return PLOT.bottom - (p/MAX_PDF)*PH; }
 
@@ -641,6 +674,15 @@
 
   function setLineX(el, day, dashed){
     el.setAttribute('x', xScale(day)-1);
+  }
+
+  // The mode marker is drawn a full day wide (unlike the other, razor-thin
+  // single-point reference lines) so it reads as a highlighted day rather
+  // than an instant — width and position both computed here, centred on
+  // the mode day, so callers never have to keep the two in sync by hand.
+  function setModeLineX(el, day){
+    el.setAttribute('width', DAY_PX);
+    el.setAttribute('x', xScale(day)-DAY_PX/2);
   }
 
   function label(id, x, y, text, cls){
@@ -720,13 +762,16 @@
       elRegionRight.classList.add('visible');
       setLineX(elLineCurrent, MEDIAN_DAY);
       elLineCurrent.classList.add('visible');
-      setLineX(elModeLine, MODE_DAY);
+      setModeLineX(elModeLine, MODE_DAY);
       elModeLine.classList.add('visible');
       // Due date and mode sit only ~2 days apart (~16px), so a row-only
       // split isn't enough separation — each label also grows in the
       // opposite direction from the other: due date right, mode left.
+      // The mode label's start clears the marker's actual left edge (not
+      // just its centre) by LABEL_GAP, so widening the marker can't creep
+      // the label into overlapping it.
       label('lbl-due', xScale(MEDIAN_DAY)+LABEL_GAP, LABEL_ROW1, 'Due date · '+weeksLabel(MEDIAN_DAY), 'strong');
-      label('lbl-mode', xScale(MODE_DAY)-LABEL_GAP, LABEL_ROW2, 'Most likely day · '+weeksLabel(MODE_DAY), 'strong mode-label anchor-end');
+      label('lbl-mode', xScale(MODE_DAY)-DAY_PX/2-LABEL_GAP, LABEL_ROW2, 'Most likely day · '+weeksLabel(MODE_DAY), 'strong mode-label anchor-end');
       showLabel('lbl-due'); showLabel('lbl-mode');
     }
 
