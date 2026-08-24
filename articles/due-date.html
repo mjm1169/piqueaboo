@@ -131,17 +131,6 @@
      text scroll normally through here. Height set in JS alongside the pin. */
   .scrub-lead{ min-height:30vh; }
 
-  .card{
-    background:var(--surface);
-    border-left:3px solid var(--accent);
-    border-radius:0 8px 8px 0;
-    padding: 16px 20px 16px 17px;
-    margin: 8px 0 16px 0;
-    font-size:15px;
-  }
-  .card.note{ border-left-color:var(--muted); color:var(--muted); font-weight:300; }
-  .card.aside{ border-left-color:var(--accent); color:var(--ink); font-style:italic; }
-
   /* ---------- info icon / tooltip ---------- */
 
   .meta-line{
@@ -285,10 +274,6 @@
      reading as a different, heavier typeface next to the rest. */
   .chart-label.pct{ font-weight:500; font-size:22px; text-anchor:middle; }
 
-  /* whichever of a close pair of labels sits further left grows away to
-     the left instead of growing toward its neighbour */
-  .chart-label.anchor-end{ text-anchor:end; }
-
   /* "most likely day" label paired with the mode marker */
   .chart-label.mode-label{ fill:var(--mode-color); }
 
@@ -317,7 +302,7 @@
     .visual-col{
       position:sticky;
       top:var(--header-h, 0px);
-      height:34vh;
+      height:36vh;
       padding:12px;
       background:var(--canvas);
       z-index:2;
@@ -327,26 +312,45 @@
     .step{ min-height:56vh; padding:6vh 0; }
     .scrub-lead{ min-height:40vh; }
 
+    /* Less room is given to the text here than on desktop (each step is a
+       much smaller fraction of the viewport), so fading it in/out reads as
+       mostly-illegible grey for most of that smaller space. Keep it fully
+       readable throughout instead — the active/inactive distinction still
+       exists for the JS that drives the chart, it just isn't shown visually. */
+    .step p, .step h2, .step h3{ opacity:1; }
+
     /* Desktop sizes the chart by width (100% / height:auto) because the
        sticky column there is always taller than the chart needs. Here the
-       column is a fixed 34vh band, which on narrower/shorter phones is
+       column is a fixed-height band, which on narrower/shorter phones is
        shorter than a width-locked chart's aspect ratio produces — the
        overflow doesn't clip (nothing here sets overflow:hidden), it just
        extends upward past the column's own top edge, straight into the
        sticky site header (z-index:10) sitting right above, which paints
        over it and hides the chart's top label row. Sizing by both
        dimensions instead lets each chart's own aspect ratio (preserved by
-       its viewBox) contain-fit inside the 34vh band, so it can no longer
-       grow past it in either direction. */
+       its viewBox) contain-fit inside the band, so it can no longer grow
+       past it in either direction. */
     .visual-inner{ height:100%; }
-    .chart{ width:100%; height:100%; }
 
-    /* .visual-col is a 34vh band up top here, not the full viewport, so
+    /* The chart itself only fills the band down to a reserved strip at the
+       bottom, rather than the full band — that strip is where the "+N
+       days" scrub readout sits (see .scrub-readout below). Without it, the
+       readout (positioned below the chart) had nowhere to go but past the
+       band's own bottom edge, where it floated on top of whatever text-col
+       content had scrolled up underneath. */
+    .chart{ width:100%; height:calc(100% - 22px); }
+
+    .scrub-readout{
+      bottom:0;
+      font-size:11px;
+    }
+
+    /* .visual-col is a fixed band up top here, not the full viewport, so
        the pinned text has to stick below it rather than at the very top
        — otherwise it would sit directly on top of the sticky chart. */
     .step.pin-step{
-      top:calc(var(--header-h, 0px) + 34vh);
-      height:calc(100vh - var(--header-h, 0px) - 34vh);
+      top:calc(var(--header-h, 0px) + 36vh);
+      height:calc(100vh - var(--header-h, 0px) - 36vh);
     }
   }
 
@@ -377,16 +381,20 @@
         <rect id="g-fade-overlay" class="fade-overlay" y="56" height="324"></rect>
 
         <!-- reference lines: original due date (dotted), previous updated median (dashed), current (solid) -->
-        <rect id="g-line-original" class="refline" y="20" width="2" height="370"></rect>
-        <rect id="g-line-prev" class="refline" y="20" width="2" height="370"></rect>
-        <rect id="g-line-current" class="curline" y="20" width="2" height="370"></rect>
-        <rect id="g-today-line" class="todayline" y="20" width="2" height="370"></rect>
-        <!-- solid marker for the mode (most likely day), exactly one day
-             wide — a translucent area fill this narrow read as muddy
-             blended into the pink beneath it, so it's a crisp opaque bar
-             instead. width/x set by setModeLineX() rather than fixed here,
-             since "one day wide" depends on the chart's day-to-px scale -->
-        <rect id="g-mode-line" class="modeline" y="20" height="370"></rect>
+        <!-- y/height start below the label rows (PLOT.top) rather than at
+             the very top of the canvas — starting at y=20 used to run the
+             line straight up through the on-chart label text sitting right
+             above it, reading as the line crossing the label. -->
+        <rect id="g-line-original" class="refline" y="56" width="2" height="324"></rect>
+        <rect id="g-line-prev" class="refline" y="56" width="2" height="324"></rect>
+        <rect id="g-line-current" class="curline" y="56" width="2" height="324"></rect>
+        <rect id="g-today-line" class="todayline" y="56" width="2" height="324"></rect>
+        <!-- "most likely day" region: the one-day-wide slice of the curve's
+             area itself (bound above by the curve, below by the x-axis, and
+             on the sides by the day's two edges) rather than a full-height
+             bar — same construction as the 50/50 regions, just a day wide
+             instead of spanning a whole half. d set by setModeArea() -->
+        <path id="g-mode-line" class="modeline"></path>
 
         <g id="g-labels"></g>
       </svg>
@@ -412,7 +420,7 @@
         Publish date · Reading time: 3 mins
         <button type="button" class="info-icon" id="about-data-btn" aria-label="About the data" aria-describedby="about-data-tip">i</button>
         <span class="info-tooltip" id="about-data-tip" role="tooltip">
-          <strong>About the data.</strong> The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made, so don't take any of this as clinical advice.
+          About the data. The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made, so don't take any of this as clinical advice.
         </span>
       </p>
       <p>I didn't know either. But if you think about it for a moment, you'll probably land close to the real answer.</p>
@@ -422,8 +430,8 @@
 
     <section class="step" data-group="gestation" data-step="intro">
       <h2>The due date is a median</h2>
-      <p>A due date is the date on which the baby is 50% likely to have been born, on or before. In other words, it's the <strong>median</strong> of the distribution of when spontaneous labour begins.</p>
-      <p class="muted">The curve on the left shows that distribution. The higher the line is, the greater chance that the baby will be born on that day.</p>
+      <p>A due date is the date on which the baby is 50% likely to have been born, on or before. In other words, it's the median of the distribution of when spontaneous labour begins.</p>
+      <p>The curve on the left shows that distribution. The higher the line is, the greater chance that the baby will be born on that day.</p>
     </section>
 
     <section class="step" data-group="gestation" data-step="regions">
@@ -442,7 +450,7 @@
 
     <section class="step" data-group="dice" data-step="dice-intro">
       <h2>A quick detour: conditional probability</h2>
-      <p>Before we go further, it's worth being clear on one idea: conditional probability. That's maths-speak for something simple: <span class="muted">how your beliefs change once you have more information.</span></p>
+      <p>Before we go further, it's worth being clear on one idea: conditional probability. That's maths-speak for something simple: how your beliefs change once you have more information.</p>
       <p>Imagine a die has been rolled, and you haven't seen the result yet.</p>
     </section>
 
@@ -455,8 +463,8 @@
     </section>
 
     <section class="step" data-group="dice" data-step="dice-newhalf">
-      <p>With 1 and 2 ruled out, only 3, 4, 5 and 6 remain, each still equally likely. Now it's 3 and 4 that make up the "lower" half. So we know there's a 50% chance the roll was at least <strong>5</strong>.</p>
-      <p class="muted">The new information changed our perception of the value of the die and shifted where the halfway point sits.</p>
+      <p>With 1 and 2 ruled out, only 3, 4, 5 and 6 remain, each still equally likely. Now it's 3 and 4 that make up the "lower" half. So we know there's a 50% chance the roll was at least 5.</p>
+      <p>The new information changed our perception of the value of the die and shifted where the halfway point sits.</p>
     </section>
 
     <!-- ===================== GROUP C: back to due dates ===================== -->
@@ -483,7 +491,7 @@
 
       <section class="step" data-group="gestation" data-step="today-38">
         <p>Say we reach 38 weeks and the baby still hasn't arrived. Just like ruling out the 1 and 2 on the die, we can rule out everything to the left of "today."</p>
-        <p>The halfway point of what's <em>left</em> has shifted slightly later than the original due date.</p>
+        <p>The halfway point of what's left has shifted slightly later than the original due date.</p>
       </section>
 
       <section class="step" data-group="gestation" data-step="today-39">
@@ -492,7 +500,7 @@
 
       <section class="step" data-group="gestation" data-step="today-41">
         <p>If the baby still hasn't arrived by the original due date, the "updated due date" is now several days further into the future.</p>
-        <div class="card aside">We'll stop there, since realistically, if you've made it to your due date and the baby hasn't come yet, you'll probably have more pressing things on your mind than conditional probability.</div>
+        <p>We'll stop there, since realistically, if you've made it to your due date and the baby hasn't come yet, you'll probably have more pressing things on your mind than conditional probability.</p>
       </section>
 
     </div>
@@ -691,13 +699,12 @@
     el.setAttribute('x', xScale(day)-1);
   }
 
-  // The mode marker is drawn a full day wide (unlike the other, razor-thin
-  // single-point reference lines) so it reads as a highlighted day rather
-  // than an instant — width and position both computed here, centred on
-  // the mode day, so callers never have to keep the two in sync by hand.
-  function setModeLineX(el, day){
-    el.setAttribute('width', DAY_PX);
-    el.setAttribute('x', xScale(day)-DAY_PX/2);
+  // The mode marker is the curve's own area over a one-day-wide window
+  // (unlike the other, razor-thin single-point reference lines) so it reads
+  // as a highlighted day rather than an instant — reuses areaPath() so it's
+  // bound by the curve/x-axis/day-edges exactly like the 50/50 regions are.
+  function setModeArea(el, day){
+    el.setAttribute('d', areaPath(day-0.5, day+0.5));
   }
 
   function label(id, x, y, text, cls){
@@ -777,16 +784,18 @@
       elRegionRight.classList.add('visible');
       setLineX(elLineCurrent, MEDIAN_DAY);
       elLineCurrent.classList.add('visible');
-      setModeLineX(elModeLine, MODE_DAY);
+      setModeArea(elModeLine, MODE_DAY);
       elModeLine.classList.add('visible');
-      // Due date and mode sit only ~2 days apart (~16px), so a row-only
-      // split isn't enough separation — each label also grows in the
-      // opposite direction from the other: due date right, mode left.
-      // The mode label's start clears the marker's actual left edge (not
-      // just its centre) by LABEL_GAP, so widening the marker can't creep
-      // the label into overlapping it.
+      // Due date and mode sit only ~2 days apart (~16px) — both labels grow
+      // rightward from their own marker's edge (same convention as every
+      // other on-chart label) and are kept apart by sitting on separate
+      // rows. An earlier version grew the mode label leftward instead, to
+      // put more visual distance between the two labels — but with a label
+      // this long, "leftward" meant its far end landed well out over the
+      // open curve, with nothing to visibly tie it back to the (thin, one
+      // day wide) marker it was naming.
       label('lbl-due', xScale(MEDIAN_DAY)+LABEL_GAP, LABEL_ROW1, 'Due date · '+weeksLabel(MEDIAN_DAY), 'strong');
-      label('lbl-mode', xScale(MODE_DAY)-DAY_PX/2-LABEL_GAP, LABEL_ROW2, 'Most likely day · '+weeksLabel(MODE_DAY), 'strong mode-label anchor-end');
+      label('lbl-mode', xScale(MODE_DAY)+DAY_PX/2+LABEL_GAP, LABEL_ROW2, 'Most likely day · '+weeksLabel(MODE_DAY), 'strong mode-label');
       showLabel('lbl-due'); showLabel('lbl-mode');
     }
 
@@ -883,6 +892,49 @@
   var scrubPinWrap = document.getElementById('pin-wrap');
   var scrubRAF = null;
 
+  // Which of the four scrub-track steps should read as "active" (i.e. be
+  // highlighted, as far as CSS cares) is decided from `day` itself here,
+  // rather than left to the same viewport-geometry IntersectionObserver
+  // that drives every other step. That observer judges a step "active"
+  // once its midpoint nears the viewport's — a rule tuned around steps
+  // that are close to a full viewport tall. On the mobile layout each step
+  // is a much smaller fraction of the (shorter) viewport, so that same
+  // rule fires at a very different point in the scroll than it does on
+  // desktop, throwing the text out of step with the chart (e.g. the
+  // "38 weeks" text arriving well before the chart's "today" line does).
+  // Driving both off the same `day` value instead keeps them in lockstep
+  // on any viewport, and guarantees the "38w" text and chart line up
+  // exactly, since they're now quite literally the same number.
+  var stepReturn = document.querySelector('.step[data-step="return"]');
+  var stepToday38 = document.querySelector('.step[data-step="today-38"]');
+  var stepToday39 = document.querySelector('.step[data-step="today-39"]');
+  var stepToday41 = document.querySelector('.step[data-step="today-41"]');
+
+  function pickScrubStep(day){
+    // The three milestone steps split the milestone phase (38w0d to the
+    // end of the scrub) into equal thirds — matching their equal CSS
+    // heights, which is what the reader's scroll distance through each
+    // is actually proportional to.
+    var third = (SCRUB_DAY_END - SCRUB_DAY_MILESTONE) / 3;
+    if(day < SCRUB_DAY_MILESTONE) return stepReturn;
+    if(day < SCRUB_DAY_MILESTONE + third) return stepToday38;
+    if(day < SCRUB_DAY_MILESTONE + 2*third) return stepToday39;
+    return stepToday41;
+  }
+
+  function activateScrubStep(el){
+    if(!el || el === activeStep) return;
+    activeStep = el;
+    steps.forEach(function(s){ s.classList.remove('active'); });
+    el.classList.add('active');
+    // Mirrors activateStep()'s own handling of these same four steps —
+    // wipes any static-step leftovers (e.g. "Most likely day" from the
+    // earlier 'mode' step) on the way in, since renderGestation() is
+    // deliberately skipped for all four.
+    showGroup('gestation');
+    clearRegions();
+  }
+
   // Size the pinned 'return' section and the short unpinned run-up after
   // it so "today" advances at the exact same days-per-pixel rate in both
   // as it does across the three labelled sections below — otherwise the
@@ -948,6 +1000,7 @@
 
     setScrubbing(true);
     showGroup('gestation');
+    activateScrubStep(pickScrubStep(day));
     renderTodayContinuous(day);
   }
 
@@ -1101,6 +1154,9 @@
     return best;
   }
 
+  // Handles every step except the four scrub-track ones (return/today-38/
+  // today-39/today-41) — those are excluded from observation entirely and
+  // driven instead by activateScrubStep(), keyed off `day` — see there for why.
   function activateStep(el){
     if(!el || el === activeStep) return;
     activeStep = el;
@@ -1108,16 +1164,8 @@
     el.classList.add('active');
     var group = el.getAttribute('data-group');
     var step = el.getAttribute('data-step');
-    var isScrubStep = step==='return' || step==='today-38' || step==='today-39' || step==='today-41';
     showGroup(group);
-    if(isScrubStep){
-      // Chart visuals for these steps are driven continuously by
-      // updateScrub() on scroll — but still wipe any static-step leftovers
-      // (e.g. "Most likely day" from the earlier 'mode' step) on the way
-      // in, since renderGestation() — the thing that normally clears
-      // them via clearRegions() — is deliberately skipped here.
-      if(group==='gestation') clearRegions();
-    } else if(group==='gestation'){
+    if(group==='gestation'){
       setScrubbing(false);
       renderGestation(step);
     } else {
@@ -1132,7 +1180,13 @@
     activateStep(pickActiveStep());
   }, { root:null, rootMargin:'-45% 0px -45% 0px', threshold:0 });
 
-  steps.forEach(function(s){ observer.observe(s); });
+  // The four scrub-track steps (return/today-38/today-39/today-41) are
+  // deliberately NOT observed here — see activateScrubStep() below for why.
+  steps.forEach(function(s){
+    var step = s.getAttribute('data-step');
+    if(step==='return' || step==='today-38' || step==='today-39' || step==='today-41') return;
+    observer.observe(s);
+  });
 
   // initial state
   showGroup('gestation');
