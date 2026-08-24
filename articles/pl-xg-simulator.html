@@ -19,10 +19,18 @@
   }
   .intro p{ font-size:17px; }
 
-  /* placeholder-copy marker: a quiet visual flag (not shipped as real
-     styling intent) so this is easy to find and rewrite -- see the
-     HTML comment beside every block that uses it */
-  .placeholder-copy{ border-left:3px solid var(--muted); padding-left:14px; }
+  /* ---------- data info disclosure ---------- */
+
+  .data-info{ margin-top:24px; font-size:14px; }
+  .data-info summary{
+    cursor:pointer; font-weight:500; color:var(--accent-step);
+    list-style:none;
+  }
+  .data-info summary::-webkit-details-marker{ display:none; }
+  .data-info summary:before{ content:'+ '; }
+  .data-info[open] summary:before{ content:'– '; }
+  .data-info ul{ margin:10px 0 0 0; padding-left:20px; color:var(--muted); font-weight:300; }
+  .data-info li{ margin-bottom:6px; }
 
   section{ margin:0 0 10vh 0; }
   h2{ font-size:26px; }
@@ -207,22 +215,31 @@
 
 <div class="wrap">
 
-  <!-- PLACEHOLDER COPY: intro framing below is functional/factual only, per
-       this site's convention (see CLAUDE.md) that Claude implements and the
-       user writes the actual prose/headings. Please rewrite before this
-       goes live. -->
-  <div class="intro placeholder-copy">
-    <div class="eyebrow">A short explainer</div>
-    <h1>A million Premier Leagues</h1>
-    <p>Every shot in the real 2025/26 season had some probability of being a goal — its xG. What actually happened was one draw from that process. Here it's been redrawn 1,000,000 times, and this is who won.</p>
+  <!-- TITLE/HEADING: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
+  <div class="intro">
+    <p>If you’ve clicked on this there’s a pretty good chance you’ll be familiar with the concept of xG anyway, so I’ll keep this bit short.</p>
+    <p>Every time a shot is taken in a football game, a probability is calculated that is associated with it. This represents the probability that that shot would result in a goal. A tap-in from a yard out would have a very high xG, close to 1, and a speculative hit from 35 yards out would have a low xG, close to 0.</p>
+    <p>Naturally, there are times when the outcome doesn’t go the way the xG would suggest. A team may score from a rare, low quality effort on goal, while their opponents fail to convert any of their more numerous, better chances. You’d expect this sort of thing to even over the course of a season, but have you ever wondered, “What if…?”.</p>
+    <p>What if a relegation candidate kept scoring from half-chances all season? Could they win the league?</p>
+    <p>How many goals could be scored in a game in an alternate reality where everyone had their shooting boots on?</p>
+
+    <details class="data-info">
+      <summary>Data information</summary>
+      <ul>
+        <li>Data is taken from Understat.</li>
+        <li>Shots are treated as independent of each other. In real life game-management would come into play, but for a bit of fun such as this we will suspend disbelief.</li>
+        <li>Own goals are modelled in Understat, sparing the blushes of millions of players in this article.</li>
+        <li>League position tie-breaks are done on goal difference, goals for, then a random coin toss.</li>
+      </ul>
+    </details>
   </div>
 
   <!-- ===================== treemap ===================== -->
 
   <section id="treemap-section">
-    <!-- PLACEHOLDER COPY -->
-    <h2 class="placeholder-copy">Every champion, out of a million tries</h2>
-    <p class="placeholder-copy">Each of the 1,000,000 simulated seasons contributes one unit of area, grouped and coloured by whichever team won that particular simulation. A handful of individual simulated seasons are marked below the map — click one to see its full final table and notable games.</p>
+    <!-- HEADING: TBD -- user to fill in -->
+    <p>Imagine if we played the season again. Every shot recreated as if were played again, with the same likelihood it would be scored. Some that were drilled past the keeper would be smashed wide. Others that were skied into row Z would nestle into the top corner. And some would play out exactly the same. How could the league have looked? What if we repeated it again, and again? Maybe our team would fluke an unlikely title! In a million simulations what might happen?</p>
+    <p>I took the 20xx/xx season and did just that. Here is how the league ended up all 1,000,000 times.</p>
 
     <div class="treemap-card">
       <canvas id="treemap-canvas" width="1250" height="800"></canvas>
@@ -232,6 +249,8 @@
       </div>
     </div>
 
+    <p>Let’s explore the highlights.</p>
+
     <div class="roster" id="roster"></div>
     <p class="never-won-note" id="never-won-note"></p>
   </section>
@@ -239,10 +258,7 @@
   <!-- ===================== simulate it yourself (2025/26) ===================== -->
 
   <section id="simulator-section">
-    <!-- PLACEHOLDER COPY -->
-    <h2 class="placeholder-copy">Simulate a 2025/26 season</h2>
-    <p class="placeholder-copy">Everything above is the shape of 1,000,000 replays. This runs just one, live, in your browser — the same 380 matches, the same 9,524 shots, re-rolled on the spot.</p>
-
+    <!-- HEADING/COPY: TBD -- user to fill in -->
     <button type="button" class="sim-run-btn" id="sim-run-btn">▶ Simulate a season</button>
     <div class="sim-status" id="sim-status"></div>
 
@@ -268,11 +284,8 @@
   <!-- ===================== leicester 2015-16 ===================== -->
 
   <section id="leicester-section">
-    <!-- PLACEHOLDER COPY / DATA ONLY: the user is writing the actual
-         narrative for this section themselves (see conversation) — the
-         card below is supporting stats + crest only, no prose. Drop your
-         writing in around/above this card. -->
-    <h2 class="placeholder-copy">One that already happened: Leicester, 2015-16</h2>
+    <!-- HEADING: TBD -- user to fill in -->
+    <p>That was last year, but let’s take a moment to appreciate Leicester’s year of triumph. In 10,000 simulations of that season they triumphed xx% of the time. Yes, you could say they were fortunate to win some games (insert examples here), but they genuinely did create better chances than they were expected to before the season started.</p>
     <div class="leicester-card">
       <img class="leicester-crest" src="../assets/logos/clubs/leicester.svg" alt="Leicester City crest">
       <div class="leicester-stats" id="leicester-stats"></div>

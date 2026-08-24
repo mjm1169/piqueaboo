@@ -17,13 +17,24 @@ for the actual text and visual direction before drafting either.
   built around a 1,000,000-simulation treemap of the 2025/26 season, per
   the user's own visual spec (area-proportional treemap, one region per
   champion team, crest centered, click-to-inspect "story" simulations) plus
-  a supporting section on Leicester's 2015-16 title (10,000 sims). All
-  headings/body copy in both that section and the intro/treemap framing are
-  still Claude-drafted placeholders (marked `placeholder-copy` in the HTML)
-  — the user is writing the Leicester section themselves and should pass
-  over the rest before this is really "done." `index.html`'s teaser card
-  for this article was also updated and is placeholder copy too. The old
+  a supporting section on Leicester's 2015-16 title (10,000 sims). The old
   article's "simulate it yourself" live client-side widget was re-added
-  (2026-08-24) pointed at the 2025/26 data — `articles/pl-xg-simulator-data.json`
+  pointed at the 2025/26 data — `articles/pl-xg-simulator-data.json`
   now holds that season's shots (regenerated via `export_client_data.py`)
   rather than 2024/25's.
+  As of 2026-08-24 the user has written the actual commentary for the
+  intro (xG explainer + "data information" disclosure), the treemap
+  section's framing paragraphs, and the Leicester paragraph — all dropped
+  in as real `<p>` copy. Still outstanding, marked `<!-- HEADING: TBD -->`
+  (or similar) in the HTML for the user to fill in themselves: the page
+  title/h1, the treemap section heading, the simulator section's
+  heading/intro copy, and the Leicester section heading. Two inline
+  placeholders inside the user's own Leicester paragraph are also still
+  theirs to finish: `xx%` (the actual simulated Leicester title odds —
+  note the equivalent number is already computed live in
+  `#leicester-stats`) and `(insert examples here)`. The treemap intro
+  paragraph also still has a literal `20xx/xx` season placeholder. The
+  user separately mentioned wanting a "zoom through the treemap"
+  interaction built for the highlights callout — not yet implemented.
+  `index.html`'s teaser card for this article is still placeholder copy
+  and wasn't touched by this pass.
