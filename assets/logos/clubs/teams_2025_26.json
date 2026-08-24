@@ -1,0 +1,102 @@
+{
+  "Arsenal": {
+    "slug": "arsenal",
+    "crest_file": "arsenal.svg",
+    "color": "#F00000"
+  },
+  "Aston Villa": {
+    "slug": "aston-villa",
+    "crest_file": "aston-villa.svg",
+    "color": "#69091C"
+  },
+  "Bournemouth": {
+    "slug": "bournemouth",
+    "crest_file": "bournemouth.svg",
+    "color": "#DA291C"
+  },
+  "Brentford": {
+    "slug": "brentford",
+    "crest_file": "brentford.svg",
+    "color": "#D2122E"
+  },
+  "Brighton": {
+    "slug": "brighton",
+    "crest_file": "brighton.svg",
+    "color": "#004899"
+  },
+  "Burnley": {
+    "slug": "burnley",
+    "crest_file": "burnley.svg",
+    "color": "#6C1D45"
+  },
+  "Chelsea": {
+    "slug": "chelsea",
+    "crest_file": "chelsea.svg",
+    "color": "#14349B"
+  },
+  "Crystal Palace": {
+    "slug": "crystal-palace",
+    "crest_file": "crystal-palace.svg",
+    "color": "#1B458F"
+  },
+  "Everton": {
+    "slug": "everton",
+    "crest_file": "everton.svg",
+    "color": "#0000FF"
+  },
+  "Fulham": {
+    "slug": "fulham",
+    "crest_file": "fulham.svg",
+    "color": "#000000"
+  },
+  "Leeds": {
+    "slug": "leeds",
+    "crest_file": "leeds.svg",
+    "color": "#1D428A"
+  },
+  "Liverpool": {
+    "slug": "liverpool",
+    "crest_file": "liverpool.svg",
+    "color": "#8F1E32"
+  },
+  "Manchester City": {
+    "slug": "manchester-city",
+    "crest_file": "manchester-city.svg",
+    "color": "#98C6EB"
+  },
+  "Manchester United": {
+    "slug": "manchester-united",
+    "crest_file": "manchester-united.svg",
+    "color": "#FF0000"
+  },
+  "Newcastle United": {
+    "slug": "newcastle-united",
+    "crest_file": "newcastle-united.svg",
+    "color": "#241F20"
+  },
+  "Nottingham Forest": {
+    "slug": "nottingham-forest",
+    "crest_file": "nottingham-forest.svg",
+    "color": "#D70926"
+  },
+  "Sunderland": {
+    "slug": "sunderland",
+    "crest_file": "sunderland.svg",
+    "color": "#FF0000"
+  },
+  "Tottenham": {
+    "slug": "tottenham",
+    "crest_file": "tottenham.svg",
+    "color": "#132257"
+  },
+  "West Ham": {
+    "slug": "west-ham",
+    "crest_file": "west-ham.svg",
+    "color": "#7E1823"
+  },
+  "Wolverhampton Wanderers": {
+    "slug": "wolverhampton-wanderers",
+    "crest_file": "wolverhampton-wanderers.svg",
+    "color": "#F4B125"
+  }
+}

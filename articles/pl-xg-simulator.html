@@ -3,191 +3,163 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Premier League, replayed 10,000 times — Piqueaboo</title>
-<meta name="description" content="We reran the 2024/25 Premier League season 10,000 times, letting every shot land exactly as often as its quality suggested — then let you run your own.">
+<title>A million Premier Leagues — Piqueaboo</title>
+<meta name="description" content="We replayed the 2025/26 Premier League season 1,000,000 times over, letting every shot fall exactly as often as its quality suggested, and mapped who won it.">
 <link rel="icon" type="image/svg+xml" href="../assets/logos/piqueaboo-logo.svg">
 <link rel="stylesheet" href="../assets/css/style.css">
 <style>
   body{ -webkit-font-smoothing:antialiased; }
 
-  /* ---------- scrollytelling layout (same skeleton as the due-date piece) ---------- */
+  .wrap{ max-width:1100px; margin:0 auto; padding:0 24px; }
 
-  .wrapper{
-    max-width:1200px;
-    margin:0 auto;
-    display:grid;
-    grid-template-columns: 46% 54%;
-  }
-
-  .visual-col{
-    position:sticky;
-    top:var(--header-h, 0px);
-    height:calc(100vh - var(--header-h, 0px));
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:24px;
-  }
-
-  .visual-inner{
-    position:relative;
-    width:100%;
-    max-width:480px;
-  }
-
-  .visual-panel{
-    width:100%;
-    opacity:0;
-    position:absolute;
-    top:0; left:0;
-    transition:opacity .3s ease;
-    pointer-events:none;
-  }
-  .visual-panel.visible{ opacity:1; position:relative; pointer-events:auto; }
-
-  .text-col{ padding: 0 40px; }
-
-  .intro, .outro{ padding: 24px 0 48px 0; max-width:640px; }
-  .intro{ padding-top:16vh; }
-  .outro{ padding-bottom:12vh; }
-
+  .intro{ padding:14vh 0 6vh 0; max-width:720px; }
   .eyebrow{
-    text-transform:uppercase;
-    letter-spacing:.08em;
-    font-size:12px;
-    font-weight:500;
-    color:var(--accent-step);
-    margin-bottom:12px;
+    text-transform:uppercase; letter-spacing:.08em; font-size:12px;
+    font-weight:500; color:var(--accent-step); margin-bottom:12px;
+  }
+  .intro p{ font-size:17px; }
+
+  /* placeholder-copy marker: a quiet visual flag (not shipped as real
+     styling intent) so this is easy to find and rewrite -- see the
+     HTML comment beside every block that uses it */
+  .placeholder-copy{ border-left:3px solid var(--muted); padding-left:14px; }
+
+  section{ margin:0 0 10vh 0; }
+  h2{ font-size:26px; }
+
+  .stat-line{ font-size:15px; color:var(--muted); font-weight:300; margin:4px 0 0 0; }
+  .stat-line strong{ color:var(--ink); font-weight:500; }
+
+  /* ---------- treemap ---------- */
+
+  .treemap-card{
+    background:var(--surface);
+    border-radius:12px;
+    padding:16px;
+    margin:28px 0 20px 0;
+  }
+  #treemap-canvas{
+    width:100%; height:auto; display:block;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .treemap-caption{
+    font-size:13px; color:var(--muted); font-weight:300; margin-top:10px;
+    display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
   }
 
-  .step{
-    min-height:76vh;
+  /* ---------- legend / roster ---------- */
+
+  .roster{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap:10px;
+    margin:20px 0;
+  }
+  .roster-card{
+    background:var(--surface);
+    border-radius:8px;
+    padding:12px;
     display:flex;
     flex-direction:column;
-    justify-content:center;
-    max-width:560px;
-    padding: 8vh 0;
+    align-items:center;
+    text-align:center;
+    gap:6px;
+    position:relative;
   }
-  .step p, .step h2, .step h3{ opacity:.35; transition:opacity .12s ease; }
-  .step.active p, .step.active h2, .step.active h3{ opacity:1; }
-  .step h2{ font-size:26px; }
+  .roster-card.zero{
+    background:none;
+    border:1px dashed #D8D8D8;
+    opacity:.65;
+  }
+  .roster-crest{ width:36px; height:36px; object-fit:contain; }
+  .roster-name{ font-size:13px; font-weight:500; }
+  .roster-stat{ font-size:12px; color:var(--muted); font-weight:300; }
+  .roster-swatch{
+    width:14px; height:14px; border-radius:3px;
+    position:absolute; top:10px; right:10px;
+  }
+  .roster-story-btn{
+    margin-top:2px;
+    font-family:'Poppins', sans-serif;
+    font-size:11px; font-weight:500;
+    color:var(--accent-step);
+    background:none; border:1px solid var(--accent-step);
+    border-radius:20px; padding:4px 10px;
+    cursor:pointer;
+  }
+  .roster-story-btn:hover{ background:var(--accent-step); color:#fff; }
 
-  .card{
+  .never-won-note{ font-size:13px; color:var(--muted); font-weight:300; margin:14px 0 0 0; }
+
+  /* ---------- story modal ---------- */
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.45);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:6vh 16px; overflow-y:auto;
+    opacity:0; pointer-events:none;
+    transition:opacity .18s ease;
+    z-index:50;
+  }
+  .modal-backdrop.open{ opacity:1; pointer-events:auto; }
+
+  .modal{
     background:var(--surface);
-    border-left:3px solid var(--accent);
-    border-radius:0 8px 8px 0;
-    padding: 16px 20px 16px 17px;
-    margin: 8px 0 16px 0;
-    font-size:15px;
+    border-radius:12px;
+    max-width:640px; width:100%;
+    padding:24px;
   }
-  .card.note{ border-left-color:var(--muted); color:var(--muted); font-weight:300; }
-
-  .stat-inline{ font-weight:500; color:var(--ink); }
-
-  /* ---------- info icon / tooltip ---------- */
-
-  .meta-line{ display:flex; align-items:center; gap:8px; position:relative; flex-wrap:wrap; }
-
-  .info-icon{
-    display:inline-flex; align-items:center; justify-content:center;
-    width:16px; height:16px; border-radius:50%;
-    border:1px solid var(--muted); color:var(--muted); background:none;
-    font-family:'Poppins', sans-serif; font-size:10px; font-weight:500; line-height:1;
-    cursor:pointer; padding:0; flex:none;
+  .modal-header{ display:flex; align-items:center; gap:14px; margin-bottom:4px; }
+  .modal-crest{ width:44px; height:44px; object-fit:contain; flex:none; }
+  .modal-tag{
+    font-size:12px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--accent-step); font-weight:500; margin-bottom:2px;
   }
-  .info-icon:hover, .info-icon:focus-visible, .info-icon.open{
-    border-color:var(--accent-step); color:var(--accent-step); outline:none;
+  .modal-title{ font-size:20px; font-weight:500; }
+  .modal-sub{ font-size:13px; color:var(--muted); font-weight:300; margin:2px 0 18px 0; }
+  .modal-close{
+    position:absolute; top:16px; right:16px;
+    width:28px; height:28px; border-radius:50%;
+    border:1px solid var(--muted); background:none; color:var(--muted);
+    font-size:14px; cursor:pointer; line-height:1;
   }
-  .info-tooltip{
-    position:absolute; top:calc(100% + 8px); left:0; z-index:5; width:280px;
-    background:var(--surface); border-left:3px solid var(--muted);
-    border-radius:0 8px 8px 0; padding:12px 16px 12px 13px;
-    font-size:13px; font-weight:300; color:var(--muted); line-height:1.5;
-    box-shadow:0 6px 20px rgba(0,0,0,.12);
-    opacity:0; transform:translateY(-4px); pointer-events:none;
-    transition:opacity .2s ease, transform .2s ease;
+  .modal-close:hover{ border-color:var(--ink); color:var(--ink); }
+  .modal{ position:relative; }
+
+  .modal h4{ font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:500; margin:18px 0 8px 0; }
+
+  .final-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .final-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; border-bottom:1px solid #E5E5E5; }
+  .final-table td{ padding:5px 6px; border-bottom:1px solid #EFEFEF; }
+  .final-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .final-table tr.champion td{ font-weight:500; }
+  .final-table tr.champion{ background:rgba(17,206,238,.08); }
+
+  .game-line{ font-size:13px; padding:4px 0; display:flex; justify-content:space-between; gap:10px; }
+  .game-line .score{ font-variant-numeric:tabular-nums; font-weight:500; }
+
+  /* ---------- leicester section ---------- */
+
+  .leicester-card{
+    background:var(--surface);
+    border-radius:12px;
+    padding:20px 24px;
+    display:flex;
+    gap:20px;
+    align-items:center;
   }
-  .info-icon:hover + .info-tooltip, .info-icon:focus-visible + .info-tooltip, .info-tooltip.open{
-    opacity:1; transform:translateY(0); pointer-events:auto;
+  .leicester-crest{ width:64px; height:64px; object-fit:contain; flex:none; }
+  .leicester-stats{ display:flex; gap:28px; flex-wrap:wrap; }
+  .leicester-stats .num{ font-size:28px; font-weight:500; line-height:1; }
+  .leicester-stats .lbl{ font-size:12px; color:var(--muted); font-weight:300; margin-top:4px; max-width:160px; }
+
+  @media (max-width:640px){
+    .leicester-card{ flex-direction:column; align-items:flex-start; }
   }
-  .info-tooltip ul{ margin:8px 0 0 0; padding-left:18px; }
-  .info-tooltip li{ margin-bottom:4px; }
 
-  /* ---------- gauge panel (shot xG wheel) ---------- */
+  /* ---------- simulate-it-yourself (2025/26) ---------- */
 
-  .gauge-panel{ text-align:center; padding:12px; }
-  .gauge-panel svg{ width:220px; height:220px; }
-  .gauge-track{ fill:none; stroke:var(--muted); stroke-width:16; opacity:.2; }
-  .gauge-fill{ fill:none; stroke-width:16; stroke-linecap:round; }
-  .gauge-fill.accent{ stroke:var(--accent); }
-  .gauge-fill.positive{ stroke:var(--positive-step); }
-  .gauge-pct{ font-family:'Poppins', sans-serif; font-size:34px; font-weight:500; fill:var(--ink); }
-  .gauge-sub{ font-family:'Poppins', sans-serif; font-size:12px; font-weight:300; fill:var(--muted); }
-  .gauge-result{ font-size:16px; font-weight:500; margin-top:12px; }
-  .gauge-result.miss{ color:var(--negative-step); }
-  .gauge-result.goal{ color:var(--positive-step); }
-  .gauge-caption{ font-size:13px; color:var(--muted); font-weight:300; margin-top:6px; }
-
-  /* ---------- stat trio (method panel) ---------- */
-
-  .stat-trio{ display:flex; flex-direction:column; gap:20px; padding:12px 8px; }
-  .stat-trio .num{ font-size:40px; font-weight:500; color:var(--ink); line-height:1; }
-  .stat-trio .lbl{ font-size:13px; color:var(--muted); font-weight:300; margin-top:4px; }
-
-  /* ---------- horizontal bar chart ---------- */
-
-  .barh-panel{ padding:8px; }
-  .barh-row{ display:grid; grid-template-columns: 108px 1fr 48px; align-items:center; gap:10px; margin-bottom:10px; }
-  .barh-team{ font-size:13px; color:var(--ink); text-align:right; }
-  .barh-team.highlight{ font-weight:500; color:var(--accent-step); }
-  .barh-track{ background:var(--surface); border-radius:4px; height:20px; overflow:hidden; }
-  .barh-fill{ height:100%; background:var(--accent); border-radius:4px; }
-  .barh-fill.highlight{ background:var(--positive-step); }
-  .barh-value{ font-size:13px; color:var(--muted); font-weight:300; }
-
-  /* ---------- movers panel ---------- */
-
-  .movers-panel{ padding:8px; display:flex; flex-direction:column; gap:6px; }
-  .movers-group-label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:10px 0 4px 0; }
-  .movers-group-label:first-child{ margin-top:0; }
-  .mover-row{ display:flex; align-items:center; gap:10px; font-size:14px; padding:4px 0; }
-  .mover-arrow{ font-weight:600; width:16px; text-align:center; flex:none; }
-  .mover-arrow.up{ color:var(--positive-step); }
-  .mover-arrow.down{ color:var(--negative-step); }
-  .mover-team{ flex:1; }
-  .mover-detail{ color:var(--muted); font-size:12px; font-weight:300; }
-
-  /* ---------- scoreline / trophy / player cards ---------- */
-
-  .showcase-card{ text-align:center; padding:20px 16px; }
-  .showcase-eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:10px; }
-  .showcase-score{ font-size:32px; font-weight:500; color:var(--ink); line-height:1.3; }
-  .showcase-teams{ font-size:14px; color:var(--muted); font-weight:300; margin-top:2px; }
-  .showcase-note{ font-size:13px; color:var(--muted); font-weight:300; margin-top:14px; padding-top:14px; border-top:1px solid #E5E5E5; }
-  .showcase-note strong{ color:var(--ink); font-weight:500; }
-
-  .trophy-list{ text-align:left; margin-top:14px; padding-top:14px; border-top:1px solid #E5E5E5; }
-  .trophy-row{ display:flex; justify-content:space-between; font-size:14px; padding:3px 0; }
-  .trophy-row .n{ color:var(--muted); font-weight:300; font-size:13px; }
-
-  /* ---------- calibration two-bar compare ---------- */
-
-  .compare-panel{ padding:12px 8px; }
-  .compare-row{ margin-bottom:16px; }
-  .compare-label{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
-  .compare-label .v{ font-weight:500; color:var(--ink); }
-  .compare-track{ background:var(--surface); border-radius:4px; height:16px; overflow:hidden; }
-  .compare-fill{ height:100%; border-radius:4px; }
-  .compare-fill.real{ background:var(--muted); }
-  .compare-fill.sim{ background:var(--accent); }
-
-  /* ===================== simulator (full width, outside the scroll wrapper) ===================== */
-
-  .simulator{
-    max-width:900px;
-    margin:0 auto;
-    padding: 24px 24px 64px 24px;
-  }
   .sim-run-btn{
     display:inline-flex; align-items:center; gap:10px;
     background:var(--ink); color:var(--surface);
@@ -226,339 +198,383 @@
   .sim-storylines ul{ margin:0; padding-left:20px; font-size:14px; }
   .sim-storylines li{ margin-bottom:8px; }
 
-  /* ---------- responsive ---------- */
-
-  @media (max-width: 860px){
-    .wrapper{ grid-template-columns: 1fr; }
-    .visual-col{
-      position:sticky; top:var(--header-h, 0px); height:36vh;
-      padding:12px; background:var(--canvas); z-index:2;
-    }
-    .visual-inner{ max-width:340px; }
-    .gauge-panel svg{ width:160px; height:160px; }
-    .text-col{ padding:0 20px; }
-    .intro{ padding-top:6vh; }
-    .step{ min-height:56vh; padding:6vh 0; }
+  @media (max-width:640px){
     .sim-grid{ grid-template-columns: 1fr; }
   }
-
-  @media (prefers-reduced-motion: reduce){ *{ transition-duration:.001ms !important; } }
 </style>
 </head>
 <body class="article-page">
 
-<div class="wrapper">
+<div class="wrap">
 
-  <div class="visual-col">
-    <div class="visual-inner">
-
-      <div class="visual-panel" id="panel-miss">
-        <div class="gauge-panel">
-          <svg viewBox="0 0 200 200">
-            <circle class="gauge-track" cx="100" cy="100" r="80"></circle>
-            <circle class="gauge-fill accent" cx="100" cy="100" r="80"
-              stroke-dasharray="502.65" stroke-dashoffset="18.58"
-              transform="rotate(-90 100 100)"></circle>
-            <text x="100" y="96" text-anchor="middle" class="gauge-pct">96%</text>
-            <text x="100" y="118" text-anchor="middle" class="gauge-sub">chance of a goal</text>
-          </svg>
-          <div class="gauge-result miss">✗ Missed</div>
-          <div class="gauge-caption">Marcus Tavernier, 7th minute<br>Ipswich 1–2 Bournemouth, Dec 2024</div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-goal">
-        <div class="gauge-panel">
-          <svg viewBox="0 0 200 200">
-            <circle class="gauge-track" cx="100" cy="100" r="80"></circle>
-            <circle class="gauge-fill positive" cx="100" cy="100" r="80"
-              stroke-dasharray="502.65" stroke-dashoffset="498.82"
-              transform="rotate(-90 100 100)"></circle>
-            <text x="100" y="96" text-anchor="middle" class="gauge-pct">0.8%</text>
-            <text x="100" y="118" text-anchor="middle" class="gauge-sub">chance of a goal</text>
-          </svg>
-          <div class="gauge-result goal">✓ Goal</div>
-          <div class="gauge-caption">Alex Iwobi, 50th minute<br>West Ham 1–3 Fulham, Jan 2025</div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-scale">
-        <div class="stat-trio">
-          <div>
-            <div class="num">380</div>
-            <div class="lbl">matches in the season</div>
-          </div>
-          <div>
-            <div class="num">9,878</div>
-            <div class="lbl">individual shots, each with its own xG</div>
-          </div>
-          <div>
-            <div class="num">10,000</div>
-            <div class="lbl">replayed seasons</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-title-odds">
-        <div class="barh-panel">
-          <div class="barh-row"><div class="barh-team highlight">Liverpool</div><div class="barh-track"><div class="barh-fill highlight" style="width:100%"></div></div><div class="barh-value">75.7%</div></div>
-          <div class="barh-row"><div class="barh-team">Arsenal</div><div class="barh-track"><div class="barh-fill" style="width:23%"></div></div><div class="barh-value">17.0%</div></div>
-          <div class="barh-row"><div class="barh-team">Man City</div><div class="barh-track"><div class="barh-fill" style="width:6%"></div></div><div class="barh-value">2.2%</div></div>
-          <div class="barh-row"><div class="barh-team highlight">Bournemouth</div><div class="barh-track"><div class="barh-fill highlight" style="width:6%"></div></div><div class="barh-value">2.2%</div></div>
-          <div class="barh-row"><div class="barh-team">Chelsea</div><div class="barh-track"><div class="barh-fill" style="width:4%"></div></div><div class="barh-value">1.2%</div></div>
-          <div class="barh-row"><div class="barh-team">Newcastle</div><div class="barh-track"><div class="barh-fill" style="width:4%"></div></div><div class="barh-value">0.9%</div></div>
-          <div class="barh-row"><div class="barh-team">Aston Villa</div><div class="barh-track"><div class="barh-fill" style="width:3%"></div></div><div class="barh-value">0.3%</div></div>
-          <div class="barh-row"><div class="barh-team">Fulham</div><div class="barh-track"><div class="barh-fill" style="width:3%"></div></div><div class="barh-value">0.2%</div></div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-same-champion">
-        <div class="gauge-panel">
-          <svg viewBox="0 0 200 200">
-            <circle class="gauge-track" cx="100" cy="100" r="80"></circle>
-            <circle class="gauge-fill positive" cx="100" cy="100" r="80"
-              stroke-dasharray="502.65" stroke-dashoffset="121.94"
-              transform="rotate(-90 100 100)"></circle>
-            <text x="100" y="96" text-anchor="middle" class="gauge-pct">75.7%</text>
-            <text x="100" y="118" text-anchor="middle" class="gauge-sub">of replayed seasons</text>
-          </svg>
-          <div class="gauge-result goal">Liverpool win it again</div>
-          <div class="gauge-caption">Same champion as the real 2024/25 season</div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-movers">
-        <div class="movers-panel">
-          <div class="movers-group-label">Climbed most on pure chance quality</div>
-          <div class="mover-row"><span class="mover-arrow up">▲</span><span class="mover-team">Tottenham</span><span class="mover-detail">17th real → ~12.5th expected</span></div>
-          <div class="mover-row"><span class="mover-arrow up">▲</span><span class="mover-team">Man United</span><span class="mover-detail">15th real → ~11.5th expected</span></div>
-          <div class="mover-row"><span class="mover-arrow up">▲</span><span class="mover-team">Bournemouth</span><span class="mover-detail">9th real → ~5.4th expected</span></div>
-          <div class="movers-group-label">Fell furthest on pure chance quality</div>
-          <div class="mover-row"><span class="mover-arrow down">▼</span><span class="mover-team">Nottingham Forest</span><span class="mover-detail">7th real → ~12.5th expected</span></div>
-          <div class="mover-row"><span class="mover-arrow down">▼</span><span class="mover-team">Chelsea</span><span class="mover-detail">4th real → ~6.4th expected</span></div>
-          <div class="mover-row"><span class="mover-arrow down">▼</span><span class="mover-team">Man City</span><span class="mover-detail">3rd real → ~5.3th expected</span></div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-minnow">
-        <div class="showcase-card">
-          <div class="showcase-eyebrow">Genuine shocks</div>
-          <div class="showcase-score">31 / 10,000</div>
-          <div class="showcase-teams">seasons crowned a team that really finished outside the top half</div>
-          <div class="trophy-list">
-            <div class="trophy-row"><span>🏆 Fulham</span><span class="n">17× · real 11th</span></div>
-            <div class="trophy-row"><span>🏆 Crystal Palace</span><span class="n">13× · real 12th</span></div>
-            <div class="trophy-row"><span>🏆 Man United</span><span class="n">1× · real 15th</span></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-thrillers">
-        <div class="showcase-card">
-          <div class="showcase-eyebrow">Highest-scoring replay</div>
-          <div class="showcase-score">Man United 3–13 Tottenham</div>
-          <div class="showcase-teams">16 goals in a single simulated match</div>
-          <div class="showcase-note">Games with 7+ goals happen <strong>21.1</strong> times per replayed season on average — the real season had only <strong>10</strong>, all year.</div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-goals-explosion">
-        <div class="showcase-card">
-          <div class="showcase-eyebrow">Biggest individual haul</div>
-          <div class="showcase-score">Erling Haaland — 7 goals</div>
-          <div class="showcase-teams">Man City vs. Southampton, one simulated afternoon</div>
-          <div class="showcase-note">Hat-tricks (3+ in a game) happen <strong>~17.5</strong> times per replayed season on average, vs. <strong>12</strong> in the real one.</div>
-        </div>
-      </div>
-
-      <div class="visual-panel" id="panel-calibration">
-        <div class="compare-panel">
-          <div class="compare-row">
-            <div class="compare-label"><span>Real season</span><span class="v">2.93 goals / game</span></div>
-            <div class="compare-track"><div class="compare-fill real" style="width:90%"></div></div>
-          </div>
-          <div class="compare-row">
-            <div class="compare-label"><span>Simulated average</span><span class="v">3.26 goals / game</span></div>
-            <div class="compare-track"><div class="compare-fill sim" style="width:100%"></div></div>
-          </div>
-        </div>
-      </div>
-
-    </div>
+  <!-- PLACEHOLDER COPY: intro framing below is functional/factual only, per
+       this site's convention (see CLAUDE.md) that Claude implements and the
+       user writes the actual prose/headings. Please rewrite before this
+       goes live. -->
+  <div class="intro placeholder-copy">
+    <div class="eyebrow">A short explainer</div>
+    <h1>A million Premier Leagues</h1>
+    <p>Every shot in the real 2025/26 season had some probability of being a goal — its xG. What actually happened was one draw from that process. Here it's been redrawn 1,000,000 times, and this is who won.</p>
   </div>
 
-  <div class="text-col">
+  <!-- ===================== treemap ===================== -->
 
-    <div class="intro">
-      <div class="eyebrow">An xG experiment</div>
-      <h1>The Premier League, replayed 10,000 times</h1>
-      <p class="muted meta-line">
-        2024/25 season · data from Understat
-        <button type="button" class="info-icon" id="about-data-btn" aria-label="About the data" aria-describedby="about-data-tip">i</button>
-        <span class="info-tooltip" id="about-data-tip" role="tooltip">
-          <strong>About the data.</strong> Every shot in the 2024/25 Premier League season, with Understat's xG for it. The simulation re-rolls each shot as an independent Bernoulli(xG) trial and rebuilds the table from scratch. That's a simplification:
-          <ul>
-            <li>Shots are treated as independent — no game-state, momentum, or "game management" effects.</li>
-            <li>Own goals aren't modelled (Understat doesn't attribute an xG to them).</li>
-            <li>Ties are broken by points → goal difference → goals for, not head-to-head.</li>
-          </ul>
-        </span>
-      </p>
-      <p>Every shot in football has some chance of going in — that's what xG (expected goals) measures. What actually happens over 90 minutes is one draw from that process. So what if we drew again?</p>
+  <section id="treemap-section">
+    <!-- PLACEHOLDER COPY -->
+    <h2 class="placeholder-copy">Every champion, out of a million tries</h2>
+    <p class="placeholder-copy">Each of the 1,000,000 simulated seasons contributes one unit of area, grouped and coloured by whichever team won that particular simulation. A handful of individual simulated seasons are marked below the map — click one to see its full final table and notable games.</p>
+
+    <div class="treemap-card">
+      <canvas id="treemap-canvas" width="1250" height="800"></canvas>
+      <div class="treemap-caption">
+        <span id="treemap-caption-left"></span>
+        <span id="treemap-caption-right"></span>
+      </div>
     </div>
 
-    <section class="step" data-step="miss">
-      <h2>A near-certain goal, missed</h2>
-      <p>This chance had a <strong>96% xG</strong> — the kind of shot that goes in almost every time it's taken. Marcus Tavernier put it wide.</p>
-      <p class="muted">Multiply that across 9,878 shots in a season and you start to see the problem with treating the table as a pure measure of quality: some of it is just how the coin landed.</p>
-    </section>
+    <div class="roster" id="roster"></div>
+    <p class="never-won-note" id="never-won-note"></p>
+  </section>
 
-    <section class="step" data-step="goal">
-      <h2>A near-impossible goal, scored</h2>
-      <p>And the opposite happens too. This one had less than a <strong>1% xG</strong> — a shot that, on quality alone, should almost never go in. Alex Iwobi scored anyway.</p>
-      <p class="muted">Neither of these is a data error. They're just what "probability" means: even a 96% chance fails sometimes, and even a 1% chance comes off sometimes.</p>
-    </section>
+  <!-- ===================== simulate it yourself (2025/26) ===================== -->
 
-    <section class="step" data-step="scale">
-      <h2>So we rolled the dice again</h2>
-      <p>Take every one of the 9,878 shots from the real 2024/25 season and give each one its own weighted coin flip, using its actual xG as the probability of scoring. Rebuild the scorelines, rebuild the table.</p>
-      <p>Then do that <strong>10,000 times</strong>, and see what changes and what doesn't.</p>
-    </section>
+  <section id="simulator-section">
+    <!-- PLACEHOLDER COPY -->
+    <h2 class="placeholder-copy">Simulate a 2025/26 season</h2>
+    <p class="placeholder-copy">Everything above is the shape of 1,000,000 replays. This runs just one, live, in your browser — the same 380 matches, the same 9,524 shots, re-rolled on the spot.</p>
 
-    <section class="step" data-step="title-odds">
-      <h2>Liverpool still win — usually</h2>
-      <p>Across 10,000 replays, Liverpool are champions <strong>75.7%</strong> of the time. That's a genuinely dominant number, but it also means that in roughly <strong>1 in 4 replays of the exact same chances they actually created</strong>, somebody else wins the league.</p>
-      <p class="muted">Arsenal pick up most of the rest (17%). But look further down: Bournemouth — 9th in reality — out-title Chelsea, Newcastle and Aston Villa combined.</p>
-    </section>
+    <button type="button" class="sim-run-btn" id="sim-run-btn">▶ Simulate a season</button>
+    <div class="sim-status" id="sim-status"></div>
 
-    <section class="step" data-step="same-champion">
-      <h2>A deserved title, mostly</h2>
-      <p>75.7% isn't "inevitable," but it's a lot better than a coin flip. Liverpool's actual title looks like the single most likely outcome of the season they played — not a lucky break, and not a guarantee either.</p>
-    </section>
-
-    <section class="step" data-step="movers">
-      <h2>Who got the rub of the green?</h2>
-      <p>Comparing each team's real finish to their <em>average</em> finish across 10,000 replays shows who the chances actually favoured. Nottingham Forest's real 7th-place finish sits well above what their underlying shot quality alone would predict — one of the most talked-about overperformances of the season.</p>
-      <p class="muted">Tottenham and Manchester United sit at the other extreme: mid-table by the shots they actually created, but well below that in reality.</p>
-    </section>
-
-    <section class="step" data-step="minnow">
-      <h2>When the minnows win it</h2>
-      <p>In <strong>31 of 10,000</strong> seasons (0.31%), the simulated champion is a team that really finished in the bottom half of the table. Fulham (11th in reality) top the list, followed by Crystal Palace (12th).</p>
-      <p class="muted">Rare — but not impossible. That's the honest range of outcomes hiding inside one real season's worth of chances.</p>
-    </section>
-
-    <section class="step" data-step="thrillers">
-      <h2>The games that got out of hand</h2>
-      <p>Somewhere in the 10,000 replays, Manchester United and Tottenham somehow combined for <strong>16 goals</strong> in one match. It's an outlier — but high-scoring thrillers (7+ goals) show up <strong>21.1 times</strong> per replayed season on average, roughly double the real season's tally of 10.</p>
-    </section>
-
-    <section class="step" data-step="goals-explosion">
-      <h2>When one player gets hot</h2>
-      <p>In one replay, Erling Haaland scored <strong>7 goals</strong> in a single match against Southampton. Individual hauls like this are rarer than team-level thrillers, but hat-tricks (3+ goals in a game) still land about <strong>17–18 times</strong> per replayed season.</p>
-    </section>
-
-    <section class="step" data-step="calibration">
-      <h2>One honest caveat</h2>
-      <p>The simulated seasons average <strong>3.26 goals per game</strong>, noticeably more than the real season's <strong>2.93</strong>. That's a known quirk of xG models: they tend to run a little "hot" relative to how teams actually finish, since finishing quality, last-ditch defending and goalkeeping aren't fully priced into a shot's raw quality.</p>
-      <p class="muted">Worth keeping in mind when reading the thriller and hat-trick numbers above — the shape of the story holds, but the exact rates are probably a touch inflated.</p>
-    </section>
-
-    <div class="outro">
-      <h2>Try it yourself</h2>
-      <p>Everything above is the average of 10,000 replays. Scroll down to run just one — the same 380 matches, the same 9,878 shots, re-rolled live in your browser.</p>
+    <div class="sim-results" id="sim-results">
+      <div class="sim-banner" id="sim-banner"></div>
+      <div class="sim-grid">
+        <div>
+          <table class="sim-table" id="sim-table">
+            <thead>
+              <tr><th>#</th><th>Team</th><th>Pts</th><th>GD</th><th>vs. real</th></tr>
+            </thead>
+            <tbody id="sim-table-body"></tbody>
+          </table>
+        </div>
+        <div class="sim-storylines">
+          <h3>From this replay</h3>
+          <ul id="sim-storylines-list"></ul>
+        </div>
+      </div>
     </div>
+  </section>
 
-  </div>
+  <!-- ===================== leicester 2015-16 ===================== -->
+
+  <section id="leicester-section">
+    <!-- PLACEHOLDER COPY / DATA ONLY: the user is writing the actual
+         narrative for this section themselves (see conversation) — the
+         card below is supporting stats + crest only, no prose. Drop your
+         writing in around/above this card. -->
+    <h2 class="placeholder-copy">One that already happened: Leicester, 2015-16</h2>
+    <div class="leicester-card">
+      <img class="leicester-crest" src="../assets/logos/clubs/leicester.svg" alt="Leicester City crest">
+      <div class="leicester-stats" id="leicester-stats"></div>
+    </div>
+  </section>
+
 </div>
 
-<div class="simulator" id="simulator">
-  <h2>Simulate a 2024/25 season</h2>
-  <p class="muted">Every shot from the real season gets its own fresh coin flip, weighted by its actual xG. Click to see what happens.</p>
+<!-- ===================== story modal ===================== -->
 
-  <button type="button" class="sim-run-btn" id="sim-run-btn">▶ Simulate a season</button>
-  <div class="sim-status" id="sim-status"></div>
-
-  <div class="sim-results" id="sim-results">
-    <div class="sim-banner" id="sim-banner"></div>
-    <div class="sim-grid">
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal">
+    <button type="button" class="modal-close" id="modal-close">✕</button>
+    <div class="modal-header">
+      <img class="modal-crest" id="modal-crest" src="" alt="">
       <div>
-        <table class="sim-table" id="sim-table">
-          <thead>
-            <tr><th>#</th><th>Team</th><th>Pts</th><th>GD</th><th>vs. real</th></tr>
-          </thead>
-          <tbody id="sim-table-body"></tbody>
-        </table>
-      </div>
-      <div class="sim-storylines">
-        <h3>From this replay</h3>
-        <ul id="sim-storylines-list"></ul>
+        <div class="modal-tag" id="modal-tag"></div>
+        <div class="modal-title" id="modal-title"></div>
       </div>
     </div>
+    <div class="modal-sub" id="modal-sub"></div>
+
+    <h4>Final table</h4>
+    <table class="final-table">
+      <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
+      <tbody id="modal-table-body"></tbody>
+    </table>
+
+    <h4>Highest-scoring games</h4>
+    <div id="modal-highest"></div>
+
+    <h4>Biggest wins</h4>
+    <div id="modal-wins"></div>
   </div>
 </div>
 
 <script>
-(function(){
-  // ===================== scrollytelling step activation =====================
-  var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
-  var panels = {};
-  document.querySelectorAll('.visual-panel').forEach(function(p){ panels[p.id] = p; });
+(async function(){
 
-  var activeStep = null;
-  var intersecting = new Map(steps.map(function(s){ return [s, false]; }));
+  var data = await fetch('pl-treemap-data/treemap-data.json').then(function(r){ return r.json(); });
 
-  function pickActiveStep(){
-    var best = null, bestDist = Infinity;
-    intersecting.forEach(function(isIn, el){
-      if(!isIn) return;
-      var rect = el.getBoundingClientRect();
-      var mid = rect.top + rect.height / 2;
-      var dist = Math.abs(mid - window.innerHeight / 2);
-      if(dist < bestDist){ bestDist = dist; best = el; }
+  var teams = data.teams.slice();
+  var nonZero = teams.filter(function(t){ return t.title_count > 0; });
+  var zero = teams.filter(function(t){ return t.title_count === 0; });
+  var storiesByTeam = {};
+  data.stories.forEach(function(s){
+    (storiesByTeam[s.champion] = storiesByTeam[s.champion] || []).push(s);
+  });
+
+  var TAG_LABEL = {
+    biggest_upset: 'Biggest upset',
+    closest_title_race: 'Closest title race',
+    record_points_champion: 'Record points',
+    weakest_champion: 'Weakest champion',
+    most_thrillers: 'Most thrillers in a season',
+    most_hattricks: 'Most hat-tricks in a season',
+    closest_to_reality: 'Closest to what really happened',
+    most_alternate_reality: 'Furthest from what really happened',
+  };
+
+  /* =========================================================
+     1. SQUARIFIED TREEMAP LAYOUT
+     Standard Bruls/Huizing/van Wijk algorithm: lay out a sorted list of
+     values into a rect, building each row to keep aspect ratios as close
+     to square as possible rather than naive slice-and-dice strips.
+     ========================================================= */
+
+  function squarify(items, x, y, w, h) {
+    var result = [];
+    var remaining = items.slice();
+
+    function rowWorst(row, length) {
+      var sum = 0, max = -Infinity, min = Infinity;
+      row.forEach(function(r){
+        sum += r.value;
+        if (r.value > max) max = r.value;
+        if (r.value < min) min = r.value;
+      });
+      var s2 = sum * sum, l2 = length * length;
+      return Math.max((l2 * max) / s2, s2 / (l2 * min));
+    }
+
+    while (remaining.length) {
+      var length = Math.min(w, h);
+      var row = [remaining[0]];
+      var i = 1;
+      while (i < remaining.length) {
+        var testRow = row.concat([remaining[i]]);
+        if (rowWorst(testRow, length) <= rowWorst(row, length)) {
+          row = testRow;
+          i++;
+        } else break;
+      }
+
+      var rowSum = row.reduce(function(a, b){ return a + b.value; }, 0);
+      if (w >= h) {
+        var colW = rowSum / h;
+        var cy = y;
+        row.forEach(function(item){
+          var itemH = item.value / colW;
+          result.push(Object.assign({}, item, { x: x, y: cy, w: colW, h: itemH }));
+          cy += itemH;
+        });
+        x += colW; w -= colW;
+      } else {
+        var rowH = rowSum / w;
+        var cx = x;
+        row.forEach(function(item){
+          var itemW = item.value / rowH;
+          result.push(Object.assign({}, item, { x: cx, y: y, w: itemW, h: rowH }));
+          cx += itemW;
+        });
+        y += rowH; h -= rowH;
+      }
+      remaining = remaining.slice(row.length);
+    }
+    return result;
+  }
+
+  /* =========================================================
+     2. RENDER
+     ========================================================= */
+
+  var canvas = document.getElementById('treemap-canvas');
+  var ctx = canvas.getContext('2d');
+  var CW = canvas.width, CH = canvas.height;
+
+  var layoutItems = nonZero.map(function(t){ return { value: t.title_count, team: t }; });
+  var blocks = squarify(layoutItems, 0, 0, CW, CH);
+  var blockByTeam = {};
+  blocks.forEach(function(b){ blockByTeam[b.team.team] = b; });
+
+  // Crests load at wildly different sizes (a couple of these Wikipedia
+  // SVGs run to several hundred KB). Drawing waits on each one individually
+  // rather than Promise.all-ing the whole set, so the solid-colour map
+  // paints immediately and crests pop in as they arrive instead of the
+  // heaviest file holding up every block's first paint.
+  var crestCache = {};
+  function loadImage(src){
+    return new Promise(function(resolve){
+      var img = new Image();
+      img.onload = function(){ resolve(img); };
+      img.onerror = function(){ resolve(null); };
+      img.src = src;
     });
-    return best;
   }
-
-  function showPanel(id){
-    Object.keys(panels).forEach(function(k){ panels[k].classList.toggle('visible', k === id); });
-  }
-
-  function activateStep(el){
-    if(!el || el === activeStep) return;
-    activeStep = el;
-    steps.forEach(function(s){ s.classList.remove('active'); });
-    el.classList.add('active');
-    showPanel('panel-' + el.getAttribute('data-step'));
-  }
-
-  var observer = new IntersectionObserver(function(entries){
-    entries.forEach(function(entry){ intersecting.set(entry.target, entry.isIntersecting); });
-    activateStep(pickActiveStep());
-  }, { root:null, rootMargin:'-45% 0px -45% 0px', threshold:0 });
-
-  steps.forEach(function(s){ observer.observe(s); });
-  showPanel('panel-miss');
-
-  // "About the data" info icon: hover via CSS, tap-to-toggle for touch
-  var btn = document.getElementById('about-data-btn');
-  var tip = document.getElementById('about-data-tip');
-  if(btn && tip){
-    btn.addEventListener('click', function(e){
-      e.stopPropagation();
-      var open = tip.classList.toggle('open');
-      btn.classList.toggle('open', open);
+  nonZero.forEach(function(t){
+    loadImage('../assets/logos/clubs/' + t.crest_file).then(function(img){
+      crestCache[t.team] = img;
+      draw();
     });
-    document.addEventListener('click', function(){
-      tip.classList.remove('open');
-      btn.classList.remove('open');
+  });
+
+  function draw(){
+    ctx.clearRect(0, 0, CW, CH);
+    blocks.forEach(function(b){
+      ctx.fillStyle = b.team.color;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+
+      // hairline separators so adjoining same-tone blocks still read as
+      // distinct regions
+      ctx.strokeStyle = 'rgba(255,255,255,.6)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+
+      var short = Math.min(b.w, b.h);
+      if (short < 8) return; // too small for any legible content
+
+      var crest = crestCache[b.team.team];
+      var boxSize = Math.min(short * 0.6, 90);
+      if (crest && short >= 26) {
+        var ar = crest.naturalWidth / crest.naturalHeight || 1;
+        var cw = ar >= 1 ? boxSize : boxSize * ar;
+        var ch = ar >= 1 ? boxSize / ar : boxSize;
+        var cx = b.x + b.w / 2 - cw / 2;
+        var cy = b.y + b.h / 2 - ch / 2 - (short >= 60 ? 8 : 0);
+        ctx.drawImage(crest, cx, cy, cw, ch);
+      }
+
+      if (short >= 70) {
+        ctx.fillStyle = 'rgba(0,0,0,.55)';
+        ctx.font = '500 13px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        var labelY = b.y + b.h / 2 + boxSize / 2 + 4;
+        if (labelY < b.y + b.h - 6) {
+          ctx.fillText(b.team.team, b.x + b.w / 2, labelY);
+        }
+      }
     });
   }
+  draw();
+
+  document.getElementById('treemap-caption-left').textContent =
+    data.meta.n_sims.toLocaleString() + ' simulated seasons · ' + nonZero.length + ' different champions';
+  document.getElementById('treemap-caption-right').textContent =
+    'Same champion as reality in ' + (data.same_champion_odds * 100).toFixed(1) + '% of simulations';
+
+  /* =========================================================
+     3. ROSTER / LEGEND
+     ========================================================= */
+
+  var roster = document.getElementById('roster');
+  var html = '';
+  nonZero.forEach(function(t){
+    var stories = storiesByTeam[t.team] || [];
+    html += '<div class="roster-card">'
+      + '<span class="roster-swatch" style="background:' + t.color + '"></span>'
+      + '<img class="roster-crest" src="../assets/logos/clubs/' + t.crest_file + '" alt="' + t.team + ' crest">'
+      + '<div class="roster-name">' + t.team + '</div>'
+      + '<div class="roster-stat">' + t.title_count.toLocaleString() + ' / 1,000,000 · ' + (t.title_odds*100).toFixed(t.title_odds < 0.001 ? 3 : 1) + '%</div>'
+      + stories.map(function(s, si){
+          return '<button type="button" class="roster-story-btn" data-story="' + t.team + ':' + si + '">' + TAG_LABEL[s.tag] + '</button>';
+        }).join('')
+      + '</div>';
+  });
+  roster.innerHTML = html;
+
+  var noteZero = zero.length
+    ? 'Never won it, not once in 1,000,000 tries: ' + zero.map(function(t){ return t.team; }).join(', ') + '.'
+    : '';
+  document.getElementById('never-won-note').textContent = noteZero;
+
+  roster.addEventListener('click', function(e){
+    var btn = e.target.closest('.roster-story-btn');
+    if (!btn) return;
+    var parts = btn.getAttribute('data-story').split(':');
+    var team = parts[0], si = parseInt(parts[1], 10);
+    openStory(storiesByTeam[team][si]);
+  });
+
+  /* =========================================================
+     4. STORY MODAL
+     ========================================================= */
+
+  var backdrop = document.getElementById('modal-backdrop');
+
+  function crestPath(teamName){
+    var t = teams.filter(function(x){ return x.team === teamName; })[0];
+    return t ? '../assets/logos/clubs/' + t.crest_file : '';
+  }
+
+  function gameLine(g){
+    return '<div class="game-line"><span>' + g.home_team + ' vs ' + g.away_team + '</span>'
+      + '<span class="score">' + g.home_goals + '–' + g.away_goals + '</span></div>';
+  }
+
+  function openStory(story){
+    document.getElementById('modal-crest').src = crestPath(story.champion);
+    document.getElementById('modal-crest').alt = story.champion + ' crest';
+    document.getElementById('modal-tag').textContent = TAG_LABEL[story.tag] || story.tag;
+    document.getElementById('modal-title').textContent = story.champion + ' win the league';
+    document.getElementById('modal-sub').textContent = 'Real-life finish that season: ' + ordinal(story.champion_real_position);
+
+    var body = document.getElementById('modal-table-body');
+    body.innerHTML = story.final_table.map(function(r){
+      var cls = r.team === story.champion ? ' class="champion"' : '';
+      return '<tr' + cls + '><td>' + r.position + '</td><td>' + r.team + '</td>'
+        + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
+        + '<td class="num">' + r.gf + '</td><td class="num">' + r.ga + '</td></tr>';
+    }).join('');
+
+    document.getElementById('modal-highest').innerHTML = story.notable_games.highest_scoring.map(gameLine).join('');
+    document.getElementById('modal-wins').innerHTML = story.notable_games.biggest_wins.map(gameLine).join('');
+
+    backdrop.classList.add('open');
+  }
+
+  function ordinal(n){
+    var s = ['th','st','nd','rd'], v = n % 100;
+    return n + (s[(v-20)%10] || s[v] || s[0]);
+  }
+
+  document.getElementById('modal-close').addEventListener('click', function(){
+    backdrop.classList.remove('open');
+  });
+  backdrop.addEventListener('click', function(e){
+    if (e.target === backdrop) backdrop.classList.remove('open');
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') backdrop.classList.remove('open');
+  });
+
+  /* =========================================================
+     5. LEICESTER 2015-16 STATS (data only -- see HTML comment)
+     ========================================================= */
+
+  var leicester = await fetch('../simulations/results/sim_leicester_2015_16.json').then(function(r){ return r.json(); }).catch(function(){ return null; });
+  if (leicester) {
+    var lei = leicester.per_team.filter(function(r){ return r.team === 'Leicester'; })[0];
+    var favourite = leicester.per_team[0];
+    var stats = document.getElementById('leicester-stats');
+    stats.innerHTML =
+      '<div><div class="num">' + (lei.title_odds*100).toFixed(1) + '%</div><div class="lbl">Leicester\'s simulated title odds that season, across 10,000 replays</div></div>'
+      + '<div><div class="num">' + (favourite.title_odds*100).toFixed(1) + '%</div><div class="lbl">' + favourite.team + '\'s simulated odds — the model\'s actual favourite — who never won a single one</div></div>'
+      + '<div><div class="num">' + (leicester.same_champion_odds*100).toFixed(1) + '%</div><div class="lbl">of the 10,000 replays produced the same champion as reality</div></div>';
+  }
+
 })();
 </script>
 
 <script>
-// ===================== client-side single-season simulator =====================
+// ===================== client-side single-season simulator (2025/26) =====================
 (function(){
   var runBtn = document.getElementById('sim-run-btn');
   var statusEl = document.getElementById('sim-status');
@@ -585,7 +601,6 @@
     });
 
   function realTable(){
-    var n = DATA.teams.length;
     var t = DATA.teams.map(function(name){ return { team:name, pts:0, gf:0, ga:0 }; });
     DATA.matches.forEach(function(m){
       var hg = m.hg, ag = m.ag;
@@ -604,7 +619,6 @@
   }
 
   function simulateOnce(){
-    var n = DATA.teams.length;
     var t = DATA.teams.map(function(name){ return { team:name, pts:0, gf:0, ga:0 }; });
     var thrillers = 0, bigHauls = [], biggestWin = null, totalGoals = 0;
     var THRILLER_THRESHOLD = 7, HAUL_THRESHOLD = 3;
@@ -730,13 +744,12 @@
   runBtn.addEventListener('click', function(){
     if(!DATA) return;
     runBtn.disabled = true;
-    var originalLabel = runBtn.textContent;
-    runBtn.textContent = 'Rolling 9,878 shots…';
+    runBtn.textContent = 'Rolling ' + DATA.matches.reduce(function(s,m){ return s+m.xh.length+m.xa.length; }, 0).toLocaleString() + ' shots…';
     if(!real) real = realTable();
 
     // Small artificial pause: the computation itself is near-instant, but a
-    // beat here reads better than 9,878 coin flips resolving with no sense
-    // that anything happened.
+    // beat here reads better than several thousand coin flips resolving
+    // with no sense that anything happened.
     setTimeout(function(){
       var sim = simulateOnce();
       render(sim, real);
