@@ -452,6 +452,14 @@ def main():
         team_payload.append({
             "team": t,
             **teams_meta[t],
+            # This team's byte value in champions.bin -- teams there are
+            # indexed by the alphabetical `teams` order used throughout this
+            # script, which is *not* the title_count-descending order this
+            # payload gets sorted into below. Ships explicitly so the client
+            # can decode champions.bin / the flagged-sim files (which only
+            # carry a global sim index) back to a team without having to
+            # reproduce Python's sort order in JS.
+            "champion_byte": i,
             "real_position": int(real_table[real_table["team"] == t]["position"].iloc[0]),
             "title_count": int(title_counts[i]),
             "title_odds": float(title_counts[i] / args.sims),
