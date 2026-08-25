@@ -128,3 +128,53 @@ for the actual text and visual direction before drafting either.
   tiebreak sections), and a stale itinerary-index assumption in the
   regression test suite (not a site bug) after the itinerary gained new
   stop kinds.
+
+  **2026-08-25, later — Other cutoff to 3%, Other-zoom jank fix, sim
+  numbers in captions; two markdown candidate lists left for tomorrow.**
+  User feedback on the above pass, actioned same day: (1) `OTHER_CUTOFF_FRACTION`
+  changed from 0.05 to 0.03 in `pl-xg-simulator.html` (same 17-team "Other"
+  set on the current data either way — the gap between the smallest teams'
+  cumulative total and the next team's inclusion straddles both
+  thresholds). (2) The "Other" zoom-in read as janky (a flat grey block
+  popping into a detailed sub-map) — fixed by pre-rendering "Other" itself
+  as a mini mosaic of its own constituent teams' colours on the overview
+  (new `drawOtherMosaic()`, called from `drawBlocks()` instead of a flat
+  fill), using the exact same `squarify()` output scaled into Other's
+  actual overview rect, so the crossfade into the full-scale sub-map now
+  lands on (near enough) the same geometry instead of popping. (3) Tour
+  captions and both story-modal subtitles now quote the sim number
+  ("Sim #34,421 — Arsenal win the title on a tiebreak…") via a new
+  `simTag()` helper — small, and shipped outright rather than left as a
+  choice, per the user's ask.
+  **Deliberately NOT done, per the user's own request to pick a shortlist
+  themselves**: the tour itself is still all 20 stops (5 champion + 5
+  title-tie + 10 game) — cutting it to 5 needs the user's picks first.
+  `notes/pl-xg-tour-candidates.md` lists all 20 (sim number, teams/score,
+  one-liner) for them to choose from; once they reply, trim `buildItinerary()`
+  to just those 5 (or whatever count they land on) — that's the one
+  concrete follow-up this note leaves open. Also **not done**, explicitly
+  lower priority per the user ("we can talk about that later"):
+  `notes/pl-xg-roster-card-candidates.md` sketches ideas for richer roster
+  cards, including the user's own "best season" idea for the 4 clubs that
+  never win in 1,000,000 sims (Burnley, Sunderland, West Ham, Wolves) —
+  flagged there as needing a small new backend pass (best-position-per-team
+  isn't in any saved output today, since ordinary sims discard a team's
+  position once folded into the running totals), alongside two candidates
+  that need no new data. **Investigated, not a code bug**: "I'm still not
+  seeing any game level details" — re-scanned for the `style.display=''`
+  pitfall (none found) and re-ran the full scorecard-rendering check across
+  all 10 game stops (all correct: player/minute/penalty grouping renders
+  right). Working theory, given the tour is 20 stops long and the 10 game
+  stops are all in the back half (positions 11–20): the user likely hadn't
+  scrolled/played that far into the tour yet, not a rendering bug. Noted in
+  `pl-xg-tour-candidates.md` too, since cutting to their chosen 5 (assuming
+  at least one game-kind stop makes the cut) should resolve it either way.
+  Verified via headless-Chromium Playwright: full 20-stop walk (all modal
+  kinds/contents correct, 0 findings), then a corrected "Other" pixel-scan
+  (the old flat-colour scan no longer matches now that Other is a mosaic;
+  rewrote it to find the region structurally instead) confirming
+  overview → Other → a pooled team's real per-sim grid → back → back
+  round-trips correctly, plus the existing desktop/mobile suites all still
+  pass. Nothing pushed to `main` this round — this work is left on
+  `claude/pl-xg-article-commentary-cnrfz3` pending the user's picks from
+  the two notes above.

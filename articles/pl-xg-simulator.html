@@ -642,13 +642,13 @@
   var HIGHLIGHT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--accent-step').trim() || '#11CEEE';
 
   // "Other": pool the least-frequent champions -- the smallest teams whose
-  // combined title count is <=5% of all sims -- into one region, so a
+  // combined title count is <=3% of all sims -- into one region, so a
   // one-in-a-million team doesn't get an overview block too thin to see or
   // click. Clicking "Other" opens its own squarified sub-map (built the
   // same way, just from this smaller set) from which a real per-sim grid
   // is one more click away, same as any other team. Same idea on desktop
   // as mobile, per the user.
-  var OTHER_CUTOFF_FRACTION = 0.05;
+  var OTHER_CUTOFF_FRACTION = 0.03;
   var otherBudget = data.meta.n_sims * OTHER_CUTOFF_FRACTION;
   var otherTeamsList = [], otherSum = 0;
   nonZero.slice().sort(function(a, b){ return a.title_count - b.title_count; }).forEach(function(t){
@@ -671,6 +671,17 @@
   var otherBlocks = otherTeamsList.length ? squarify(otherLayoutItems, 0, 0, CW, CH) : [];
   var otherBlockByTeam = {};
   otherBlocks.forEach(function(b){ otherBlockByTeam[b.team.team] = b; });
+
+  // The exact same squarify(), just laid out directly inside "Other"'s own
+  // rect at the top level instead of a full 0..CW,0..CH canvas -- so the
+  // overview already shows Other textured as a mini mosaic of its real
+  // constituents, geometrically consistent with what otherBlocks draws at
+  // full scale. Zooming in is then a continuous magnification of the same
+  // pattern rather than a flat block popping into a different picture.
+  var otherRectAtTop = blockByTeam[OTHER_TEAM.team];
+  var otherMiniBlocks = (otherRectAtTop && otherTeamsList.length)
+    ? squarify(otherLayoutItems, otherRectAtTop.x, otherRectAtTop.y, otherRectAtTop.w, otherRectAtTop.h)
+    : [];
 
   // Crests load at wildly different sizes (a couple of these Wikipedia
   // SVGs run to several hundred KB). Drawing waits on each one individually
@@ -704,8 +715,14 @@
   // exists -- it's exactly the same ~20-block draw as before zoom was
   // added. Detail only appears once the camera has actually zoomed into a
   // team's block and section 4 switches to rendering its grid instead.
+  // The one exception is "Other", drawn as its own mini mosaic (see
+  // drawOtherMosaic) rather than a flat block, so zooming into it reads as
+  // a continuous reveal of real detail instead of one colour popping into
+  // a totally different picture.
   function drawBlocks(){
     activeBlocks.forEach(function(b){
+      if (b.team.team === OTHER_TEAM.team) { drawOtherMosaic(b); return; }
+
       ctx.fillStyle = b.team.color;
       ctx.fillRect(b.x, b.y, b.w, b.h);
 
@@ -739,6 +756,35 @@
         }
       }
     });
+  }
+
+  function drawOtherMosaic(outerRect){
+    otherMiniBlocks.forEach(function(mb){
+      ctx.fillStyle = mb.team.color;
+      ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,.5)';
+    ctx.lineWidth = 1;
+    otherMiniBlocks.forEach(function(mb){
+      ctx.strokeRect(mb.x + 0.5, mb.y + 0.5, Math.max(0, mb.w - 1), Math.max(0, mb.h - 1));
+    });
+    ctx.strokeRect(outerRect.x + 0.5, outerRect.y + 0.5, outerRect.w - 1, outerRect.h - 1);
+
+    var short = Math.min(outerRect.w, outerRect.h);
+    if (short < 70) return;
+    var label = 'Other';
+    ctx.font = '500 13px Poppins, sans-serif';
+    var textW = ctx.measureText(label).width;
+    var boxW = textW + 20, boxH = 25;
+    var bx = outerRect.x + outerRect.w / 2 - boxW / 2;
+    var by = outerRect.y + outerRect.h / 2 - boxH / 2;
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    ctx.fillRect(bx, by, boxW, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, outerRect.x + outerRect.w / 2, outerRect.y + outerRect.h / 2 + 1);
+    ctx.textBaseline = 'alphabetic'; // restore the default the rest of drawBlocks relies on
   }
 
   // view.mode is the only thing that decides which draw path is on screen:
@@ -1089,6 +1135,11 @@
     return out;
   }
 
+  // Prefixed onto every tour caption -- quoting which one of the
+  // 1,000,000 this is seems to make it land better as a real, specific
+  // thing that happened rather than an abstract illustration.
+  function simTag(sim){ return 'Sim #' + sim.toLocaleString() + ' — '; }
+
   function buildItinerary(){
     var stops = [];
 
@@ -1100,7 +1151,7 @@
       if (!team) return;
       stops.push({
         team: team, rank: rankOfSim[c.sim], kind: 'champion', record: c,
-        caption: c.champion + ' win the league here — in reality they finished ' + ordinal(c.champion_real_position) + '.',
+        caption: simTag(c.sim) + c.champion + ' win the league here — in reality they finished ' + ordinal(c.champion_real_position) + '.',
       });
     });
 
@@ -1110,16 +1161,16 @@
       var others = t.tied_teams.filter(function(x){ return x !== t.champion; }).join(' and ');
       stops.push({
         team: team, rank: rankOfSim[t.sim], kind: 'title_tie', record: t,
-        caption: t.champion + ' win the title on a tiebreak, level with ' + others + '.',
+        caption: simTag(t.sim) + t.champion + ' win the title on a tiebreak, level with ' + others + '.',
       });
     });
 
     function makeGameStop(g){
       var team = byteToTeam[champions[g.sim]];
       var scoreline = g.home_team + ' ' + g.home_goals + '–' + g.away_goals + ' ' + g.away_team;
-      var caption = g.haul
+      var caption = simTag(g.sim) + (g.haul
         ? g.haul.player + ' scores ' + g.haul.goals + ' in ' + scoreline + '.'
-        : scoreline + ' — ' + (g.home_goals + g.away_goals) + ' goals in one simulated game.';
+        : scoreline + ' — ' + (g.home_goals + g.away_goals) + ' goals in one simulated game.');
       return { team: team, rank: rankOfSim[g.sim], kind: 'game', record: g, caption: caption };
     }
 
@@ -1352,9 +1403,10 @@
         return tr === 'high_scoring' ? 'High-scoring game' : 'Big individual haul';
       }).join(' · ');
       document.getElementById('modal-title').textContent = story.home_team + ' vs ' + story.away_team;
-      document.getElementById('modal-sub').textContent = story.date
+      var gameDateStr = story.date
         ? new Date(story.date.replace(' ', 'T')).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
         : '';
+      document.getElementById('modal-sub').textContent = 'Sim #' + story.sim.toLocaleString() + (gameDateStr ? ' · ' + gameDateStr : '');
       document.getElementById('modal-game-score').innerHTML =
         '<span>' + story.home_team + ' vs ' + story.away_team + '</span>'
         + '<span class="score">' + story.home_goals + '–' + story.away_goals + '</span>';
@@ -1375,7 +1427,8 @@
     document.getElementById('modal-tag').textContent = entry.kind === 'title_tie' ? 'Title decided by tiebreak'
       : (story.tag ? (TAG_LABEL[story.tag] || story.tag) : 'Unexpected winner');
     document.getElementById('modal-title').textContent = story.champion + ' win the league';
-    document.getElementById('modal-sub').textContent = 'Real-life finish that season: ' + ordinal(story.champion_real_position);
+    document.getElementById('modal-sub').textContent =
+      'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
     renderTiebreak(story);
     renderCampaign(story.campaign, story.champion);
 
