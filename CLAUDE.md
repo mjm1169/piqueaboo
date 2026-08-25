@@ -71,3 +71,38 @@ for the actual text and visual direction before drafting either.
   the league here — in reality they finished Nth.") — worth the user's own
   pass to hand-tune once they've seen it live, same as the rest of this
   article's copy.
+
+  **2026-08-25, in progress — real tie-breaks, full scorecards/campaigns,
+  "Other" grouping** (see `/root/.claude/plans/purring-finding-badger.md`
+  for the full plan): replaces the simplified GD→GF→coin-toss tie-break
+  with the real Premier League chain (GD, GF, head-to-head points,
+  head-to-head away goals, coin flip standing in for a play-off), flags a
+  title decided at head-to-head-or-later as its own story type, adds full
+  ordered scorecards (player/minute/penalty) to flagged games, and full
+  38-game campaign logs (opponent, H/A, sim score, xG score) to flagged
+  champions. **Part 1 (backend) is done and checked in**:
+  `simulations/simulate_season.py` gained `build_h2h_fixture_index()` /
+  `resolve_tied_group()` (the real tie-break chain, reused everywhere
+  match-level detail is available) and per-shot minute/penalty arrays in
+  `build_match_index()`. `simulations/export_treemap_data.py`'s big pass is
+  now two sweeps: sweep 1 (unchanged in spirit, now seeds each match's
+  draws independently via `SeedSequence([seed, match_index])` so sweep 2
+  can regenerate any match's results bit-for-bit identically without
+  replaying the whole match list) detects title-level ties (~37 on this
+  run) and captures full scorecards on flagged games; sweep 2 resolves
+  those pending ties via head-to-head and builds a 38-game campaign log for
+  every flagged champion. New output: `flagged-title-ties.json`. The small
+  story batch and the article's own `sim_leicester_2015_16.json` generator
+  now use the same real tie-break chain too (cheap there — full match
+  detail is already retained for every sim at that scale). Full
+  1,000,000-sim regeneration verified end-to-end: 1,985 flagged champions,
+  987 flagged games, 37 flagged title ties, all cross-checked by hand
+  (campaign W/D/L/GF/GA sums match each champion's final table exactly,
+  scorecards match the raw shot data's minutes/penalty flags exactly, all
+  7 title-tie resolutions verified by hand at dry-run scale before the
+  full run). Total combined data payload is now ~16MB (mostly
+  `flagged-champions.json`'s campaign logs) — up from ~15MB before, still a
+  one-time fetch. **Part 2 (frontend) is not started**: none of this new
+  data is read by `pl-xg-simulator.html` yet — no scorecard/campaign
+  display, no title-tie story type, no "Other" grouping, and the mobile
+  tween-speed complaint (too fast to track) is unaddressed.

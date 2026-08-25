@@ -12,11 +12,18 @@ front:
   - Shots are treated as independent of each other (no momentum, game
     state, fatigue, or subs effects; a team 4-0 up doesn't shoot differently).
   - Own goals aren't modelled (Understat doesn't attribute an xG to them).
-  - Tie-breaking uses points -> goal difference -> goals for, not head-to-head
-    (the real Premier League's actual first tiebreaker).
 That's fine for the story being told here (how much of a season's shape
 comes from "who created the better chances" vs. "how the coin landed on
 each one") rather than a forecasting tool.
+
+Tie-breaking uses the real Premier League chain -- points, goal difference,
+goals scored, head-to-head points, head-to-head away goals, then a random
+coin flip standing in for the real world's final "play-off at a neutral
+venue" -- via resolve_tied_group() below, wherever a caller has the full
+match-by-match results needed to compute it (this module's own
+run_simulation() doesn't retain per-match results across all its sims, so
+it still falls back to points/GD/GF only; callers that do keep per-sim
+match detail should use resolve_tied_group() for a correct table).
 
 Usage:
     python simulate_season.py --shots data/shots_2024_25.csv --sims 200 \
@@ -93,7 +100,10 @@ def build_match_index(shots: pd.DataFrame):
     """
     Group shots into a per-match structure ready for vectorised simulation:
     each match keeps its home/away team names and, per side, the xG and
-    scoring player for every shot.
+    scoring player for every shot -- plus each shot's minute and whether it
+    was a penalty (situation == "Penalty"), aligned by index alongside the
+    player arrays, for building full scorecards ("Haaland (1', 31', 54'
+    (p))") when a match is flagged as notable.
     """
     matches = []
     for match_id, g in shots.groupby("match_id", sort=False):
@@ -108,8 +118,117 @@ def build_match_index(shots: pd.DataFrame):
             "xg_a": a_shots["xG"].to_numpy(dtype=float),
             "players_h": h_shots["player"].to_numpy(),
             "players_a": a_shots["player"].to_numpy(),
+            "minutes_h": h_shots["minute"].to_numpy(dtype=int) if "minute" in g.columns else None,
+            "minutes_a": a_shots["minute"].to_numpy(dtype=int) if "minute" in g.columns else None,
+            "is_pen_h": (h_shots["situation"] == "Penalty").to_numpy() if "situation" in g.columns else None,
+            "is_pen_a": (a_shots["situation"] == "Penalty").to_numpy() if "situation" in g.columns else None,
         })
     return matches
+
+
+def build_h2h_fixture_index(matches, team_idx):
+    """
+    {frozenset({team_a_idx, team_b_idx}): [(match_index, home_idx, away_idx), ...]}
+    for every pair of teams -- each pair maps to exactly two matches (their
+    home-and-away fixtures) in a standard double round-robin. Static, built
+    once from the real fixture list; independent of any simulation.
+    """
+    fixtures = {}
+    for i, m in enumerate(matches):
+        h, a = team_idx[m["home_team"]], team_idx[m["away_team"]]
+        fixtures.setdefault(frozenset((h, a)), []).append((i, h, a))
+    return fixtures
+
+
+def resolve_tied_group(tied_idxs, fixture_index, get_result, rng=None):
+    """
+    Resolve a group of team indices tied on points/GD/GF, using the real
+    Premier League chain: a head-to-head mini-league's points among just
+    the tied teams; if still tied, head-to-head away goals among whichever
+    subset remains tied; if still tied, a coin flip (standing in for a
+    real-world play-off at a neutral venue).
+
+    fixture_index: from build_h2h_fixture_index().
+    get_result(match_index) -> (home_goals, away_goals) for the ONE sim
+    being resolved -- the caller supplies this however it has the data
+    (a retained match matrix, or a handful of specifically-gathered results).
+    rng: a numpy Generator used only for the coin-flip stage, so the whole
+    pipeline stays reproducible under a fixed seed like everything else
+    here -- pass the same seeded Generator callers already use elsewhere.
+    Defaults to an unseeded one (genuinely random) if not given.
+
+    Returns (ordered_idxs, criterion), best-placed first. criterion is
+    'none' (no tie), 'h2h_points', 'h2h_away_goals', or 'coin_flip' --
+    whichever was the *most* severe stage actually needed anywhere in the
+    group (a single group can contain more than two teams, and different
+    subsets can resolve at different stages).
+    """
+    if len(tied_idxs) < 2:
+        return list(tied_idxs), "none"
+    if rng is None:
+        rng = np.random.default_rng()
+
+    def h2h_points_table(idxs):
+        pts = {t: 0 for t in idxs}
+        for i in range(len(idxs)):
+            for j in range(i + 1, len(idxs)):
+                a, b = idxs[i], idxs[j]
+                for match_idx, home_idx, _away_idx in fixture_index.get(frozenset((a, b)), []):
+                    hg, ag = get_result(match_idx)
+                    a_goals, b_goals = (hg, ag) if home_idx == a else (ag, hg)
+                    if a_goals > b_goals:
+                        pts[a] += 3
+                    elif b_goals > a_goals:
+                        pts[b] += 3
+                    else:
+                        pts[a] += 1
+                        pts[b] += 1
+        return pts
+
+    def h2h_away_table(idxs):
+        away = {t: 0 for t in idxs}
+        for i in range(len(idxs)):
+            for j in range(i + 1, len(idxs)):
+                a, b = idxs[i], idxs[j]
+                for match_idx, _home_idx, away_idx in fixture_index.get(frozenset((a, b)), []):
+                    _hg, ag = get_result(match_idx)
+                    away[away_idx] += ag
+        return away
+
+    def group_by(idxs, key_fn):
+        ordered = sorted(idxs, key=lambda t: -key_fn(t))
+        groups, current = [], [ordered[0]]
+        for t in ordered[1:]:
+            if key_fn(t) == key_fn(current[-1]):
+                current.append(t)
+            else:
+                groups.append(current)
+                current = [t]
+        groups.append(current)
+        return groups
+
+    pts = h2h_points_table(tied_idxs)
+    groups = group_by(tied_idxs, lambda t: pts[t])
+
+    final_order = []
+    criterion = "h2h_points"
+    for g in groups:
+        if len(g) == 1:
+            final_order.extend(g)
+            continue
+        away = h2h_away_table(g)
+        subgroups = group_by(g, lambda t: away[t])
+        if len(subgroups) > 1:
+            criterion = "h2h_away_goals"
+        for sg in subgroups:
+            if len(sg) == 1:
+                final_order.extend(sg)
+            else:
+                criterion = "coin_flip"
+                shuffled = list(sg)
+                rng.shuffle(shuffled)
+                final_order.extend(shuffled)
+    return final_order, criterion
 
 
 def run_simulation(matches, teams, n_sims, seed=None, thriller_threshold=7, hattrick_threshold=3):

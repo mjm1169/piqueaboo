@@ -1,12 +1,12 @@
 """
 Build the data behind the "1,000,000 simulated seasons" title-race treemap.
 
-Two separate simulation passes, at very different scales, feed the outputs:
+Three passes, at very different scales, feed the outputs:
 
-  1. The big pass (n_sims = --sims, meant to be run at ~1,000,000) is the
-     spatial backbone of the treemap -- every one of its sims is a real,
-     addressable cell -- and it applies a three-tier save policy per sim,
-     cheapest tier first:
+  1. The big pass's first sweep (n_sims = --sims, meant to be run at
+     ~1,000,000) is the spatial backbone of the treemap -- every one of its
+     sims is a real, addressable cell -- and it applies a three-tier save
+     policy per sim, cheapest tier first:
        - By default: just WHO WON. Dumped as a compact binary file, one
          byte per simulation (the champion's team index) -- this alone is
          what drives the treemap's layout (title count per team) and the
@@ -16,20 +16,41 @@ Two separate simulation passes, at very different scales, feed the outputs:
          table is additionally kept (flagged-champions.json).
        - If any single match in that sim finished with a very high combined
          score, or one player scored a large individual haul: that match's
-         full detail is additionally kept (flagged-games.json). A 6+-goal
-         individual haul is capped to the single best-qualifying sim per
-         real fixture (these turn out to cluster heavily on a handful of
-         shot-heavy real matches, so keeping every raw hit would just be
-         thousands of near-duplicates of the same few fixtures).
-     All of this happens in one streaming pass over the matches (vectorised
-     across all n_sims per match) -- the per-sim points/gf/ga totals needed
-     for final standings are already carried through to the end regardless,
-     so the "unexpected winner" tier costs nothing extra; the per-match
-     threshold checks are cheap vectorised comparisons made while that
-     match's goal arrays are already in scope, discarded once the loop
-     moves to the next match.
+         full detail -- including a full ordered scorecard, not just the
+         final score -- is additionally kept (flagged-games.json). A
+         6+-goal individual haul is capped to the single best-qualifying
+         sim per real fixture (these turn out to cluster heavily on a
+         handful of shot-heavy real matches, so keeping every raw hit
+         would just be thousands of near-duplicates of the same few
+         fixtures).
+     All of this happens in one streaming sweep over the matches
+     (vectorised across all n_sims per match) -- the per-sim points/gf/ga
+     totals needed for final standings are already carried through to the
+     end regardless, so the "unexpected winner" tier costs nothing extra;
+     the per-match threshold checks are cheap vectorised comparisons made
+     while that match's goal arrays are already in scope, discarded once
+     the sweep moves to the next match.
 
-  2. A small, separate, decoupled pass (n_sims = --story-sims, a few
+  2. The big pass's SECOND sweep exists for one reason: points/GD/GF alone
+     can't crown a champion when two teams tie on all three -- the real
+     tie-break chain (head-to-head points, then head-to-head away goals,
+     then a coin flip standing in for a play-off) needs the actual results
+     of the specific matches between the tied teams, which sweep 1 never
+     retains (that's what keeps 1,000,000 sims affordable in the first
+     place). This is rare enough at the *title* level (~30 sims per
+     million, calibrated) that a second full sweep to regenerate exactly
+     what's needed is cheap relative to sweep 1. It's made possible by
+     seeding each match's random draws independently --
+     np.random.default_rng(SeedSequence([seed, match_index])) instead of
+     one shared stream consumed match-by-match -- so any single match's
+     draws-for-every-sim can be regenerated bit-for-bit identically on
+     demand, without replaying the matches before it. The same sweep also
+     builds the full 38-game campaign log (opponent, H/A, sim score, xG
+     score) for every unexpected-winner flagged champion, since it's
+     already regenerating match results anyway and the marginal cost of
+     also capturing a flagged champion's own fixtures is negligible.
+
+  3. A small, separate, decoupled pass (n_sims = --story-sims, a few
      thousand) that additionally keeps every match's scoreline for every
      one of its sims (affordable at this scale, not at 1,000,000).
      "Interesting" simulated seasons are picked out of *this* batch --
@@ -43,7 +64,10 @@ Two separate simulation passes, at very different scales, feed the outputs:
      meaningful sense in which one specific one-in-a-million column is
      "more real" than a same-shaped example from a separate batch. Unlike
      the flagged-sim data, though, these examples aren't tied to any
-     specific cell in the treemap grid.
+     specific cell in the treemap grid. It also gets the real head-to-head
+     tie-break chain (for every position, not just the title) applied to
+     its own final tables, cheaply, since it already retains full match
+     detail for every one of its (much smaller number of) sims.
 
 Usage:
     python export_treemap_data.py --shots data/shots_2025_26.csv \
@@ -57,42 +81,91 @@ import json
 import os
 import sys
 import time
+from collections import defaultdict
 
 import numpy as np
 
 from simulate_season import (
+    build_h2h_fixture_index,
     build_match_index,
     build_real_table,
     load_shots,
+    resolve_tied_group,
 )
 
 
-def run_big_pass_with_flags(matches, teams, n_sims, real_pos, seed=None,
-                             high_score_threshold=15, haul_threshold=6):
+# Distinct from any real match index (0..~379), used to seed the coin-flip
+# stage of tie resolution separately from the per-match draw streams.
+COIN_FLIP_SEED_OFFSET = 10_000_000
+
+
+def _match_rng(seed, match_index):
+    """An independent, reproducible RNG stream for one match -- the whole
+    point being that any single match's draws-for-all-sims can be
+    regenerated bit-for-bit identically later (sweep 2) without replaying
+    every match before it, unlike one shared stream consumed in sequence."""
+    return np.random.default_rng(np.random.SeedSequence([seed, match_index]))
+
+
+def build_team_fixture_index(matches, teams):
+    """team name -> list of match indices (both home and away legs) --
+    that team's 38 real fixtures, in real fixture-list order. Static,
+    independent of any simulation."""
+    idx = {t: [] for t in teams}
+    for i, m in enumerate(matches):
+        idx[m["home_team"]].append(i)
+        idx[m["away_team"]].append(i)
+    return idx
+
+
+def static_match_xg(matches):
+    """[(xg_home_total, xg_away_total), ...] per match -- the sum of that
+    match's real shots' xG per side. Independent of simulation: every sim
+    replays the same shots, only whether each one goes in changes."""
+    return [(float(m["xg_h"].sum()), float(m["xg_a"].sum())) for m in matches]
+
+
+def extract_scorecard(sim_idx, draws, players, minutes, is_pen, team):
+    """Ordered-by-minute list of {player, minute, penalty, team} for every
+    shot that actually scored in this one sim's column of one match."""
+    entries = []
+    for shot_idx in np.flatnonzero(draws[sim_idx]).tolist():
+        entries.append({
+            "player": str(players[shot_idx]),
+            "minute": int(minutes[shot_idx]) if minutes is not None else None,
+            "penalty": bool(is_pen[shot_idx]) if is_pen is not None else False,
+            "team": team,
+        })
+    entries.sort(key=lambda e: (e["minute"] is None, e["minute"]))
+    return entries
+
+
+def run_big_pass_sweep1(matches, teams, n_sims, real_pos, seed=None,
+                         high_score_threshold=15, haul_threshold=6):
     """
-    The big (~1,000,000-sim) pass. Vectorised across all n_sims, one match
-    at a time -- same streaming shape as run_simulation_with_matches below,
-    but keeping only what the three-tier save policy actually needs:
+    The big (~1,000,000-sim) pass's first sweep. Vectorised across all
+    n_sims, one match at a time -- keeps only what the three-tier save
+    policy actually needs:
 
       - points/gf/ga per sim, all the way through (already required to work
         out final standings/champion -- no extra cost for the "unexpected
         winner" tier).
       - per match, while its home/away goal arrays for all n_sims are still
         in scope: which sims cleared the high-scoring bar (kept as-is, no
-        dedup -- rare enough already at this threshold), and the single
-        best-qualifying sim for a 6+-goal individual haul (capped to one
-        per real fixture -- see module docstring for why).
+        dedup -- rare enough already at this threshold) with a full scorer
+        list, and the single best-qualifying sim for a 6+-goal individual
+        haul (capped to one per real fixture -- see module docstring).
 
     Deliberately doesn't retain any full (n_matches, n_sims) match array --
-    that's what makes 1,000,000 sims of full-detail-on-demand affordable at
-    all. Once a match's iteration is done, only the handful of qualifying
-    records for it survive.
+    that's what keeps 1,000,000 sims affordable. Once a match's iteration
+    is done, only the handful of qualifying records for it survive.
 
-    Returns champion_idx (for champions.bin / title counts) plus the two
-    flagged-event lists, each entry tagged with its real global sim index
-    so the client can place it in the actual treemap grid.
+    Champion/position here is provisional wherever a sim is tied at the
+    title (points/GD/GF all equal for 2+ teams) -- those sims are flagged
+    as pending for sweep 2 to resolve properly via head-to-head. Everywhere
+    else (the ~99.997% of sims with no title-level tie) this is already
+    the final answer.
     """
-    rng = np.random.default_rng(seed)
     n_teams = len(teams)
     team_idx = {t: i for i, t in enumerate(teams)}
 
@@ -104,11 +177,13 @@ def run_big_pass_with_flags(matches, teams, n_sims, real_pos, seed=None,
 
     t0 = time.time()
     for i, m in enumerate(matches, 1):
+        mi = i - 1
         h_idx, a_idx = team_idx[m["home_team"]], team_idx[m["away_team"]]
         xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, mi)
 
-        draws_h = rng.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
-        draws_a = rng.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
 
         home_goals = draws_h.sum(axis=1)
         away_goals = draws_a.sum(axis=1)
@@ -164,42 +239,75 @@ def run_big_pass_with_flags(matches, teams, n_sims, real_pos, seed=None,
                     "date": m["date"], "triggers": ["six_plus_haul"], "haul": haul_info,
                 }
 
+        # Full scorecard for every sim that ended up flagged on this match,
+        # for either reason -- built once the flags for this match are
+        # settled, while draws/players/minutes are still in scope. Merged
+        # across both sides and re-sorted so the list reads as a genuine
+        # match timeline, not "all home goals, then all away goals".
+        for s, record in match_flags.items():
+            scorers = (
+                extract_scorecard(s, draws_h, m["players_h"], m["minutes_h"], m["is_pen_h"], m["home_team"])
+                + extract_scorecard(s, draws_a, m["players_a"], m["minutes_a"], m["is_pen_a"], m["away_team"])
+            )
+            scorers.sort(key=lambda e: (e["minute"] is None, e["minute"]))
+            record["scorers"] = scorers
+
         flagged_games.extend(match_flags.values())
 
         if i % 50 == 0 or i == len(matches):
-            print(f"  [big pass] {i}/{len(matches)} matches ({time.time()-t0:.1f}s elapsed, "
+            print(f"  [big pass, sweep 1] {i}/{len(matches)} matches ({time.time()-t0:.1f}s elapsed, "
                   f"{len(flagged_games)} flagged games so far)", file=sys.stderr)
 
     gd = gf - ga
     rank_key = points.astype(np.int64) * 10_000_000 + (gd.astype(np.int64) + 500) * 10_000 + gf.astype(np.int64)
     order = np.argsort(-rank_key, axis=1)
     position = np.argsort(order, axis=1) + 1
-    champion_idx = order[:, 0]
+    champion_idx = order[:, 0].copy()  # provisional -- patched for pending sims after sweep 2
 
-    # --- unexpected winners: every sim whose champion's real-life position
-    # was outside the top half of the table gets its full final table kept ---
+    # --- title-level ties: any sim where 2+ teams share the very top
+    # rank_key value need sweep 2's head-to-head resolution before their
+    # champion is final ---
+    sorted_key = np.take_along_axis(rank_key, order, axis=1)
+    title_tie_mask = sorted_key[:, 0] == sorted_key[:, 1]
+    pending_sims = []
+    for s in np.flatnonzero(title_tie_mask).tolist():
+        top_key = sorted_key[s, 0]
+        tied_idxs = [int(order[s, k]) for k in range(n_teams) if rank_key[s, order[s, k]] == top_key]
+        pending_sims.append({"sim": s, "tied_idxs": tied_idxs})
+    if pending_sims:
+        print(f"  [big pass, sweep 1] {len(pending_sims)} sim(s) tied at the title level, "
+              f"pending sweep 2", file=sys.stderr)
+
+    # --- unexpected winners: every sim (not pending) whose champion's
+    # real-life position was outside the top half of the table gets its
+    # full final table kept ---
+    pending_sim_set = {p["sim"] for p in pending_sims}
     champ_real_pos = np.array([real_pos[teams[i]] for i in champion_idx])
-    upset_mask = champ_real_pos > (n_teams // 2)
-    flagged_champions = []
+    upset_mask = (champ_real_pos > (n_teams // 2))
+    flagged_champions = {}
     for s in np.flatnonzero(upset_mask).tolist():
-        flagged_champions.append({
+        if s in pending_sim_set:
+            continue  # resolved (and, if still an upset, added) after sweep 2
+        flagged_champions[s] = {
             "sim": s,
             "champion": teams[champion_idx[s]],
             "champion_real_position": int(champ_real_pos[s]),
             "final_table": build_final_table(points, gf, ga, position, s, teams),
-        })
+        }
 
     return {
-        "champion_idx": champion_idx,
+        "points": points, "gf": gf, "ga": ga, "position": position,
+        "champion_idx": champion_idx, "rank_key": rank_key,
         "flagged_champions": flagged_champions,
         "flagged_games": flagged_games,
+        "pending_sims": pending_sims,
     }
 
 
 def build_final_table(points, gf, ga, position, sim_idx, teams):
     """Full final table for one sim, read straight out of the big pass's
     points/gf/ga/position arrays (kept for all n_sims regardless -- see
-    run_big_pass_with_flags)."""
+    run_big_pass_sweep1)."""
     rows = []
     for i, t in enumerate(teams):
         rows.append({
@@ -212,6 +320,146 @@ def build_final_table(points, gf, ga, position, sim_idx, teams):
         })
     rows.sort(key=lambda r: r["position"])
     return rows
+
+
+def run_big_pass_sweep2(matches, teams, n_sims, seed, team_idx, fixture_index,
+                         pending_sims, flagged_champions, static_xg):
+    """
+    The big pass's second sweep. Regenerates every match's draws via the
+    same per-match independent seeding as sweep 1 (bit-identical results),
+    gathering exactly two things sweep 1 couldn't afford to retain:
+
+      - the specific head-to-head results needed to resolve each pending
+        title tie (which fixtures matter is known up front from
+        pending_sims -- only those matches' relevant sim columns get used).
+      - a full 38-game campaign log for every already-confirmed
+        unexpected-winner flagged champion, and -- since a pending sim's
+        eventual champion isn't known until after this sweep -- a
+        *candidate* campaign for every team still tied in a pending sim,
+        with the wrong candidate(s) simply discarded once resolved.
+    """
+    sims_by_team = defaultdict(list)
+    for s, rec in flagged_champions.items():
+        sims_by_team[rec["champion"]].append(s)
+
+    pending_candidates = {p["sim"]: {teams[t]: [] for t in p["tied_idxs"]} for p in pending_sims}
+    pending_h2h_results = {p["sim"]: {} for p in pending_sims}
+
+    match_to_pending = defaultdict(list)  # match_index -> [pending sim, ...]
+    for p in pending_sims:
+        tied = p["tied_idxs"]
+        needed = set()
+        for i in range(len(tied)):
+            for j in range(i + 1, len(tied)):
+                for match_idx, _h, _a in fixture_index.get(frozenset((tied[i], tied[j])), []):
+                    needed.add(match_idx)
+        for match_idx in needed:
+            match_to_pending[match_idx].append(p["sim"])
+
+    campaign_entries = defaultdict(list)
+
+    t0 = time.time()
+    for i, m in enumerate(matches, 1):
+        mi = i - 1
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, mi)
+
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        home_goals = draws_h.sum(axis=1)
+        away_goals = draws_a.sum(axis=1)
+
+        for sim in match_to_pending.get(mi, []):
+            pending_h2h_results[sim][mi] = (int(home_goals[sim]), int(away_goals[sim]))
+
+        xg_home, xg_away = static_xg[mi]
+        for team, opponent, is_home, xg_for, xg_against in (
+            (m["home_team"], m["away_team"], True, xg_home, xg_away),
+            (m["away_team"], m["home_team"], False, xg_away, xg_home),
+        ):
+            entry_template = lambda sim: {  # noqa: E731 -- tiny, scoped, clearer inline
+                "opponent": opponent, "home": is_home, "date": m["date"],
+                "sim_goals_for": int(home_goals[sim]) if is_home else int(away_goals[sim]),
+                "sim_goals_against": int(away_goals[sim]) if is_home else int(home_goals[sim]),
+                "xg_for": round(xg_for, 2), "xg_against": round(xg_against, 2),
+            }
+            for sim in sims_by_team.get(team, []):
+                campaign_entries[sim].append(entry_template(sim))
+            for sim, candidates in pending_candidates.items():
+                if team in candidates:
+                    candidates[team].append(entry_template(sim))
+
+        if i % 50 == 0 or i == len(matches):
+            print(f"  [big pass, sweep 2] {i}/{len(matches)} matches ({time.time()-t0:.1f}s elapsed)",
+                  file=sys.stderr)
+
+    return {
+        "campaign_entries": campaign_entries,
+        "pending_h2h_results": pending_h2h_results,
+        "pending_candidates": pending_candidates,
+    }
+
+
+def finalize_big_pass(sweep1, sweep2, teams, real_pos, fixture_index, seed):
+    """
+    Attaches campaign logs to already-confirmed flagged champions, then
+    resolves every pending title tie via the real head-to-head chain
+    (resolve_tied_group), patching champion_idx/position for those sims,
+    adding them to flagged_champions if the resolved champion also turns
+    out to be an unexpected winner, and building flagged-title-ties.json's
+    records regardless of upset status (a title decided on head-to-head is
+    noteworthy on its own, whoever it favours).
+    """
+    points, gf, ga, position = sweep1["points"], sweep1["gf"], sweep1["ga"], sweep1["position"]
+    champion_idx = sweep1["champion_idx"]
+    n_teams = len(teams)
+
+    flagged_champions = sweep1["flagged_champions"]
+    for sim, rec in flagged_champions.items():
+        rec["campaign"] = sweep2["campaign_entries"].get(sim, [])
+
+    coin_rng = np.random.default_rng(np.random.SeedSequence([seed, COIN_FLIP_SEED_OFFSET]))
+    flagged_title_ties = []
+    for p in sweep1["pending_sims"]:
+        sim, tied_idxs = p["sim"], p["tied_idxs"]
+        h2h_results = sweep2["pending_h2h_results"][sim]
+        order, criterion = resolve_tied_group(tied_idxs, fixture_index, lambda mi: h2h_results[mi], rng=coin_rng)
+
+        for rank, team_i in enumerate(order):
+            position[sim, team_i] = rank + 1
+        champion_idx[sim] = order[0]
+        champion_name = teams[order[0]]
+        champ_real_position = real_pos[champion_name]
+
+        campaign = sweep2["pending_candidates"][sim][champion_name]
+        final_table = build_final_table(points, gf, ga, position, sim, teams)
+
+        if champ_real_position > (n_teams // 2):
+            flagged_champions[sim] = {
+                "sim": sim, "champion": champion_name,
+                "champion_real_position": int(champ_real_position),
+                "final_table": final_table, "campaign": campaign,
+            }
+
+        h2h_matches = []
+        for i in range(len(tied_idxs)):
+            for j in range(i + 1, len(tied_idxs)):
+                for match_idx, home_i, away_i in fixture_index.get(frozenset((tied_idxs[i], tied_idxs[j])), []):
+                    hg, ag = h2h_results[match_idx]
+                    h2h_matches.append({"home_team": teams[home_i], "away_team": teams[away_i],
+                                         "home_goals": hg, "away_goals": ag})
+
+        flagged_title_ties.append({
+            "sim": sim, "champion": champion_name,
+            "champion_real_position": int(champ_real_position),
+            "tied_teams": [teams[t] for t in tied_idxs],
+            "resolution": criterion,
+            "h2h_matches": h2h_matches,
+            "final_table": final_table,
+            "campaign": campaign,
+        })
+
+    return list(flagged_champions.values()), flagged_title_ties
 
 
 def run_simulation_with_matches(matches, teams, n_sims, seed=None,
@@ -286,6 +534,48 @@ def run_simulation_with_matches(matches, teams, n_sims, seed=None,
         "thriller_count": thriller_count, "hattrick_count": hattrick_count,
         "match_home_goals": match_home_goals, "match_away_goals": match_away_goals,
     }
+
+
+def apply_full_tiebreaks_to_batch(sim, fixture_index, seed):
+    """
+    Patches sim['position']/sim['champion_idx'] in place, resolving every
+    tie -- any position, not just the title -- via the real head-to-head
+    chain. Affordable here (unlike the 1,000,000-sim big pass) because
+    match_home_goals/match_away_goals are already retained for every sim
+    in this batch, so no second sweep is needed: resolve_tied_group() can
+    just read straight out of them.
+    """
+    n_sims, n_teams = sim["points"].shape
+    rank_key = sim["points"].astype(np.int64) * 10_000_000 + \
+        (sim["gd"].astype(np.int64) + 500) * 10_000 + sim["gf"].astype(np.int64)
+    order = np.argsort(-rank_key, axis=1)
+    sorted_key = np.take_along_axis(rank_key, order, axis=1)
+    has_tie = (sorted_key[:, :-1] == sorted_key[:, 1:]).any(axis=1)
+
+    mh, ma = sim["match_home_goals"], sim["match_away_goals"]
+    position = sim["position"]
+    champion_idx = sim["champion_idx"] = sim["champion_idx"].copy()
+    coin_rng = np.random.default_rng(np.random.SeedSequence([seed, COIN_FLIP_SEED_OFFSET]))
+
+    for s in np.flatnonzero(has_tie).tolist():
+        get_result = lambda mi, _s=s: (int(mh[mi, _s]), int(ma[mi, _s]))  # noqa: E731
+        row_order, row_keys = order[s].tolist(), sorted_key[s].tolist()
+        final = []
+        i = 0
+        while i < n_teams:
+            j = i
+            while j + 1 < n_teams and row_keys[j + 1] == row_keys[i]:
+                j += 1
+            group = row_order[i:j + 1]
+            if len(group) > 1:
+                resolved, _criterion = resolve_tied_group(group, fixture_index, get_result, rng=coin_rng)
+                final.extend(resolved)
+            else:
+                final.extend(group)
+            i = j + 1
+        for rank, team_i in enumerate(final):
+            position[s, team_i] = rank + 1
+        champion_idx[s] = final[0]
 
 
 def team_final_table(sim, sim_idx, teams):
@@ -405,10 +695,14 @@ def main():
         raise SystemExit(f"teams-meta is missing: {missing}")
 
     real_pos = {row["team"]: int(row["position"]) for _, row in real_table.iterrows()}
+    team_idx = {t: i for i, t in enumerate(teams)}
+    fixture_index = build_h2h_fixture_index(matches, team_idx)
+    static_xg = static_match_xg(matches)
 
     champions_path = os.path.join(args.out_dir, "champions.bin")
     flagged_champions_path = os.path.join(args.out_dir, "flagged-champions.json")
     flagged_games_path = os.path.join(args.out_dir, "flagged-games.json")
+    flagged_title_ties_path = os.path.join(args.out_dir, "flagged-title-ties.json")
     if args.skip_big_pass:
         print(f"\n=== Big pass: skipped, reusing {champions_path} ===", file=sys.stderr)
         champion_idx = np.fromfile(champions_path, dtype=np.uint8).astype(np.int64)
@@ -417,32 +711,47 @@ def main():
         # on disk from the last full run, if any, rather than wiping it out.
         flagged_champions = json.load(open(flagged_champions_path)) if os.path.exists(flagged_champions_path) else []
         flagged_games = json.load(open(flagged_games_path)) if os.path.exists(flagged_games_path) else []
-        print(f"  reusing {len(flagged_champions)} flagged champions, {len(flagged_games)} flagged games from disk",
-              file=sys.stderr)
+        flagged_title_ties = json.load(open(flagged_title_ties_path)) if os.path.exists(flagged_title_ties_path) else []
+        print(f"  reusing {len(flagged_champions)} flagged champions, {len(flagged_games)} flagged games, "
+              f"{len(flagged_title_ties)} flagged title ties from disk", file=sys.stderr)
     else:
-        print(f"\n=== Big pass: {args.sims:,} simulations ===", file=sys.stderr)
+        print(f"\n=== Big pass, sweep 1: {args.sims:,} simulations ===", file=sys.stderr)
         t0 = time.time()
-        big = run_big_pass_with_flags(matches, teams, args.sims, real_pos, seed=args.seed)
+        sweep1 = run_big_pass_sweep1(matches, teams, args.sims, real_pos, seed=args.seed)
         print(f"Done in {time.time()-t0:.1f}s", file=sys.stderr)
 
-        big["champion_idx"].astype(np.uint8).tofile(champions_path)
-        print(f"Wrote {args.sims:,} champion bytes to {champions_path}", file=sys.stderr)
-        title_counts = np.bincount(big["champion_idx"], minlength=len(teams))
+        print(f"\n=== Big pass, sweep 2: head-to-head ties + campaign logs ===", file=sys.stderr)
+        t0 = time.time()
+        sweep2 = run_big_pass_sweep2(matches, teams, args.sims, args.seed, team_idx, fixture_index,
+                                      sweep1["pending_sims"], sweep1["flagged_champions"], static_xg)
+        print(f"Done in {time.time()-t0:.1f}s", file=sys.stderr)
 
-        flagged_champions = big["flagged_champions"]
-        flagged_games = big["flagged_games"]
+        flagged_champions, flagged_title_ties = finalize_big_pass(
+            sweep1, sweep2, teams, real_pos, fixture_index, args.seed)
+        champion_idx = sweep1["champion_idx"]
+        flagged_games = sweep1["flagged_games"]
+
+        champion_idx.astype(np.uint8).tofile(champions_path)
+        print(f"Wrote {args.sims:,} champion bytes to {champions_path}", file=sys.stderr)
+        title_counts = np.bincount(champion_idx, minlength=len(teams))
+
         with open(flagged_champions_path, "w") as f:
             json.dump(flagged_champions, f, separators=(",", ":"))
         with open(flagged_games_path, "w") as f:
             json.dump(flagged_games, f, separators=(",", ":"))
+        with open(flagged_title_ties_path, "w") as f:
+            json.dump(flagged_title_ties, f, separators=(",", ":"))
         print(f"Wrote {len(flagged_champions):,} flagged champions to {flagged_champions_path} "
               f"({os.path.getsize(flagged_champions_path)/1024:.0f} KB)", file=sys.stderr)
         print(f"Wrote {len(flagged_games):,} flagged games to {flagged_games_path} "
               f"({os.path.getsize(flagged_games_path)/1024:.0f} KB)", file=sys.stderr)
+        print(f"Wrote {len(flagged_title_ties):,} flagged title ties to {flagged_title_ties_path} "
+              f"({os.path.getsize(flagged_title_ties_path)/1024:.0f} KB)", file=sys.stderr)
 
     print(f"\n=== Story pass: {args.story_sims:,} simulations (full detail) ===", file=sys.stderr)
     t0 = time.time()
     story_sim = run_simulation_with_matches(matches, teams, args.story_sims, seed=args.story_seed)
+    apply_full_tiebreaks_to_batch(story_sim, fixture_index, args.story_seed)
     print(f"Done in {time.time()-t0:.1f}s", file=sys.stderr)
 
     stories = pick_stories(story_sim, real_table, teams, matches)
