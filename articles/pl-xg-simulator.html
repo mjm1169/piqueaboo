@@ -229,6 +229,35 @@
   }
   .modal-game-note{ font-size:14px; color:var(--muted); font-weight:300; margin-top:12px; }
 
+  /* ---------- scorecard (grouped by player, in the game modal) ---------- */
+
+  .scorecard{ display:flex; gap:24px; margin-top:16px; flex-wrap:wrap; }
+  .scorecard-side{ flex:1 1 180px; min-width:160px; }
+  .scorecard-team{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:500; margin-bottom:6px; }
+  .scorecard-list{ font-size:14px; }
+  .scorecard-list .scorecard-empty{ color:var(--muted); font-weight:300; }
+  .scorecard-player{ padding:3px 0; }
+  .scorecard-player .mins{ color:var(--muted); font-weight:300; }
+
+  /* ---------- campaign table (full season, in the champion modal) ---------- */
+
+  #modal-campaign-block{ display:none; }
+  .campaign-table-wrap{ max-height:320px; overflow-y:auto; }
+  .campaign-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .campaign-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; border-bottom:1px solid #E5E5E5; position:sticky; top:0; background:var(--surface); }
+  .campaign-table td{ padding:4px 6px; border-bottom:1px solid #EFEFEF; }
+  .campaign-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .campaign-table tr.win td:first-child{ border-left:2px solid var(--positive-step); }
+  .campaign-table tr.loss td:first-child{ border-left:2px solid var(--negative-step); }
+  .campaign-table tr.draw td:first-child{ border-left:2px solid var(--muted); }
+  .campaign-table td.result{ font-weight:500; }
+
+  /* ---------- tiebreak explainer (in the champion modal, title-tie stories only) ---------- */
+
+  #modal-tiebreak-block{ display:none; }
+  .modal-tiebreak-note{ font-size:14px; color:var(--muted); font-weight:300; margin:0 0 10px 0; }
+  #modal-tiebreak-games .game-line{ background:rgba(0,0,0,.03); border-radius:8px; padding:8px 12px; margin-bottom:4px; }
+
   /* ---------- leicester section ---------- */
 
   .leicester-card{
@@ -410,11 +439,27 @@
     <div class="modal-sub" id="modal-sub"></div>
 
     <div id="modal-champion-body">
+      <div id="modal-tiebreak-block">
+        <h4>How the title was decided</h4>
+        <p class="modal-tiebreak-note" id="modal-tiebreak-note"></p>
+        <div id="modal-tiebreak-games"></div>
+      </div>
+
       <h4>Final table</h4>
       <table class="final-table">
         <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
         <tbody id="modal-table-body"></tbody>
       </table>
+
+      <div id="modal-campaign-block">
+        <h4>Full campaign</h4>
+        <div class="campaign-table-wrap">
+          <table class="campaign-table">
+            <thead><tr><th>Opponent</th><th>H/A</th><th></th><th class="num">Score</th><th class="num">xG</th></tr></thead>
+            <tbody id="modal-campaign-body"></tbody>
+          </table>
+        </div>
+      </div>
 
       <div id="modal-notable-block">
         <h4>Highest-scoring games</h4>
@@ -428,6 +473,16 @@
     <div id="modal-game-body">
       <div class="game-line" id="modal-game-score"></div>
       <p class="modal-game-note" id="modal-game-note"></p>
+      <div class="scorecard" id="modal-scorecard">
+        <div class="scorecard-side">
+          <div class="scorecard-team" id="modal-scorecard-home-team"></div>
+          <div class="scorecard-list" id="modal-scorecard-home"></div>
+        </div>
+        <div class="scorecard-side">
+          <div class="scorecard-team" id="modal-scorecard-away-team"></div>
+          <div class="scorecard-list" id="modal-scorecard-away"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -440,6 +495,7 @@
     fetch('pl-treemap-data/champions.bin').then(function(r){ return r.arrayBuffer(); }),
     fetch('pl-treemap-data/flagged-champions.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/flagged-games.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/flagged-title-ties.json').then(function(r){ return r.json(); }),
   ]);
   var data = fetched[0];
   // One byte per simulation, that byte being the champion's team index (see
@@ -448,6 +504,7 @@
   var champions = new Uint8Array(fetched[1]);
   var flaggedChampionsRaw = fetched[2];
   var flaggedGamesRaw = fetched[3];
+  var flaggedTitleTiesRaw = fetched[4];
 
   var teams = data.teams.slice();
   var nonZero = teams.filter(function(t){ return t.title_count > 0; });
@@ -504,6 +561,12 @@
   });
   flaggedGamesRaw.forEach(function(g){
     addFlag(byteToTeam[champions[g.sim]].team, rankOfSim[g.sim], { kind: 'game', record: g });
+  });
+  // Added last so a sim that's *both* an unexpected winner and a
+  // title-decided-on-tiebreak (rare, but possible) shows as the more
+  // specific title-tie story in the grid.
+  flaggedTitleTiesRaw.forEach(function(t){
+    addFlag(t.champion, rankOfSim[t.sim], { kind: 'title_tie', record: t });
   });
 
   /* =========================================================
@@ -578,10 +641,36 @@
   // so it stays in step with the rest of the page's palette.
   var HIGHLIGHT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--accent-step').trim() || '#11CEEE';
 
-  var layoutItems = nonZero.map(function(t){ return { value: t.title_count, team: t }; });
-  var blocks = squarify(layoutItems, 0, 0, CW, CH);
+  // "Other": pool the least-frequent champions -- the smallest teams whose
+  // combined title count is <=5% of all sims -- into one region, so a
+  // one-in-a-million team doesn't get an overview block too thin to see or
+  // click. Clicking "Other" opens its own squarified sub-map (built the
+  // same way, just from this smaller set) from which a real per-sim grid
+  // is one more click away, same as any other team. Same idea on desktop
+  // as mobile, per the user.
+  var OTHER_CUTOFF_FRACTION = 0.05;
+  var otherBudget = data.meta.n_sims * OTHER_CUTOFF_FRACTION;
+  var otherTeamsList = [], otherSum = 0;
+  nonZero.slice().sort(function(a, b){ return a.title_count - b.title_count; }).forEach(function(t){
+    if (otherSum + t.title_count <= otherBudget) { otherTeamsList.push(t); otherSum += t.title_count; }
+  });
+  var otherTeamNames = {};
+  otherTeamsList.forEach(function(t){ otherTeamNames[t.team] = true; });
+  function isPooled(team){ return !!otherTeamNames[team.team]; }
+
+  var mainTeamsList = nonZero.filter(function(t){ return !otherTeamNames[t.team]; });
+  var OTHER_TEAM = { team: 'Other', color: '#B9B9B9', title_count: otherSum, title_odds: otherSum / data.meta.n_sims };
+
+  var topLayoutItems = mainTeamsList.map(function(t){ return { value: t.title_count, team: t }; });
+  if (otherTeamsList.length) topLayoutItems.push({ value: otherSum, team: OTHER_TEAM });
+  var blocks = squarify(topLayoutItems, 0, 0, CW, CH);
   var blockByTeam = {};
   blocks.forEach(function(b){ blockByTeam[b.team.team] = b; });
+
+  var otherLayoutItems = otherTeamsList.map(function(t){ return { value: t.title_count, team: t }; });
+  var otherBlocks = otherTeamsList.length ? squarify(otherLayoutItems, 0, 0, CW, CH) : [];
+  var otherBlockByTeam = {};
+  otherBlocks.forEach(function(b){ otherBlockByTeam[b.team.team] = b; });
 
   // Crests load at wildly different sizes (a couple of these Wikipedia
   // SVGs run to several hundred KB). Drawing waits on each one individually
@@ -604,12 +693,19 @@
     });
   });
 
+  // Whichever squarified block set is the current "overview-style" screen
+  // -- the top-level map, or (once zoomed into "Other") its own sub-map of
+  // pooled teams. Both render through the exact same drawBlocks/transform
+  // machinery below; only this pointer (and its matching lookup) changes.
+  var activeBlocks = blocks;
+  var activeBlockByTeam = blockByTeam;
+
   // The overview never has to know a single one of the 1,000,000 cells
   // exists -- it's exactly the same ~20-block draw as before zoom was
   // added. Detail only appears once the camera has actually zoomed into a
   // team's block and section 4 switches to rendering its grid instead.
   function drawBlocks(){
-    blocks.forEach(function(b){
+    activeBlocks.forEach(function(b){
       ctx.fillStyle = b.team.color;
       ctx.fillRect(b.x, b.y, b.w, b.h);
 
@@ -645,9 +741,11 @@
     });
   }
 
-  // view.mode is the only thing that decides which of the two draw paths
-  // (this section's drawBlocks, or section 4's drawGrid) is on screen.
-  var view = { mode: 'overview' }; // 'overview' | 'grid'
+  // view.mode is the only thing that decides which draw path is on screen:
+  // drawBlocks() (this section, driving both 'overview' and 'other' --
+  // they're the same mechanism over a different activeBlocks) or
+  // section 4's drawGrid ('grid').
+  var view = { mode: 'overview' }; // 'overview' | 'other' | 'grid'
   var overviewT = 0;               // 0 = full map, 1 = target block fills the canvas
   var overviewTarget = null;       // the block being zoomed to/from, while overviewT > 0
 
@@ -680,17 +778,23 @@
 
   /* =========================================================
      4. ZOOM / GRID ENGINE
-     Two views on the same canvas: the overview above, and -- once zoomed
-     into a team's block past a defined threshold -- a uniform grid of that
-     team's own individual title-winning sims (equal-weight units, so a
-     plain grid is both simpler and more correct here than another
-     squarify pass). The transition between them is a defined crossfade
-     (zoom the overview in until the block fills the canvas, then swap to
-     the grid) rather than one continuous coordinate system across both --
-     simpler to build, and it reads fine.
+     Three screens on the same canvas: the top-level overview, "Other"'s
+     own sub-map (both driven by drawBlocks() over whichever squarify
+     result is currently activeBlocks), and -- once zoomed into an actual
+     team past a defined threshold -- a uniform grid of that team's own
+     individual title-winning sims (equal-weight units, so a plain grid is
+     both simpler and more correct here than another squarify pass). Every
+     transition between screens is a defined crossfade (zoom the current
+     screen in until the target block fills the canvas, then swap what's
+     being drawn) rather than one continuous coordinate system throughout
+     -- simpler to build, and it reads fine.
      ========================================================= */
 
-  var ZOOM_MS = 650;
+  // Tuned slower on mobile: a fixed-duration tween covers the same visual
+  // distance regardless of screen size, so the same speed that reads fine
+  // on desktop (mouse tracks it easily) goes past too fast to follow on a
+  // small screen with no cursor to anchor on.
+  var ZOOM_MS = window.matchMedia('(max-width: 640px)').matches ? 1400 : 650;
   var MIN_CELLS_ACROSS = 3;
   var ENTRY_CELLS_ACROSS_CAP = 140; // how many grid columns a first look into a huge block shows
   var TARGET_CELLS_ACROSS = 9;      // how tight a tour stop / direct link zooms in on its cell
@@ -714,12 +818,52 @@
   }
 
   function exitGrid(onDone){
-    var block = blockByTeam[gridState.team.team];
-    view.mode = 'overview';
+    // activeBlockByTeam, not the top-level blockByTeam directly: a grid
+    // entered from "Other"'s sub-map needs to zoom back out to *that*,
+    // not jump straight to the top -- activeBlocks was never touched by
+    // entering a grid, so it still holds whichever screen we came from.
+    var block = activeBlockByTeam[gridState.team.team];
+    view.mode = (activeBlocks === otherBlocks) ? 'other' : 'overview';
     canvas.style.cursor = 'pointer';
     updateControlsVisibility();
     overviewTarget = block;
     tweenOverview(1, 0, function(){ gridState = null; if (onDone) onDone(); });
+  }
+
+  function enterOther(onArrived){
+    if (view.mode === 'other') { if (onArrived) onArrived(); return; }
+    var otherRect = blockByTeam[OTHER_TEAM.team];
+    if (!otherRect) { if (onArrived) onArrived(); return; }
+    activeBlocks = blocks; activeBlockByTeam = blockByTeam;
+    overviewTarget = otherRect;
+    tweenOverview(0, 1, function(){
+      view.mode = 'other';
+      activeBlocks = otherBlocks; activeBlockByTeam = otherBlockByTeam;
+      overviewT = 0; overviewTarget = null;
+      updateControlsVisibility();
+      renderCurrent();
+      if (onArrived) onArrived();
+    });
+  }
+
+  function exitOther(onDone){
+    view.mode = 'overview';
+    activeBlocks = blocks; activeBlockByTeam = blockByTeam;
+    overviewTarget = blockByTeam[OTHER_TEAM.team];
+    overviewT = 1; // snap "as if" already zoomed into Other's rect, then tween back out
+    updateControlsVisibility();
+    tweenOverview(1, 0, function(){ if (onDone) onDone(); });
+  }
+
+  // Gets the camera to the right *screen* (top overview or Other's
+  // sub-map) for a team, exiting a grid first if one is open -- the
+  // shared pre-step both zoomIntoTeam and the tour route through before
+  // actually zooming to a block or cell.
+  function switchToLevel(needsOther, onReady){
+    if (view.mode === 'grid') { exitGrid(function(){ switchToLevel(needsOther, onReady); }); return; }
+    if (needsOther && view.mode !== 'other') { enterOther(onReady); return; }
+    if (!needsOther && view.mode !== 'overview') { exitOther(onReady); return; }
+    onReady();
   }
 
   function clampGridPan(){
@@ -801,31 +945,31 @@
 
   // The single entry point both direct clicks and the guided tour use to
   // move the camera to a team (targetRank == null: just explore that
-  // team's block) or a specific cell within it.
+  // team's block) or a specific cell within it. Routes through "Other"
+  // first when the team is one of the ones pooled into it -- including a
+  // tour stop or flagged cell whose champion happens to be a pooled team.
   function zoomIntoTeam(team, targetRank, onArrived){
-    var block = blockByTeam[team.team];
-    if (!block) { if (onArrived) onArrived(); return; }
-
-    function afterOverviewIn(){
-      enterGrid(team);
+    if (view.mode === 'grid' && gridState.team.team === team.team) {
       if (targetRank != null) { tweenGridTo(targetRank, onArrived); }
       else if (onArrived) { onArrived(); }
+      return;
     }
 
-    if (view.mode === 'grid') {
-      if (gridState.team.team === team.team) {
+    if (team.team === OTHER_TEAM.team) {
+      switchToLevel(false, function(){ enterOther(onArrived); });
+      return;
+    }
+
+    switchToLevel(isPooled(team), function(){
+      var block = activeBlockByTeam[team.team];
+      if (!block) { if (onArrived) onArrived(); return; }
+      overviewTarget = block;
+      tweenOverview(0, 1, function(){
+        enterGrid(team);
         if (targetRank != null) { tweenGridTo(targetRank, onArrived); }
         else if (onArrived) { onArrived(); }
-        return;
-      }
-      exitGrid(function(){
-        overviewTarget = block;
-        tweenOverview(0, 1, afterOverviewIn);
       });
-    } else {
-      overviewTarget = block;
-      tweenOverview(0, 1, afterOverviewIn);
-    }
+    });
   }
 
   function canvasCoords(e){
@@ -837,8 +981,8 @@
   }
 
   function hitTestBlock(x, y){
-    for (var i = 0; i < blocks.length; i++) {
-      var b = blocks[i];
+    for (var i = 0; i < activeBlocks.length; i++) {
+      var b = activeBlocks[i];
       if (x >= b.x && x <= b.x+b.w && y >= b.y && y <= b.y+b.h) return b;
     }
     return null;
@@ -901,20 +1045,19 @@
   canvas.addEventListener('click', function(e){
     if (didDrag) { didDrag = false; return; }
     var p = canvasCoords(e);
-    if (view.mode === 'overview') {
-      var block = hitTestBlock(p.x, p.y);
-      if (block) zoomIntoTeam(block.team, null);
-    } else {
+    if (view.mode === 'grid') {
       var flag = hitTestGridCell(p.x, p.y);
       if (flag) openStory(flag);
+    } else {
+      var block = hitTestBlock(p.x, p.y);
+      if (block) zoomIntoTeam(block.team, null);
     }
   });
 
   var gridBackBtn = document.getElementById('grid-back-btn');
   gridBackBtn.addEventListener('click', function(){
-    if (view.mode !== 'grid') return;
-    exitGrid();
-    updateControlsVisibility();
+    if (view.mode === 'grid') { exitGrid(updateControlsVisibility); }
+    else if (view.mode === 'other') { exitOther(updateControlsVisibility); }
   });
 
   /* =========================================================
@@ -958,6 +1101,16 @@
       stops.push({
         team: team, rank: rankOfSim[c.sim], kind: 'champion', record: c,
         caption: c.champion + ' win the league here — in reality they finished ' + ordinal(c.champion_real_position) + '.',
+      });
+    });
+
+    distinctTopN(flaggedTitleTiesRaw.slice(), function(t){ return t.champion; }, 5).forEach(function(t){
+      var team = teams.filter(function(x){ return x.team === t.champion; })[0];
+      if (!team) return;
+      var others = t.tied_teams.filter(function(x){ return x !== t.champion; }).join(' and ');
+      stops.push({
+        team: team, rank: rankOfSim[t.sim], kind: 'title_tie', record: t,
+        caption: t.champion + ' win the title on a tiebreak, level with ' + others + '.',
       });
     });
 
@@ -1007,7 +1160,9 @@
     var active = tourActive();
     tourStartBtn.hidden = active;
     tourPlayingControls.hidden = !active;
-    gridBackBtn.hidden = active || view.mode !== 'grid';
+    gridBackBtn.hidden = active || view.mode === 'overview';
+    gridBackBtn.textContent = (view.mode === 'grid' && activeBlocks === otherBlocks)
+      ? '← Back to Other' : '← Back to the whole map';
   }
 
   function updateTourCounter(){
@@ -1063,7 +1218,9 @@
     if (tourAdvanceTimer) { clearTimeout(tourAdvanceTimer); tourAdvanceTimer = null; }
     tourCaptionEl.hidden = true;
     updateControlsVisibility();
-    if (view.mode === 'grid') exitGrid();
+    // Unwind up to two levels (a pooled team's grid sits inside "Other").
+    if (view.mode === 'grid') { exitGrid(function(){ if (view.mode === 'other') exitOther(); }); }
+    else if (view.mode === 'other') { exitOther(); }
   }
 
   tourStartBtn.addEventListener('click', startTour);
@@ -1131,6 +1288,55 @@
       + '<span class="score">' + g.home_goals + '–' + g.away_goals + '</span></div>';
   }
 
+  // Groups a flat, minute-ordered scorer list (see export_treemap_data.py's
+  // extract_scorecard()) into one line per player -- "Haaland (1', 31',
+  // 54' (p))" -- in first-scored order, split by side.
+  function renderScorecard(scorers, homeTeam, awayTeam){
+    function renderSide(team){
+      var order = [], byPlayer = {};
+      scorers.filter(function(s){ return s.team === team; }).forEach(function(s){
+        if (!byPlayer[s.player]) { byPlayer[s.player] = { player: s.player, mins: [] }; order.push(byPlayer[s.player]); }
+        byPlayer[s.player].mins.push(s);
+      });
+      if (!order.length) return '<span class="scorecard-empty">No goals</span>';
+      return order.map(function(p){
+        var mins = p.mins.map(function(m){ return m.minute + "'" + (m.penalty ? ' (p)' : ''); }).join(', ');
+        return '<div class="scorecard-player">' + p.player + ' <span class="mins">(' + mins + ')</span></div>';
+      }).join('');
+    }
+    document.getElementById('modal-scorecard-home-team').textContent = homeTeam;
+    document.getElementById('modal-scorecard-away-team').textContent = awayTeam;
+    document.getElementById('modal-scorecard-home').innerHTML = renderSide(homeTeam);
+    document.getElementById('modal-scorecard-away').innerHTML = renderSide(awayTeam);
+  }
+
+  function renderCampaign(campaign, champion){
+    var block = document.getElementById('modal-campaign-block');
+    if (!campaign || !campaign.length) { block.style.display = 'none'; return; }
+    block.style.display = 'block';
+    document.getElementById('modal-campaign-body').innerHTML = campaign.map(function(e){
+      var result = e.sim_goals_for > e.sim_goals_against ? 'W' : (e.sim_goals_for === e.sim_goals_against ? 'D' : 'L');
+      var cls = result === 'W' ? 'win' : (result === 'L' ? 'loss' : 'draw');
+      return '<tr class="' + cls + '"><td>' + e.opponent + '</td><td>' + (e.home ? 'H' : 'A') + '</td>'
+        + '<td class="result">' + result + '</td>'
+        + '<td class="num">' + e.sim_goals_for + '–' + e.sim_goals_against + '</td>'
+        + '<td class="num">' + e.xg_for.toFixed(2) + '–' + e.xg_against.toFixed(2) + '</td></tr>';
+    }).join('');
+  }
+
+  function renderTiebreak(story){
+    var block = document.getElementById('modal-tiebreak-block');
+    if (!story.resolution) { block.style.display = 'none'; return; }
+    block.style.display = 'block';
+    var others = story.tied_teams.filter(function(t){ return t !== story.champion; }).join(' and ');
+    var how = story.resolution === 'h2h_points' ? 'Decided by head-to-head record.'
+      : story.resolution === 'h2h_away_goals' ? 'Head-to-head record was also tied, so it came down to away goals in those meetings.'
+      : 'Even head-to-head away goals were tied, so it came down to a coin flip (standing in for a real-world play-off at a neutral venue).';
+    document.getElementById('modal-tiebreak-note').textContent =
+      story.champion + ' finished level with ' + others + ' on points, goal difference, and goals scored. ' + how;
+    document.getElementById('modal-tiebreak-games').innerHTML = story.h2h_matches.map(gameLine).join('');
+  }
+
   function openStory(entry){
     var story = entry.record;
     var champBody = document.getElementById('modal-champion-body');
@@ -1155,6 +1361,7 @@
       document.getElementById('modal-game-note').textContent = story.haul
         ? story.haul.player + ' scored ' + story.haul.goals + ' of ' + story.haul.team + '\'s goals in this simulated match.'
         : (story.home_goals + story.away_goals) + ' goals in this one simulated match — one of the highest-scoring games across 1,000,000 replays of the season.';
+      renderScorecard(story.scorers || [], story.home_team, story.away_team);
 
       backdrop.classList.add('open');
       return;
@@ -1165,9 +1372,12 @@
     crestEl.style.display = '';
     crestEl.src = crestPath(story.champion);
     crestEl.alt = story.champion + ' crest';
-    document.getElementById('modal-tag').textContent = story.tag ? (TAG_LABEL[story.tag] || story.tag) : 'Unexpected winner';
+    document.getElementById('modal-tag').textContent = entry.kind === 'title_tie' ? 'Title decided by tiebreak'
+      : (story.tag ? (TAG_LABEL[story.tag] || story.tag) : 'Unexpected winner');
     document.getElementById('modal-title').textContent = story.champion + ' win the league';
     document.getElementById('modal-sub').textContent = 'Real-life finish that season: ' + ordinal(story.champion_real_position);
+    renderTiebreak(story);
+    renderCampaign(story.campaign, story.champion);
 
     var body = document.getElementById('modal-table-body');
     body.innerHTML = story.final_table.map(function(r){
