@@ -33,8 +33,26 @@ for the actual text and visual direction before drafting either.
   theirs to finish: `xx%` (the actual simulated Leicester title odds —
   note the equivalent number is already computed live in
   `#leicester-stats`) and `(insert examples here)`. The treemap intro
-  paragraph also still has a literal `20xx/xx` season placeholder. The
-  user separately mentioned wanting a "zoom through the treemap"
-  interaction built for the highlights callout — not yet implemented.
+  paragraph also still has a literal `20xx/xx` season placeholder.
   `index.html`'s teaser card for this article is still placeholder copy
   and wasn't touched by this pass.
+
+  **2026-08-25, in progress — genuinely-1,000,000-cell zoomable treemap**
+  (see `/root/.claude/plans/purring-finding-badger.md` for the full plan,
+  agreed with the user): the "zoom through the treemap" idea above is being
+  built out as a guided-flythrough zoom into real, individually-addressable
+  simulation cells, backed by a real three-tier save policy on the
+  1,000,000-sim run (who-won by default; full season table when the
+  champion is an "unexpected winner" — real position outside the top half;
+  full match detail when a game hits 15+ total goals or a player scores
+  6+, the latter capped to one flagged instance per real fixture).
+  **Part 1 (backend) is done and checked in**: `simulations/export_treemap_data.py`'s
+  big pass now writes `articles/pl-treemap-data/flagged-champions.json`
+  (2,002 sims) and `flagged-games.json` (1,023 sims: 987 high-scoring, 36
+  deduped 6+-goal hauls) alongside the existing `champions.bin` /
+  `treemap-data.json`. Every flagged record carries a real global `sim`
+  index (0..999,999) into `champions.bin`. **Part 2 (frontend) is not
+  started**: `pl-xg-simulator.html`'s treemap script still only draws the
+  ~20 aggregate team blocks from `treemap-data.json`/`champions.bin` — it
+  doesn't yet read the two new flagged-data files, has no per-team zoomed-in
+  grid renderer, and no guided-flythrough camera/UI. That's the next piece.
