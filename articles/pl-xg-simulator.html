@@ -46,6 +46,7 @@
     padding:16px;
     margin:28px 0 20px 0;
   }
+  .treemap-canvas-wrap{ position:relative; }
   #treemap-canvas{
     width:100%; height:auto; display:block;
     border-radius:6px;
@@ -54,6 +55,65 @@
   .treemap-caption{
     font-size:13px; color:var(--muted); font-weight:300; margin-top:10px;
     display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+
+  /* ---------- treemap zoom / tour controls ---------- */
+
+  .treemap-overlay-controls{
+    position:absolute; top:14px; left:14px; right:14px;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    pointer-events:none; /* re-enabled per-control below */
+  }
+  .treemap-overlay-controls > *{ pointer-events:auto; }
+
+  .tour-btn{
+    font-family:'Poppins', sans-serif; font-size:13px; font-weight:500;
+    color:#fff; background:rgba(0,0,0,.6); backdrop-filter:blur(4px);
+    border:none; border-radius:20px; padding:8px 16px;
+    cursor:pointer; transition:background .15s ease;
+  }
+  .tour-btn:hover{ background:rgba(0,0,0,.78); }
+  .tour-exit-btn{ background:rgba(0,0,0,.4); }
+  .tour-exit-btn:hover{ background:rgba(0,0,0,.6); }
+
+  /* [hidden] needs to win over the display:flex below at equal selector
+     specificity, or the browser's default [hidden]{display:none} loses to
+     it and these stay visible even with the hidden attribute set. */
+  .tour-playing-controls[hidden], .tour-caption[hidden]{ display:none; }
+
+  .tour-playing-controls{
+    display:flex; align-items:center; gap:8px;
+    background:rgba(0,0,0,.6); backdrop-filter:blur(4px);
+    border-radius:20px; padding:6px 8px 6px 14px;
+  }
+  .tour-icon-btn{
+    width:26px; height:26px; border-radius:50%;
+    border:none; background:rgba(255,255,255,.14); color:#fff;
+    font-size:11px; cursor:pointer; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .tour-icon-btn:hover{ background:rgba(255,255,255,.28); }
+  .tour-counter{ font-size:12px; color:rgba(255,255,255,.85); font-variant-numeric:tabular-nums; padding:0 2px; }
+
+  .tour-caption{
+    position:absolute; left:14px; right:14px; bottom:14px;
+    background:rgba(0,0,0,.68); backdrop-filter:blur(4px);
+    color:#fff; border-radius:10px; padding:12px 16px;
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    font-size:14px; line-height:1.4;
+  }
+  .tour-detail-btn{
+    flex:none;
+    font-family:'Poppins', sans-serif; font-size:12px; font-weight:500;
+    color:#fff; background:rgba(255,255,255,.16);
+    border:none; border-radius:16px; padding:6px 12px;
+    cursor:pointer; white-space:nowrap;
+  }
+  .tour-detail-btn:hover{ background:rgba(255,255,255,.3); }
+
+  @media (max-width:640px){
+    .treemap-overlay-controls{ position:static; margin-bottom:10px; }
+    .tour-caption{ position:static; margin-top:10px; }
   }
 
   /* ---------- legend / roster ---------- */
@@ -146,6 +206,13 @@
 
   .game-line{ font-size:13px; padding:4px 0; display:flex; justify-content:space-between; gap:10px; }
   .game-line .score{ font-variant-numeric:tabular-nums; font-weight:500; }
+
+  #modal-game-body{ display:none; }
+  #modal-game-body .game-line{
+    font-size:17px; background:rgba(0,0,0,.03);
+    border-radius:8px; padding:12px 14px; margin-top:6px;
+  }
+  .modal-game-note{ font-size:14px; color:var(--muted); font-weight:300; margin-top:12px; }
 
   /* ---------- leicester section ---------- */
 
@@ -242,7 +309,26 @@
     <p>I took the 20xx/xx season and did just that. Here is how the league ended up all 1,000,000 times.</p>
 
     <div class="treemap-card">
-      <canvas id="treemap-canvas" width="1250" height="800"></canvas>
+      <div class="treemap-canvas-wrap">
+        <canvas id="treemap-canvas" width="1250" height="800"></canvas>
+
+        <div class="treemap-overlay-controls">
+          <button type="button" class="tour-btn" id="tour-start-btn">▶ Start the tour</button>
+          <div class="tour-playing-controls" id="tour-playing-controls" hidden>
+            <button type="button" class="tour-icon-btn" id="tour-prev-btn" title="Previous stop">◀</button>
+            <button type="button" class="tour-icon-btn" id="tour-pause-btn" title="Pause">⏸</button>
+            <button type="button" class="tour-icon-btn" id="tour-next-btn" title="Next stop">▶</button>
+            <span class="tour-counter" id="tour-counter"></span>
+            <button type="button" class="tour-btn tour-exit-btn" id="tour-exit-btn">✕ Exit tour</button>
+          </div>
+          <button type="button" class="tour-btn" id="grid-back-btn" hidden>← Back to the whole map</button>
+        </div>
+
+        <div class="tour-caption" id="tour-caption" hidden>
+          <span id="tour-caption-text"></span>
+          <button type="button" class="tour-detail-btn" id="tour-detail-btn">Details →</button>
+        </div>
+      </div>
       <div class="treemap-caption">
         <span id="treemap-caption-left"></span>
         <span id="treemap-caption-right"></span>
@@ -308,24 +394,45 @@
     </div>
     <div class="modal-sub" id="modal-sub"></div>
 
-    <h4>Final table</h4>
-    <table class="final-table">
-      <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
-      <tbody id="modal-table-body"></tbody>
-    </table>
+    <div id="modal-champion-body">
+      <h4>Final table</h4>
+      <table class="final-table">
+        <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
+        <tbody id="modal-table-body"></tbody>
+      </table>
 
-    <h4>Highest-scoring games</h4>
-    <div id="modal-highest"></div>
+      <div id="modal-notable-block">
+        <h4>Highest-scoring games</h4>
+        <div id="modal-highest"></div>
 
-    <h4>Biggest wins</h4>
-    <div id="modal-wins"></div>
+        <h4>Biggest wins</h4>
+        <div id="modal-wins"></div>
+      </div>
+    </div>
+
+    <div id="modal-game-body">
+      <div class="game-line" id="modal-game-score"></div>
+      <p class="modal-game-note" id="modal-game-note"></p>
+    </div>
   </div>
 </div>
 
 <script>
 (async function(){
 
-  var data = await fetch('pl-treemap-data/treemap-data.json').then(function(r){ return r.json(); });
+  var fetched = await Promise.all([
+    fetch('pl-treemap-data/treemap-data.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/champions.bin').then(function(r){ return r.arrayBuffer(); }),
+    fetch('pl-treemap-data/flagged-champions.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/flagged-games.json').then(function(r){ return r.json(); }),
+  ]);
+  var data = fetched[0];
+  // One byte per simulation, that byte being the champion's team index (see
+  // export_treemap_data.py) -- the spatial backbone every flagged record and
+  // every grid cell below is ultimately addressed against.
+  var champions = new Uint8Array(fetched[1]);
+  var flaggedChampionsRaw = fetched[2];
+  var flaggedGamesRaw = fetched[3];
 
   var teams = data.teams.slice();
   var nonZero = teams.filter(function(t){ return t.title_count > 0; });
@@ -347,7 +454,45 @@
   };
 
   /* =========================================================
-     1. SQUARIFIED TREEMAP LAYOUT
+     1. SPATIAL INDEX
+     Every one of the 1,000,000 bytes in champions.bin is a real,
+     individually-addressable simulation. This builds, in one pass, each
+     sim's rank within its champion's own cell grid (the order cells get
+     laid out in -- see gridCols() below) and a lookup from a team's grid
+     position back to whichever flagged record (unexpected winner /
+     notable game) belongs there, if any. All client-side: the export
+     pipeline only ships a global sim index on each flagged record, not a
+     precomputed grid position -- see CLAUDE.md / the plan for why.
+     ========================================================= */
+
+  var byteToTeam = {};
+  teams.forEach(function(t){ byteToTeam[t.champion_byte] = t; });
+
+  var N_SIMS = champions.length;
+  var teamCounters = new Uint32Array(teams.length);
+  var rankOfSim = new Uint32Array(N_SIMS);
+  for (var s = 0; s < N_SIMS; s++) {
+    var b = champions[s];
+    rankOfSim[s] = teamCounters[b]++;
+  }
+
+  function gridCols(n){ return Math.max(1, Math.ceil(Math.sqrt(n))); }
+  function rankToRowCol(rank, cols){ return { row: Math.floor(rank / cols), col: rank % cols }; }
+
+  var flaggedByTeam = {}; // team name -> Map(rank -> {kind, record})
+  function addFlag(teamName, rank, entry){
+    if (!flaggedByTeam[teamName]) flaggedByTeam[teamName] = new Map();
+    flaggedByTeam[teamName].set(rank, entry);
+  }
+  flaggedChampionsRaw.forEach(function(c){
+    addFlag(c.champion, rankOfSim[c.sim], { kind: 'champion', record: c });
+  });
+  flaggedGamesRaw.forEach(function(g){
+    addFlag(byteToTeam[champions[g.sim]].team, rankOfSim[g.sim], { kind: 'game', record: g });
+  });
+
+  /* =========================================================
+     2. SQUARIFIED TREEMAP LAYOUT
      Standard Bruls/Huizing/van Wijk algorithm: lay out a sorted list of
      values into a rect, building each row to keep aspect ratios as close
      to square as possible rather than naive slice-and-dice strips.
@@ -406,12 +551,17 @@
   }
 
   /* =========================================================
-     2. RENDER
+     3. RENDER
      ========================================================= */
 
   var canvas = document.getElementById('treemap-canvas');
   var ctx = canvas.getContext('2d');
   var CW = canvas.width, CH = canvas.height;
+
+  // Used to ring flagged cells in the zoomed-in grid (section 4) -- read
+  // once from the site's own accent colour rather than hardcoding a hex,
+  // so it stays in step with the rest of the page's palette.
+  var HIGHLIGHT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--accent-step').trim() || '#11CEEE';
 
   var layoutItems = nonZero.map(function(t){ return { value: t.title_count, team: t }; });
   var blocks = squarify(layoutItems, 0, 0, CW, CH);
@@ -435,12 +585,15 @@
   nonZero.forEach(function(t){
     loadImage('../assets/logos/clubs/' + t.crest_file).then(function(img){
       crestCache[t.team] = img;
-      draw();
+      renderCurrent();
     });
   });
 
-  function draw(){
-    ctx.clearRect(0, 0, CW, CH);
+  // The overview never has to know a single one of the 1,000,000 cells
+  // exists -- it's exactly the same ~20-block draw as before zoom was
+  // added. Detail only appears once the camera has actually zoomed into a
+  // team's block and section 4 switches to rendering its grid instead.
+  function drawBlocks(){
     blocks.forEach(function(b){
       ctx.fillStyle = b.team.color;
       ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -476,7 +629,34 @@
       }
     });
   }
-  draw();
+
+  // view.mode is the only thing that decides which of the two draw paths
+  // (this section's drawBlocks, or section 4's drawGrid) is on screen.
+  var view = { mode: 'overview' }; // 'overview' | 'grid'
+  var overviewT = 0;               // 0 = full map, 1 = target block fills the canvas
+  var overviewTarget = null;       // the block being zoomed to/from, while overviewT > 0
+
+  function renderOverview(){
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, CW, CH);
+    if (overviewT > 0 && overviewTarget) {
+      // Interpolate the visible "window" of the 0..CW,0..CH world from the
+      // full canvas down to the target block's rect, and let the canvas
+      // transform do the zooming -- drawBlocks() itself never changes.
+      var b = overviewTarget;
+      var wx = b.x * overviewT, wy = b.y * overviewT;
+      var ww = CW + (b.w - CW) * overviewT, wh = CH + (b.h - CH) * overviewT;
+      var sx = CW / ww, sy = CH / wh;
+      ctx.setTransform(sx, 0, 0, sy, -wx * sx, -wy * sy);
+    }
+    drawBlocks();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  function renderCurrent(){
+    if (view.mode === 'grid') { renderGrid(); } else { renderOverview(); }
+  }
+  renderCurrent();
 
   document.getElementById('treemap-caption-left').textContent =
     data.meta.n_sims.toLocaleString() + ' simulated seasons · ' + nonZero.length + ' different champions';
@@ -484,7 +664,405 @@
     'Same champion as reality in ' + (data.same_champion_odds * 100).toFixed(1) + '% of simulations';
 
   /* =========================================================
-     3. ROSTER / LEGEND
+     4. ZOOM / GRID ENGINE
+     Two views on the same canvas: the overview above, and -- once zoomed
+     into a team's block past a defined threshold -- a uniform grid of that
+     team's own individual title-winning sims (equal-weight units, so a
+     plain grid is both simpler and more correct here than another
+     squarify pass). The transition between them is a defined crossfade
+     (zoom the overview in until the block fills the canvas, then swap to
+     the grid) rather than one continuous coordinate system across both --
+     simpler to build, and it reads fine.
+     ========================================================= */
+
+  var ZOOM_MS = 650;
+  var MIN_CELLS_ACROSS = 3;
+  var ENTRY_CELLS_ACROSS_CAP = 140; // how many grid columns a first look into a huge block shows
+  var TARGET_CELLS_ACROSS = 9;      // how tight a tour stop / direct link zooms in on its cell
+
+  function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+
+  var gridState = null; // { team, cols, rows, n, cellsAcross, panCol, panRow }
+
+  function enterGrid(team){
+    view.mode = 'grid';
+    var n = team.title_count;
+    var cols = gridCols(n);
+    gridState = {
+      team: team, cols: cols, rows: Math.ceil(n / cols), n: n,
+      cellsAcross: Math.max(MIN_CELLS_ACROSS, Math.min(cols, ENTRY_CELLS_ACROSS_CAP)),
+      panCol: cols / 2, panRow: Math.ceil(n / cols) / 2,
+    };
+    canvas.style.cursor = 'grab';
+    updateControlsVisibility();
+    renderGrid();
+  }
+
+  function exitGrid(onDone){
+    var block = blockByTeam[gridState.team.team];
+    view.mode = 'overview';
+    canvas.style.cursor = 'pointer';
+    updateControlsVisibility();
+    overviewTarget = block;
+    tweenOverview(1, 0, function(){ gridState = null; if (onDone) onDone(); });
+  }
+
+  function clampGridPan(){
+    gridState.panCol = Math.max(0, Math.min(gridState.cols, gridState.panCol));
+    gridState.panRow = Math.max(0, Math.min(gridState.rows, gridState.panRow));
+  }
+
+  function renderGrid(){
+    var g = gridState;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, CW, CH);
+
+    var cellPx = CW / g.cellsAcross;
+    var halfX = (CW / 2) / cellPx, halfY = (CH / 2) / cellPx;
+    var colStart = Math.max(0, Math.floor(g.panCol - halfX) - 1);
+    var colEnd = Math.min(g.cols - 1, Math.ceil(g.panCol + halfX) + 1);
+    var rowStart = Math.max(0, Math.floor(g.panRow - halfY) - 1);
+    var rowEnd = Math.min(g.rows - 1, Math.ceil(g.panRow + halfY) + 1);
+    var gap = cellPx > 8 ? 1 : 0;
+    var flags = flaggedByTeam[g.team.team];
+
+    // Only the cells actually on screen are ever touched -- bounded by
+    // canvas size / min cell size, never by how many sims this team won.
+    ctx.fillStyle = g.team.color;
+    var flagged = [];
+    for (var row = rowStart; row <= rowEnd; row++) {
+      for (var col = colStart; col <= colEnd; col++) {
+        var rank = row * g.cols + col;
+        if (rank >= g.n) continue;
+        var x = (col - g.panCol) * cellPx + CW/2;
+        var y = (row - g.panRow) * cellPx + CH/2;
+        ctx.fillRect(x, y, cellPx - gap, cellPx - gap);
+        if (flags && flags.has(rank)) flagged.push({ x: x, y: y, rank: rank });
+      }
+    }
+
+    if (flagged.length) {
+      var lw = Math.max(1.5, cellPx * 0.1);
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = HIGHLIGHT_COLOR;
+      flagged.forEach(function(p){
+        ctx.strokeRect(p.x + lw/2, p.y + lw/2, cellPx - gap - lw, cellPx - gap - lw);
+      });
+    }
+  }
+
+  function tweenOverview(fromT, toT, onDone){
+    var start = null;
+    function step(ts){
+      if (start === null) start = ts;
+      var raw = Math.min(1, (ts - start) / ZOOM_MS);
+      overviewT = fromT + (toT - fromT) * easeInOutCubic(raw);
+      renderOverview();
+      if (raw < 1) { requestAnimationFrame(step); }
+      else if (onDone) { onDone(); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function tweenGridTo(targetRank, onDone){
+    var g = gridState;
+    var rc = rankToRowCol(targetRank, g.cols);
+    var fromCellsAcross = g.cellsAcross, fromPanCol = g.panCol, fromPanRow = g.panRow;
+    var toCellsAcross = Math.min(fromCellsAcross, TARGET_CELLS_ACROSS);
+    var start = null;
+    function step(ts){
+      if (start === null) start = ts;
+      var raw = Math.min(1, (ts - start) / ZOOM_MS);
+      var te = easeInOutCubic(raw);
+      g.cellsAcross = fromCellsAcross + (toCellsAcross - fromCellsAcross) * te;
+      g.panCol = fromPanCol + (rc.col + 0.5 - fromPanCol) * te;
+      g.panRow = fromPanRow + (rc.row + 0.5 - fromPanRow) * te;
+      renderGrid();
+      if (raw < 1) { requestAnimationFrame(step); }
+      else if (onDone) { onDone(); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // The single entry point both direct clicks and the guided tour use to
+  // move the camera to a team (targetRank == null: just explore that
+  // team's block) or a specific cell within it.
+  function zoomIntoTeam(team, targetRank, onArrived){
+    var block = blockByTeam[team.team];
+    if (!block) { if (onArrived) onArrived(); return; }
+
+    function afterOverviewIn(){
+      enterGrid(team);
+      if (targetRank != null) { tweenGridTo(targetRank, onArrived); }
+      else if (onArrived) { onArrived(); }
+    }
+
+    if (view.mode === 'grid') {
+      if (gridState.team.team === team.team) {
+        if (targetRank != null) { tweenGridTo(targetRank, onArrived); }
+        else if (onArrived) { onArrived(); }
+        return;
+      }
+      exitGrid(function(){
+        overviewTarget = block;
+        tweenOverview(0, 1, afterOverviewIn);
+      });
+    } else {
+      overviewTarget = block;
+      tweenOverview(0, 1, afterOverviewIn);
+    }
+  }
+
+  function canvasCoords(e){
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (CW / rect.width),
+      y: (e.clientY - rect.top) * (CH / rect.height),
+    };
+  }
+
+  function hitTestBlock(x, y){
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      if (x >= b.x && x <= b.x+b.w && y >= b.y && y <= b.y+b.h) return b;
+    }
+    return null;
+  }
+
+  function hitTestGridCell(x, y){
+    var g = gridState;
+    var cellPx = CW / g.cellsAcross;
+    var col = Math.floor(g.panCol + (x - CW/2) / cellPx);
+    var row = Math.floor(g.panRow + (y - CH/2) / cellPx);
+    if (col < 0 || row < 0 || col >= g.cols) return null;
+    var rank = row * g.cols + col;
+    if (rank >= g.n) return null;
+    var flags = flaggedByTeam[g.team.team];
+    return (flags && flags.has(rank)) ? flags.get(rank) : null;
+  }
+
+  // Desktop-only for this pass (per the plan): wheel to zoom, drag to pan,
+  // both scoped to grid mode. Mobile still gets the overview + the guided
+  // tour (camera tweens, no manual input needed) -- just not this bit.
+  var dragging = false, didDrag = false, dragStartX = 0, dragStartY = 0, dragStartPanCol = 0, dragStartPanRow = 0;
+
+  canvas.addEventListener('wheel', function(e){
+    if (view.mode !== 'grid') return;
+    e.preventDefault();
+    pauseTourIfPlaying();
+    var factor = Math.exp(e.deltaY * 0.0015);
+    var maxCellsAcross = Math.min(gridState.cols, gridState.rows) * 1.4;
+    gridState.cellsAcross = Math.max(MIN_CELLS_ACROSS, Math.min(maxCellsAcross, gridState.cellsAcross * factor));
+    clampGridPan();
+    renderGrid();
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', function(e){
+    if (view.mode !== 'grid') return;
+    dragging = true; didDrag = false;
+    dragStartX = e.clientX; dragStartY = e.clientY;
+    dragStartPanCol = gridState.panCol; dragStartPanRow = gridState.panRow;
+    canvas.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', function(e){
+    if (!dragging) return;
+    var dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+    if (!didDrag && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) { didDrag = true; pauseTourIfPlaying(); }
+    if (!didDrag) return;
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = CW / rect.width, scaleY = CH / rect.height;
+    var cellPx = CW / gridState.cellsAcross;
+    gridState.panCol = dragStartPanCol - (dx * scaleX) / cellPx;
+    gridState.panRow = dragStartPanRow - (dy * scaleY) / cellPx;
+    clampGridPan();
+    renderGrid();
+  });
+  window.addEventListener('mouseup', function(){
+    if (!dragging) return;
+    dragging = false;
+    canvas.style.cursor = view.mode === 'grid' ? 'grab' : 'pointer';
+  });
+
+  canvas.addEventListener('click', function(e){
+    if (didDrag) { didDrag = false; return; }
+    var p = canvasCoords(e);
+    if (view.mode === 'overview') {
+      var block = hitTestBlock(p.x, p.y);
+      if (block) zoomIntoTeam(block.team, null);
+    } else {
+      var flag = hitTestGridCell(p.x, p.y);
+      if (flag) openStory(flag);
+    }
+  });
+
+  var gridBackBtn = document.getElementById('grid-back-btn');
+  gridBackBtn.addEventListener('click', function(){
+    if (view.mode !== 'grid') return;
+    exitGrid();
+    updateControlsVisibility();
+  });
+
+  /* =========================================================
+     5. GUIDED TOUR
+     A curated sequence of stops built straight from the flagged data
+     above -- the most extreme unexpected winners, the highest-scoring
+     games, the biggest individual hauls -- so every stop is a real,
+     addressable cell rather than an illustrative example. Captions below
+     are generated mechanically from the numbers; treat them as a first
+     draft to hand-tune, same as the rest of this page's copy.
+     ========================================================= */
+
+  var STOP_DWELL_MS = 4500;
+
+  // The most extreme sims by a metric cluster hard on whichever single
+  // team/fixture has the most outlier shot profile (e.g. one blowout
+  // fixture supplies most of the highest-scoring-game hits) -- so ranking
+  // alone isn't enough to pick a *varied* tour. This caps to one stop per
+  // key (team, or real fixture) before taking the top N, same principle
+  // as the backend's own used_champions dedup in pick_stories().
+  function distinctTopN(sorted, keyFn, n){
+    var seen = new Set(), out = [];
+    for (var i = 0; i < sorted.length && out.length < n; i++){
+      var key = keyFn(sorted[i]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(sorted[i]);
+    }
+    return out;
+  }
+
+  function buildItinerary(){
+    var stops = [];
+
+    distinctTopN(
+      flaggedChampionsRaw.slice().sort(function(a, b){ return b.champion_real_position - a.champion_real_position; }),
+      function(c){ return c.champion; }, 5
+    ).forEach(function(c){
+      var team = teams.filter(function(t){ return t.team === c.champion; })[0];
+      if (!team) return;
+      stops.push({
+        team: team, rank: rankOfSim[c.sim], kind: 'champion', record: c,
+        caption: c.champion + ' win the league here — in reality they finished ' + ordinal(c.champion_real_position) + '.',
+      });
+    });
+
+    function makeGameStop(g){
+      var team = byteToTeam[champions[g.sim]];
+      var scoreline = g.home_team + ' ' + g.home_goals + '–' + g.away_goals + ' ' + g.away_team;
+      var caption = g.haul
+        ? g.haul.player + ' scores ' + g.haul.goals + ' in ' + scoreline + '.'
+        : scoreline + ' — ' + (g.home_goals + g.away_goals) + ' goals in one simulated game.';
+      return { team: team, rank: rankOfSim[g.sim], kind: 'game', record: g, caption: caption };
+    }
+
+    distinctTopN(
+      flaggedGamesRaw.filter(function(g){ return g.triggers.indexOf('high_scoring') >= 0; })
+        .slice().sort(function(a, b){ return (b.home_goals+b.away_goals) - (a.home_goals+a.away_goals); }),
+      function(g){ return g.match_id; }, 5
+    ).forEach(function(g){ stops.push(makeGameStop(g)); });
+
+    distinctTopN(
+      flaggedGamesRaw.filter(function(g){ return g.haul; })
+        .slice().sort(function(a, b){ return b.haul.goals - a.haul.goals; }),
+      function(g){ return g.match_id; }, 5
+    ).forEach(function(g){ stops.push(makeGameStop(g)); });
+
+    return stops;
+  }
+
+  var itinerary = buildItinerary();
+  var tourIndex = -1;
+  var tourPlaying = false;
+  var tourAdvanceTimer = null;
+
+  function tourActive(){ return tourIndex >= 0; }
+
+  var tourStartBtn = document.getElementById('tour-start-btn');
+  var tourPlayingControls = document.getElementById('tour-playing-controls');
+  var tourPrevBtn = document.getElementById('tour-prev-btn');
+  var tourPauseBtn = document.getElementById('tour-pause-btn');
+  var tourNextBtn = document.getElementById('tour-next-btn');
+  var tourCounterEl = document.getElementById('tour-counter');
+  var tourExitBtn = document.getElementById('tour-exit-btn');
+  var tourCaptionEl = document.getElementById('tour-caption');
+  var tourCaptionTextEl = document.getElementById('tour-caption-text');
+  var tourDetailBtn = document.getElementById('tour-detail-btn');
+
+  function updateControlsVisibility(){
+    var active = tourActive();
+    tourStartBtn.hidden = active;
+    tourPlayingControls.hidden = !active;
+    gridBackBtn.hidden = active || view.mode !== 'grid';
+  }
+
+  function updateTourCounter(){
+    tourCounterEl.textContent = (tourIndex + 1) + ' / ' + itinerary.length;
+  }
+
+  function setTourPlaying(playing){
+    tourPlaying = playing;
+    tourPauseBtn.textContent = playing ? '⏸' : '▶';
+    tourPauseBtn.title = playing ? 'Pause' : 'Resume';
+    if (tourAdvanceTimer) { clearTimeout(tourAdvanceTimer); tourAdvanceTimer = null; }
+    if (playing) armAdvanceTimer();
+  }
+
+  function armAdvanceTimer(){
+    if (tourAdvanceTimer) clearTimeout(tourAdvanceTimer);
+    tourAdvanceTimer = setTimeout(function(){
+      if (tourPlaying) goToTourStop(tourIndex + 1);
+    }, STOP_DWELL_MS);
+  }
+
+  function pauseTourIfPlaying(){
+    if (tourActive() && tourPlaying) setTourPlaying(false);
+  }
+
+  function goToTourStop(idx){
+    if (idx < 0 || idx >= itinerary.length) { endTour(); return; }
+    tourIndex = idx;
+    updateTourCounter();
+    updateControlsVisibility();
+    tourCaptionEl.hidden = true;
+
+    var stop = itinerary[idx];
+    zoomIntoTeam(stop.team, stop.rank, function(){
+      tourCaptionTextEl.textContent = stop.caption;
+      tourCaptionEl.hidden = false;
+      if (tourPlaying) armAdvanceTimer();
+    });
+  }
+
+  function startTour(){
+    tourIndex = -1;
+    tourPlaying = true;
+    tourPauseBtn.textContent = '⏸';
+    tourPauseBtn.title = 'Pause';
+    updateControlsVisibility();
+    goToTourStop(0);
+  }
+
+  function endTour(){
+    tourIndex = -1;
+    tourPlaying = false;
+    if (tourAdvanceTimer) { clearTimeout(tourAdvanceTimer); tourAdvanceTimer = null; }
+    tourCaptionEl.hidden = true;
+    updateControlsVisibility();
+    if (view.mode === 'grid') exitGrid();
+  }
+
+  tourStartBtn.addEventListener('click', startTour);
+  tourExitBtn.addEventListener('click', endTour);
+  tourPrevBtn.addEventListener('click', function(){ goToTourStop(tourIndex - 1); });
+  tourNextBtn.addEventListener('click', function(){ goToTourStop(tourIndex + 1); });
+  tourPauseBtn.addEventListener('click', function(){ setTourPlaying(!tourPlaying); });
+  tourDetailBtn.addEventListener('click', function(){
+    var stop = itinerary[tourIndex];
+    if (stop) openStory({ kind: stop.kind, record: stop.record });
+  });
+
+  /* =========================================================
+     6. ROSTER / LEGEND
      ========================================================= */
 
   var roster = document.getElementById('roster');
@@ -513,11 +1091,17 @@
     if (!btn) return;
     var parts = btn.getAttribute('data-story').split(':');
     var team = parts[0], si = parseInt(parts[1], 10);
-    openStory(storiesByTeam[team][si]);
+    openStory({ kind: 'champion', record: storiesByTeam[team][si] });
   });
 
   /* =========================================================
-     4. STORY MODAL
+     7. STORY MODAL
+     Shared by three sources now: the roster's curated per-team cards
+     (always champion-shaped, with a full notable_games breakdown from the
+     decoupled story batch), and the two kinds of flagged records surfaced
+     by the grid/tour above -- unexpected-winner sims (champion-shaped, but
+     no notable_games -- that section of the modal just hides) and
+     notable-game sims (a different, lighter shape entirely).
      ========================================================= */
 
   var backdrop = document.getElementById('modal-backdrop');
@@ -532,10 +1116,41 @@
       + '<span class="score">' + g.home_goals + '–' + g.away_goals + '</span></div>';
   }
 
-  function openStory(story){
-    document.getElementById('modal-crest').src = crestPath(story.champion);
-    document.getElementById('modal-crest').alt = story.champion + ' crest';
-    document.getElementById('modal-tag').textContent = TAG_LABEL[story.tag] || story.tag;
+  function openStory(entry){
+    var story = entry.record;
+    var champBody = document.getElementById('modal-champion-body');
+    var gameBody = document.getElementById('modal-game-body');
+    var crestEl = document.getElementById('modal-crest');
+
+    if (entry.kind === 'game') {
+      champBody.style.display = 'none';
+      gameBody.style.display = 'block';
+      crestEl.style.display = 'none';
+
+      document.getElementById('modal-tag').textContent = story.triggers.map(function(tr){
+        return tr === 'high_scoring' ? 'High-scoring game' : 'Big individual haul';
+      }).join(' · ');
+      document.getElementById('modal-title').textContent = story.home_team + ' vs ' + story.away_team;
+      document.getElementById('modal-sub').textContent = story.date
+        ? new Date(story.date.replace(' ', 'T')).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+        : '';
+      document.getElementById('modal-game-score').innerHTML =
+        '<span>' + story.home_team + ' vs ' + story.away_team + '</span>'
+        + '<span class="score">' + story.home_goals + '–' + story.away_goals + '</span>';
+      document.getElementById('modal-game-note').textContent = story.haul
+        ? story.haul.player + ' scored ' + story.haul.goals + ' of ' + story.haul.team + '\'s goals in this simulated match.'
+        : (story.home_goals + story.away_goals) + ' goals in this one simulated match — one of the highest-scoring games across 1,000,000 replays of the season.';
+
+      backdrop.classList.add('open');
+      return;
+    }
+
+    champBody.style.display = '';
+    gameBody.style.display = 'none';
+    crestEl.style.display = '';
+    crestEl.src = crestPath(story.champion);
+    crestEl.alt = story.champion + ' crest';
+    document.getElementById('modal-tag').textContent = story.tag ? (TAG_LABEL[story.tag] || story.tag) : 'Unexpected winner';
     document.getElementById('modal-title').textContent = story.champion + ' win the league';
     document.getElementById('modal-sub').textContent = 'Real-life finish that season: ' + ordinal(story.champion_real_position);
 
@@ -547,8 +1162,14 @@
         + '<td class="num">' + r.gf + '</td><td class="num">' + r.ga + '</td></tr>';
     }).join('');
 
-    document.getElementById('modal-highest').innerHTML = story.notable_games.highest_scoring.map(gameLine).join('');
-    document.getElementById('modal-wins').innerHTML = story.notable_games.biggest_wins.map(gameLine).join('');
+    var notableBlock = document.getElementById('modal-notable-block');
+    if (story.notable_games) {
+      notableBlock.style.display = '';
+      document.getElementById('modal-highest').innerHTML = story.notable_games.highest_scoring.map(gameLine).join('');
+      document.getElementById('modal-wins').innerHTML = story.notable_games.biggest_wins.map(gameLine).join('');
+    } else {
+      notableBlock.style.display = 'none';
+    }
 
     backdrop.classList.add('open');
   }
@@ -569,7 +1190,7 @@
   });
 
   /* =========================================================
-     5. LEICESTER 2015-16 STATS (data only -- see HTML comment)
+     8. LEICESTER 2015-16 STATS (data only -- see HTML comment)
      ========================================================= */
 
   var leicester = await fetch('../simulations/results/sim_leicester_2015_16.json').then(function(r){ return r.json(); }).catch(function(){ return null; });
