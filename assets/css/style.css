@@ -191,12 +191,24 @@ main {
 
 @media (max-width: 600px) {
   .nav-inner {
-    flex-direction: column;
+    padding: 16px 20px;
     align-items: flex-start;
-    gap: 16px;
+  }
+
+  .site-title {
+    font-size: 18px;
+  }
+
+  .site-tagline {
+    font-size: 11px;
   }
 
   .nav-links {
-    gap: 24px;
+    gap: 16px;
+    padding-top: 3px; /* optically align with the title's baseline, not the taller tagline stack below it */
+  }
+
+  .nav-links a {
+    font-size: 14px;
   }
 }
