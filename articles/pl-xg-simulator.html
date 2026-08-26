@@ -644,10 +644,9 @@
   // "Other": pool the least-frequent champions -- the smallest teams whose
   // combined title count is <=3% of all sims -- into one region, so a
   // one-in-a-million team doesn't get an overview block too thin to see or
-  // click. Clicking "Other" opens its own squarified sub-map (built the
-  // same way, just from this smaller set) from which a real per-sim grid
-  // is one more click away, same as any other team. Same idea on desktop
-  // as mobile, per the user.
+  // click. Its children live inside its own overview rect (not a separate
+  // full-canvas layout) so there's only ever one arrangement of them --
+  // see the comment above `otherBlocks` below for why that matters.
   var OTHER_CUTOFF_FRACTION = 0.03;
   var otherBudget = data.meta.n_sims * OTHER_CUTOFF_FRACTION;
   var otherTeamsList = [], otherSum = 0;
@@ -667,21 +666,27 @@
   var blockByTeam = {};
   blocks.forEach(function(b){ blockByTeam[b.team.team] = b; });
 
+  // Other's children, squarified *inside Other's own rect* -- not a second
+  // pass fit to the full canvas. squarify's row/column choices depend on
+  // the aspect ratio of the rect it's given, so a full-canvas layout and a
+  // layout fit to Other's (much narrower) actual overview rect produce
+  // genuinely different block arrangements for the same teams. Using only
+  // this one nested computation everywhere -- textured into the overview
+  // and shown zoomed-in -- means there's never a second arrangement to
+  // mismatch against, which is what the previous "everything jumps to the
+  // left" glitch actually was.
+  var otherRect = blockByTeam[OTHER_TEAM.team];
   var otherLayoutItems = otherTeamsList.map(function(t){ return { value: t.title_count, team: t }; });
-  var otherBlocks = otherTeamsList.length ? squarify(otherLayoutItems, 0, 0, CW, CH) : [];
+  var otherBlocks = (otherRect && otherTeamsList.length)
+    ? squarify(otherLayoutItems, otherRect.x, otherRect.y, otherRect.w, otherRect.h)
+    : [];
   var otherBlockByTeam = {};
   otherBlocks.forEach(function(b){ otherBlockByTeam[b.team.team] = b; });
 
-  // The exact same squarify(), just laid out directly inside "Other"'s own
-  // rect at the top level instead of a full 0..CW,0..CH canvas -- so the
-  // overview already shows Other textured as a mini mosaic of its real
-  // constituents, geometrically consistent with what otherBlocks draws at
-  // full scale. Zooming in is then a continuous magnification of the same
-  // pattern rather than a flat block popping into a different picture.
-  var otherRectAtTop = blockByTeam[OTHER_TEAM.team];
-  var otherMiniBlocks = (otherRectAtTop && otherTeamsList.length)
-    ? squarify(otherLayoutItems, otherRectAtTop.x, otherRectAtTop.y, otherRectAtTop.w, otherRectAtTop.h)
-    : [];
+  // A team's rect wherever it actually lives -- top-level, or nested one
+  // level inside Other -- used both to lay out its grid and to find what
+  // to zoom the camera toward.
+  function rectForTeam(team){ return isPooled(team) ? otherBlockByTeam[team.team] : blockByTeam[team.team]; }
 
   // Crests load at wildly different sizes (a couple of these Wikipedia
   // SVGs run to several hundred KB). Drawing waits on each one individually
@@ -700,122 +705,48 @@
   nonZero.forEach(function(t){
     loadImage('../assets/logos/clubs/' + t.crest_file).then(function(img){
       crestCache[t.team] = img;
-      renderCurrent();
+      render();
     });
   });
 
-  // Whichever squarified block set is the current "overview-style" screen
-  // -- the top-level map, or (once zoomed into "Other") its own sub-map of
-  // pooled teams. Both render through the exact same drawBlocks/transform
-  // machinery below; only this pointer (and its matching lookup) changes.
-  var activeBlocks = blocks;
-  var activeBlockByTeam = blockByTeam;
+  // The flat, coloured-block-plus-crest look every team starts as. Reused
+  // for top-level blocks and for Other's children -- there's no separate
+  // "Other" drawing path any more, it's just more blocks in the same
+  // nested world (see `otherBlocks` above).
+  function drawFlatBlock(b){
+    ctx.fillStyle = b.team.color;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
 
-  // The overview never has to know a single one of the 1,000,000 cells
-  // exists -- it's exactly the same ~20-block draw as before zoom was
-  // added. Detail only appears once the camera has actually zoomed into a
-  // team's block and section 4 switches to rendering its grid instead.
-  // The one exception is "Other", drawn as its own mini mosaic (see
-  // drawOtherMosaic) rather than a flat block, so zooming into it reads as
-  // a continuous reveal of real detail instead of one colour popping into
-  // a totally different picture.
-  function drawBlocks(){
-    activeBlocks.forEach(function(b){
-      if (b.team.team === OTHER_TEAM.team) { drawOtherMosaic(b); return; }
-
-      ctx.fillStyle = b.team.color;
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-
-      // hairline separators so adjoining same-tone blocks still read as
-      // distinct regions
-      ctx.strokeStyle = 'rgba(255,255,255,.6)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-
-      var short = Math.min(b.w, b.h);
-      if (short < 8) return; // too small for any legible content
-
-      var crest = crestCache[b.team.team];
-      var boxSize = Math.min(short * 0.6, 90);
-      if (crest && short >= 26) {
-        var ar = crest.naturalWidth / crest.naturalHeight || 1;
-        var cw = ar >= 1 ? boxSize : boxSize * ar;
-        var ch = ar >= 1 ? boxSize / ar : boxSize;
-        var cx = b.x + b.w / 2 - cw / 2;
-        var cy = b.y + b.h / 2 - ch / 2 - (short >= 60 ? 8 : 0);
-        ctx.drawImage(crest, cx, cy, cw, ch);
-      }
-
-      if (short >= 70) {
-        ctx.fillStyle = 'rgba(0,0,0,.55)';
-        ctx.font = '500 13px Poppins, sans-serif';
-        ctx.textAlign = 'center';
-        var labelY = b.y + b.h / 2 + boxSize / 2 + 4;
-        if (labelY < b.y + b.h - 6) {
-          ctx.fillText(b.team.team, b.x + b.w / 2, labelY);
-        }
-      }
-    });
-  }
-
-  function drawOtherMosaic(outerRect){
-    otherMiniBlocks.forEach(function(mb){
-      ctx.fillStyle = mb.team.color;
-      ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
-    });
-    ctx.strokeStyle = 'rgba(255,255,255,.5)';
+    // hairline separators so adjoining same-tone blocks still read as
+    // distinct regions
+    ctx.strokeStyle = 'rgba(255,255,255,.6)';
     ctx.lineWidth = 1;
-    otherMiniBlocks.forEach(function(mb){
-      ctx.strokeRect(mb.x + 0.5, mb.y + 0.5, Math.max(0, mb.w - 1), Math.max(0, mb.h - 1));
-    });
-    ctx.strokeRect(outerRect.x + 0.5, outerRect.y + 0.5, outerRect.w - 1, outerRect.h - 1);
+    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
 
-    var short = Math.min(outerRect.w, outerRect.h);
-    if (short < 70) return;
-    var label = 'Other';
-    ctx.font = '500 13px Poppins, sans-serif';
-    var textW = ctx.measureText(label).width;
-    var boxW = textW + 20, boxH = 25;
-    var bx = outerRect.x + outerRect.w / 2 - boxW / 2;
-    var by = outerRect.y + outerRect.h / 2 - boxH / 2;
-    ctx.fillStyle = 'rgba(0,0,0,.55)';
-    ctx.fillRect(bx, by, boxW, boxH);
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, outerRect.x + outerRect.w / 2, outerRect.y + outerRect.h / 2 + 1);
-    ctx.textBaseline = 'alphabetic'; // restore the default the rest of drawBlocks relies on
-  }
+    var short = Math.min(b.w, b.h);
+    if (short < 8) return; // too small for any legible content
 
-  // view.mode is the only thing that decides which draw path is on screen:
-  // drawBlocks() (this section, driving both 'overview' and 'other' --
-  // they're the same mechanism over a different activeBlocks) or
-  // section 4's drawGrid ('grid').
-  var view = { mode: 'overview' }; // 'overview' | 'other' | 'grid'
-  var overviewT = 0;               // 0 = full map, 1 = target block fills the canvas
-  var overviewTarget = null;       // the block being zoomed to/from, while overviewT > 0
-
-  function renderOverview(){
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, CW, CH);
-    if (overviewT > 0 && overviewTarget) {
-      // Interpolate the visible "window" of the 0..CW,0..CH world from the
-      // full canvas down to the target block's rect, and let the canvas
-      // transform do the zooming -- drawBlocks() itself never changes.
-      var b = overviewTarget;
-      var wx = b.x * overviewT, wy = b.y * overviewT;
-      var ww = CW + (b.w - CW) * overviewT, wh = CH + (b.h - CH) * overviewT;
-      var sx = CW / ww, sy = CH / wh;
-      ctx.setTransform(sx, 0, 0, sy, -wx * sx, -wy * sy);
+    var crest = crestCache[b.team.team];
+    var boxSize = Math.min(short * 0.6, 90);
+    if (crest && short >= 26) {
+      var ar = crest.naturalWidth / crest.naturalHeight || 1;
+      var cw = ar >= 1 ? boxSize : boxSize * ar;
+      var ch = ar >= 1 ? boxSize / ar : boxSize;
+      var cx = b.x + b.w / 2 - cw / 2;
+      var cy = b.y + b.h / 2 - ch / 2 - (short >= 60 ? 8 : 0);
+      ctx.drawImage(crest, cx, cy, cw, ch);
     }
-    drawBlocks();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }
 
-  function renderCurrent(){
-    if (view.mode === 'grid') { renderGrid(); } else { renderOverview(); }
+    if (short >= 70) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.font = '500 13px Poppins, sans-serif';
+      ctx.textAlign = 'center';
+      var labelY = b.y + b.h / 2 + boxSize / 2 + 4;
+      if (labelY < b.y + b.h - 6) {
+        ctx.fillText(b.team.team, b.x + b.w / 2, labelY);
+      }
+    }
   }
-  renderCurrent();
 
   document.getElementById('treemap-caption-left').textContent =
     data.meta.n_sims.toLocaleString() + ' simulated seasons · ' + nonZero.length + ' different champions';
@@ -824,16 +755,28 @@
 
   /* =========================================================
      4. ZOOM / GRID ENGINE
-     Three screens on the same canvas: the top-level overview, "Other"'s
-     own sub-map (both driven by drawBlocks() over whichever squarify
-     result is currently activeBlocks), and -- once zoomed into an actual
-     team past a defined threshold -- a uniform grid of that team's own
-     individual title-winning sims (equal-weight units, so a plain grid is
-     both simpler and more correct here than another squarify pass). Every
-     transition between screens is a defined crossfade (zoom the current
-     screen in until the target block fills the canvas, then swap what's
-     being drawn) rather than one continuous coordinate system throughout
-     -- simpler to build, and it reads fine.
+     One nested world, one camera. Every block -- top-level, or one of
+     Other's children -- lives at a fixed rect in the same (0,0)-(CW,CH)
+     space `blocks`/`otherBlocks` already use. A team's individual sims
+     nest the same way: cell (col,row) is just arithmetic on that team's
+     own block rect (`gridGeometry`/`cellRect` below), not a separate
+     pan/zoom system:
+       x = block.x + (col/cols)*block.w,  w = block.w/cols   (and so on for y/h)
+     `camera = {x,y,w,h}` is the one window into that world, magnified onto
+     the canvas with the same setTransform trick throughout. Zooming in or
+     out, through Other or not, is always the same thing: tween `camera`'s
+     x/y/w/h from its current rect to a target rect (`tweenCamera`). There
+     is no second coordinate system to swap to and no crossfade -- the
+     camera converges on one target the whole time, which is what fixes
+     both "the zoom changes direction" and the Other glitch (that one was
+     really the *coordinates* changing, not just the picture).
+     Which block draws its flat colour+crest vs. its per-sim grid is a
+     live geometric decision (`gridRevealAlpha`), not a separate mode: as
+     the camera zooms in close enough to a team's block that its cells
+     would actually be legible, that block starts cross-fading to its grid
+     instead -- during the very same tween that's already zooming in.
+     That's the "two stages" -- blocks, then squares coming into focus --
+     without a second camera system underneath it.
      ========================================================= */
 
   // Tuned slower on mobile: a fixed-duration tween covers the same visual
@@ -844,178 +787,189 @@
   var MIN_CELLS_ACROSS = 3;
   var ENTRY_CELLS_ACROSS_CAP = 140; // how many grid columns a first look into a huge block shows
   var TARGET_CELLS_ACROSS = 9;      // how tight a tour stop / direct link zooms in on its cell
+  // Individual cells fade in over this range of "how many would span the
+  // camera's own width/height" -- not shown at all above START, fully
+  // opaque at or below FULL. A wide range (rather than a single hard
+  // threshold) is what makes them read as *coming into focus* through the
+  // back half of a zoom-in, not popping in right at the end; it's purely a
+  // level-of-detail decision, evaluated fresh every frame, never a mode
+  // switch. FULL sits just above ENTRY_CELLS_ACROSS_CAP so a plain click
+  // into a block (which zooms to at most that many cells across, no
+  // specific cell targeted) still arrives fully opaque, not stuck
+  // part-faded because it never gets any closer than its own entry window.
+  var GRID_REVEAL_START_CELLS = 260;
+  var GRID_REVEAL_FULL_CELLS = 145;
 
   function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
 
-  var gridState = null; // { team, cols, rows, n, cellsAcross, panCol, panRow }
+  var camera = { x: 0, y: 0, w: CW, h: CH };
+  var pathTeam = null; // the team whose grid we're zoomed into (nested in Other or not), else null
+  var gridGeom = null; // { team, block, cols, rows, n, cellW, cellH } for pathTeam, else null
 
-  function enterGrid(team){
-    view.mode = 'grid';
+  function gridGeometry(team, block){
     var n = team.title_count;
     var cols = gridCols(n);
-    gridState = {
-      team: team, cols: cols, rows: Math.ceil(n / cols), n: n,
-      cellsAcross: Math.max(MIN_CELLS_ACROSS, Math.min(cols, ENTRY_CELLS_ACROSS_CAP)),
-      panCol: cols / 2, panRow: Math.ceil(n / cols) / 2,
-    };
-    canvas.style.cursor = 'grab';
-    updateControlsVisibility();
-    renderGrid();
+    var rows = Math.ceil(n / cols);
+    return { team: team, block: block, cols: cols, rows: rows, n: n, cellW: block.w / cols, cellH: block.h / rows };
   }
 
-  function exitGrid(onDone){
-    // activeBlockByTeam, not the top-level blockByTeam directly: a grid
-    // entered from "Other"'s sub-map needs to zoom back out to *that*,
-    // not jump straight to the top -- activeBlocks was never touched by
-    // entering a grid, so it still holds whichever screen we came from.
-    var block = activeBlockByTeam[gridState.team.team];
-    view.mode = (activeBlocks === otherBlocks) ? 'other' : 'overview';
-    canvas.style.cursor = 'pointer';
-    updateControlsVisibility();
-    overviewTarget = block;
-    tweenOverview(1, 0, function(){ gridState = null; if (onDone) onDone(); });
+  function cellRect(g, rank){
+    var rc = rankToRowCol(rank, g.cols);
+    return { x: g.block.x + rc.col * g.cellW, y: g.block.y + rc.row * g.cellH, w: g.cellW, h: g.cellH };
   }
 
-  function enterOther(onArrived){
-    if (view.mode === 'other') { if (onArrived) onArrived(); return; }
-    var otherRect = blockByTeam[OTHER_TEAM.team];
-    if (!otherRect) { if (onArrived) onArrived(); return; }
-    activeBlocks = blocks; activeBlockByTeam = blockByTeam;
-    overviewTarget = otherRect;
-    tweenOverview(0, 1, function(){
-      view.mode = 'other';
-      activeBlocks = otherBlocks; activeBlockByTeam = otherBlockByTeam;
-      overviewT = 0; overviewTarget = null;
-      updateControlsVisibility();
-      renderCurrent();
-      if (onArrived) onArrived();
-    });
+  // 0 = show the flat block only, 1 = show the grid at full opacity, in
+  // between = both, cross-fading. Cell count in view is bounded by
+  // GRID_REVEAL_START_CELLS the whole time this is > 0, regardless of how
+  // many total sims the team won.
+  function gridRevealAlpha(g){
+    var visible = Math.max(camera.w / g.cellW, camera.h / g.cellH);
+    if (visible >= GRID_REVEAL_START_CELLS) return 0;
+    if (visible <= GRID_REVEAL_FULL_CELLS) return 1;
+    return (GRID_REVEAL_START_CELLS - visible) / (GRID_REVEAL_START_CELLS - GRID_REVEAL_FULL_CELLS);
   }
 
-  function exitOther(onDone){
-    view.mode = 'overview';
-    activeBlocks = blocks; activeBlockByTeam = blockByTeam;
-    overviewTarget = blockByTeam[OTHER_TEAM.team];
-    overviewT = 1; // snap "as if" already zoomed into Other's rect, then tween back out
-    updateControlsVisibility();
-    tweenOverview(1, 0, function(){ if (onDone) onDone(); });
-  }
-
-  // Gets the camera to the right *screen* (top overview or Other's
-  // sub-map) for a team, exiting a grid first if one is open -- the
-  // shared pre-step both zoomIntoTeam and the tour route through before
-  // actually zooming to a block or cell.
-  function switchToLevel(needsOther, onReady){
-    if (view.mode === 'grid') { exitGrid(function(){ switchToLevel(needsOther, onReady); }); return; }
-    if (needsOther && view.mode !== 'other') { enterOther(onReady); return; }
-    if (!needsOther && view.mode !== 'overview') { exitOther(onReady); return; }
-    onReady();
-  }
-
-  function clampGridPan(){
-    gridState.panCol = Math.max(0, Math.min(gridState.cols, gridState.panCol));
-    gridState.panRow = Math.max(0, Math.min(gridState.rows, gridState.panRow));
-  }
-
-  function renderGrid(){
-    var g = gridState;
+  function render(){
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, CW, CH);
+    var sx = CW / camera.w, sy = CH / camera.h;
+    ctx.setTransform(sx, 0, 0, sy, -camera.x * sx, -camera.y * sy);
+    blocks.forEach(function(b){
+      if (b.team.team === OTHER_TEAM.team) { otherBlocks.forEach(drawBlockOrGrid); return; }
+      drawBlockOrGrid(b);
+    });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
 
-    var cellPx = CW / g.cellsAcross;
-    var halfX = (CW / 2) / cellPx, halfY = (CH / 2) / cellPx;
-    var colStart = Math.max(0, Math.floor(g.panCol - halfX) - 1);
-    var colEnd = Math.min(g.cols - 1, Math.ceil(g.panCol + halfX) + 1);
-    var rowStart = Math.max(0, Math.floor(g.panRow - halfY) - 1);
-    var rowEnd = Math.min(g.rows - 1, Math.ceil(g.panRow + halfY) + 1);
-    var gap = cellPx > 8 ? 1 : 0;
+  function drawBlockOrGrid(b){
+    var alpha = (pathTeam && b.team.team === pathTeam.team) ? gridRevealAlpha(gridGeom) : 0;
+    if (alpha <= 0) { drawFlatBlock(b); return; }
+    if (alpha < 1) drawFlatBlock(b); // base layer still showing through while cells fade in
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawGrid(gridGeom);
+    ctx.restore();
+  }
+
+  function drawGrid(g){
+    var visX0 = Math.max(camera.x, g.block.x), visX1 = Math.min(camera.x + camera.w, g.block.x + g.block.w);
+    var visY0 = Math.max(camera.y, g.block.y), visY1 = Math.min(camera.y + camera.h, g.block.y + g.block.h);
+    if (visX1 <= visX0 || visY1 <= visY0) return;
+    var colStart = Math.max(0, Math.floor((visX0 - g.block.x) / g.cellW) - 1);
+    var colEnd = Math.min(g.cols - 1, Math.ceil((visX1 - g.block.x) / g.cellW) + 1);
+    var rowStart = Math.max(0, Math.floor((visY0 - g.block.y) / g.cellH) - 1);
+    var rowEnd = Math.min(g.rows - 1, Math.ceil((visY1 - g.block.y) / g.cellH) + 1);
+
+    var sx = CW / camera.w, sy = CH / camera.h;
+    var gapX = g.cellW * sx > 8 ? 1 / sx : 0;
+    var gapY = g.cellH * sy > 8 ? 1 / sy : 0;
     var flags = flaggedByTeam[g.team.team];
 
     // Only the cells actually on screen are ever touched -- bounded by
-    // canvas size / min cell size, never by how many sims this team won.
+    // GRID_REVEAL_START_CELLS, never by how many sims this team won.
     ctx.fillStyle = g.team.color;
     var flagged = [];
     for (var row = rowStart; row <= rowEnd; row++) {
       for (var col = colStart; col <= colEnd; col++) {
         var rank = row * g.cols + col;
         if (rank >= g.n) continue;
-        var x = (col - g.panCol) * cellPx + CW/2;
-        var y = (row - g.panRow) * cellPx + CH/2;
-        ctx.fillRect(x, y, cellPx - gap, cellPx - gap);
+        var x = g.block.x + col * g.cellW, y = g.block.y + row * g.cellH;
+        ctx.fillRect(x, y, g.cellW - gapX, g.cellH - gapY);
         if (flags && flags.has(rank)) flagged.push({ x: x, y: y, rank: rank });
       }
     }
 
     if (flagged.length) {
-      var lw = Math.max(1.5, cellPx * 0.1);
+      var lw = Math.max(1.5 / sx, g.cellW * 0.1);
       ctx.lineWidth = lw;
       ctx.strokeStyle = HIGHLIGHT_COLOR;
       flagged.forEach(function(p){
-        ctx.strokeRect(p.x + lw/2, p.y + lw/2, cellPx - gap - lw, cellPx - gap - lw);
+        ctx.strokeRect(p.x + lw/2, p.y + lw/2, g.cellW - gapX - lw, g.cellH - gapY - lw);
       });
     }
   }
 
-  function tweenOverview(fromT, toT, onDone){
-    var start = null;
-    function step(ts){
-      if (start === null) start = ts;
-      var raw = Math.min(1, (ts - start) / ZOOM_MS);
-      overviewT = fromT + (toT - fromT) * easeInOutCubic(raw);
-      renderOverview();
-      if (raw < 1) { requestAnimationFrame(step); }
-      else if (onDone) { onDone(); }
-    }
-    requestAnimationFrame(step);
-  }
+  render();
 
-  function tweenGridTo(targetRank, onDone){
-    var g = gridState;
-    var rc = rankToRowCol(targetRank, g.cols);
-    var fromCellsAcross = g.cellsAcross, fromPanCol = g.panCol, fromPanRow = g.panRow;
-    var toCellsAcross = Math.min(fromCellsAcross, TARGET_CELLS_ACROSS);
+  function tweenCamera(fromRect, toRect, onDone){
     var start = null;
     function step(ts){
       if (start === null) start = ts;
       var raw = Math.min(1, (ts - start) / ZOOM_MS);
       var te = easeInOutCubic(raw);
-      g.cellsAcross = fromCellsAcross + (toCellsAcross - fromCellsAcross) * te;
-      g.panCol = fromPanCol + (rc.col + 0.5 - fromPanCol) * te;
-      g.panRow = fromPanRow + (rc.row + 0.5 - fromPanRow) * te;
-      renderGrid();
+      camera.x = fromRect.x + (toRect.x - fromRect.x) * te;
+      camera.y = fromRect.y + (toRect.y - fromRect.y) * te;
+      camera.w = fromRect.w + (toRect.w - fromRect.w) * te;
+      camera.h = fromRect.h + (toRect.h - fromRect.h) * te;
+      render();
       if (raw < 1) { requestAnimationFrame(step); }
       else if (onDone) { onDone(); }
     }
     requestAnimationFrame(step);
   }
 
+  // The camera rect for "zoomed into team's grid" -- centred on a specific
+  // cell if targetRank is given (a tour stop / flagged cell), otherwise
+  // just a bounded first look at the block's own centre. Always capped to
+  // at most ENTRY_CELLS_ACROSS_CAP cells across so a huge team's grid
+  // (Arsenal alone is over 700,000 cells) never becomes the zoom target
+  // outright -- only ever a legible window onto part of it.
+  function targetRectFor(team, targetRank){
+    var block = rectForTeam(team);
+    var g = gridGeometry(team, block);
+    var cellsAcross, cellsDown, cx, cy;
+    if (targetRank != null) {
+      cellsAcross = TARGET_CELLS_ACROSS; cellsDown = TARGET_CELLS_ACROSS;
+      var cr = cellRect(g, Math.min(targetRank, g.n - 1));
+      cx = cr.x + g.cellW / 2; cy = cr.y + g.cellH / 2;
+    } else {
+      cellsAcross = Math.min(g.cols, ENTRY_CELLS_ACROSS_CAP);
+      cellsDown = Math.min(g.rows, ENTRY_CELLS_ACROSS_CAP);
+      cx = block.x + block.w / 2; cy = block.y + block.h / 2;
+    }
+    var ww = Math.min(block.w, g.cellW * cellsAcross);
+    var wh = Math.min(block.h, g.cellH * cellsDown);
+    return {
+      x: Math.max(block.x, Math.min(block.x + block.w - ww, cx - ww / 2)),
+      y: Math.max(block.y, Math.min(block.y + block.h - wh, cy - wh / 2)),
+      w: ww, h: wh,
+    };
+  }
+
+  function currentCameraRect(){ return { x: camera.x, y: camera.y, w: camera.w, h: camera.h }; }
+
+  function zoomOut(onDone){
+    var from = currentCameraRect();
+    tweenCamera(from, { x: 0, y: 0, w: CW, h: CH }, function(){
+      pathTeam = null; gridGeom = null;
+      canvas.style.cursor = 'pointer';
+      updateControlsVisibility();
+      if (onDone) onDone();
+    });
+  }
+
   // The single entry point both direct clicks and the guided tour use to
   // move the camera to a team (targetRank == null: just explore that
-  // team's block) or a specific cell within it. Routes through "Other"
-  // first when the team is one of the ones pooled into it -- including a
-  // tour stop or flagged cell whose champion happens to be a pooled team.
+  // team's block) or a specific cell within it -- whether that team is
+  // top-level or nested inside Other. Moving between two different teams
+  // is the one case that's still two chained tweens (out to the whole map,
+  // then in to the new team) rather than a single hop -- each of those two
+  // legs is still just one camera converging on one target the whole way,
+  // so there's no discontinuity, just an out-then-in motion that makes
+  // sense for jumping between two unrelated places on the map.
   function zoomIntoTeam(team, targetRank, onArrived){
-    if (view.mode === 'grid' && gridState.team.team === team.team) {
-      if (targetRank != null) { tweenGridTo(targetRank, onArrived); }
-      else if (onArrived) { onArrived(); }
+    if (pathTeam && pathTeam.team === team.team) {
+      tweenCamera(currentCameraRect(), targetRectFor(team, targetRank), onArrived);
       return;
     }
+    if (pathTeam) { zoomOut(function(){ zoomIntoTeam(team, targetRank, onArrived); }); return; }
 
-    if (team.team === OTHER_TEAM.team) {
-      switchToLevel(false, function(){ enterOther(onArrived); });
-      return;
-    }
-
-    switchToLevel(isPooled(team), function(){
-      var block = activeBlockByTeam[team.team];
-      if (!block) { if (onArrived) onArrived(); return; }
-      overviewTarget = block;
-      tweenOverview(0, 1, function(){
-        enterGrid(team);
-        if (targetRank != null) { tweenGridTo(targetRank, onArrived); }
-        else if (onArrived) { onArrived(); }
-      });
-    });
+    var from = currentCameraRect();
+    pathTeam = team;
+    gridGeom = gridGeometry(team, rectForTeam(team));
+    canvas.style.cursor = 'grab';
+    updateControlsVisibility();
+    tweenCamera(from, targetRectFor(team, targetRank), onArrived);
   }
 
   function canvasCoords(e){
@@ -1026,20 +980,28 @@
     };
   }
 
-  function hitTestBlock(x, y){
-    for (var i = 0; i < activeBlocks.length; i++) {
-      var b = activeBlocks[i];
-      if (x >= b.x && x <= b.x+b.w && y >= b.y && y <= b.y+b.h) return b;
+  function screenToWorld(px, py){
+    return { x: camera.x + px * (camera.w / CW), y: camera.y + py * (camera.h / CH) };
+  }
+
+  function hitTestRoot(wx, wy){
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      if (wx < b.x || wx > b.x+b.w || wy < b.y || wy > b.y+b.h) continue;
+      if (b.team.team !== OTHER_TEAM.team) return b.team;
+      for (var j = 0; j < otherBlocks.length; j++) {
+        var ob = otherBlocks[j];
+        if (wx >= ob.x && wx <= ob.x+ob.w && wy >= ob.y && wy <= ob.y+ob.h) return ob.team;
+      }
+      return null; // shouldn't happen -- Other's children tile its rect with no gaps
     }
     return null;
   }
 
-  function hitTestGridCell(x, y){
-    var g = gridState;
-    var cellPx = CW / g.cellsAcross;
-    var col = Math.floor(g.panCol + (x - CW/2) / cellPx);
-    var row = Math.floor(g.panRow + (y - CH/2) / cellPx);
-    if (col < 0 || row < 0 || col >= g.cols) return null;
+  function hitTestGridCell(wx, wy){
+    var g = gridGeom;
+    if (wx < g.block.x || wx >= g.block.x+g.block.w || wy < g.block.y || wy >= g.block.y+g.block.h) return null;
+    var col = Math.floor((wx - g.block.x) / g.cellW), row = Math.floor((wy - g.block.y) / g.cellH);
     var rank = row * g.cols + col;
     if (rank >= g.n) return null;
     var flags = flaggedByTeam[g.team.team];
@@ -1049,24 +1011,32 @@
   // Desktop-only for this pass (per the plan): wheel to zoom, drag to pan,
   // both scoped to grid mode. Mobile still gets the overview + the guided
   // tour (camera tweens, no manual input needed) -- just not this bit.
-  var dragging = false, didDrag = false, dragStartX = 0, dragStartY = 0, dragStartPanCol = 0, dragStartPanRow = 0;
+  var dragging = false, didDrag = false, dragStartX = 0, dragStartY = 0, dragStartCamX = 0, dragStartCamY = 0;
 
   canvas.addEventListener('wheel', function(e){
-    if (view.mode !== 'grid') return;
+    if (!pathTeam) return;
     e.preventDefault();
     pauseTourIfPlaying();
     var factor = Math.exp(e.deltaY * 0.0015);
-    var maxCellsAcross = Math.min(gridState.cols, gridState.rows) * 1.4;
-    gridState.cellsAcross = Math.max(MIN_CELLS_ACROSS, Math.min(maxCellsAcross, gridState.cellsAcross * factor));
-    clampGridPan();
-    renderGrid();
+    var p = canvasCoords(e);
+    var worldPt = screenToWorld(p.x, p.y);
+    var g = gridGeom;
+    var minW = g.cellW * MIN_CELLS_ACROSS, minH = g.cellH * MIN_CELLS_ACROSS;
+    var maxW = g.block.w * 1.4, maxH = g.block.h * 1.4;
+    var newW = Math.max(minW, Math.min(maxW, camera.w * factor));
+    var newH = Math.max(minH, Math.min(maxH, camera.h * factor));
+    // keep the point under the cursor fixed while the window resizes around it
+    camera.x = worldPt.x - (worldPt.x - camera.x) * (newW / camera.w);
+    camera.y = worldPt.y - (worldPt.y - camera.y) * (newH / camera.h);
+    camera.w = newW; camera.h = newH;
+    render();
   }, { passive: false });
 
   canvas.addEventListener('mousedown', function(e){
-    if (view.mode !== 'grid') return;
+    if (!pathTeam) return;
     dragging = true; didDrag = false;
     dragStartX = e.clientX; dragStartY = e.clientY;
-    dragStartPanCol = gridState.panCol; dragStartPanRow = gridState.panRow;
+    dragStartCamX = camera.x; dragStartCamY = camera.y;
     canvas.style.cursor = 'grabbing';
   });
   window.addEventListener('mousemove', function(e){
@@ -1075,35 +1045,32 @@
     if (!didDrag && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) { didDrag = true; pauseTourIfPlaying(); }
     if (!didDrag) return;
     var rect = canvas.getBoundingClientRect();
-    var scaleX = CW / rect.width, scaleY = CH / rect.height;
-    var cellPx = CW / gridState.cellsAcross;
-    gridState.panCol = dragStartPanCol - (dx * scaleX) / cellPx;
-    gridState.panRow = dragStartPanRow - (dy * scaleY) / cellPx;
-    clampGridPan();
-    renderGrid();
+    camera.x = dragStartCamX - dx * (camera.w / rect.width);
+    camera.y = dragStartCamY - dy * (camera.h / rect.height);
+    render();
   });
   window.addEventListener('mouseup', function(){
     if (!dragging) return;
     dragging = false;
-    canvas.style.cursor = view.mode === 'grid' ? 'grab' : 'pointer';
+    canvas.style.cursor = pathTeam ? 'grab' : 'pointer';
   });
 
   canvas.addEventListener('click', function(e){
     if (didDrag) { didDrag = false; return; }
     var p = canvasCoords(e);
-    if (view.mode === 'grid') {
-      var flag = hitTestGridCell(p.x, p.y);
+    var w = screenToWorld(p.x, p.y);
+    if (pathTeam && gridRevealAlpha(gridGeom) >= 0.5) {
+      var flag = hitTestGridCell(w.x, w.y);
       if (flag) openStory(flag);
-    } else {
-      var block = hitTestBlock(p.x, p.y);
-      if (block) zoomIntoTeam(block.team, null);
+    } else if (!pathTeam) {
+      var team = hitTestRoot(w.x, w.y);
+      if (team) zoomIntoTeam(team, null);
     }
   });
 
   var gridBackBtn = document.getElementById('grid-back-btn');
   gridBackBtn.addEventListener('click', function(){
-    if (view.mode === 'grid') { exitGrid(updateControlsVisibility); }
-    else if (view.mode === 'other') { exitOther(updateControlsVisibility); }
+    if (pathTeam) zoomOut();
   });
 
   /* =========================================================
@@ -1211,9 +1178,7 @@
     var active = tourActive();
     tourStartBtn.hidden = active;
     tourPlayingControls.hidden = !active;
-    gridBackBtn.hidden = active || view.mode === 'overview';
-    gridBackBtn.textContent = (view.mode === 'grid' && activeBlocks === otherBlocks)
-      ? '← Back to Other' : '← Back to the whole map';
+    gridBackBtn.hidden = active || !pathTeam;
   }
 
   function updateTourCounter(){
@@ -1269,9 +1234,7 @@
     if (tourAdvanceTimer) { clearTimeout(tourAdvanceTimer); tourAdvanceTimer = null; }
     tourCaptionEl.hidden = true;
     updateControlsVisibility();
-    // Unwind up to two levels (a pooled team's grid sits inside "Other").
-    if (view.mode === 'grid') { exitGrid(function(){ if (view.mode === 'other') exitOther(); }); }
-    else if (view.mode === 'other') { exitOther(); }
+    if (pathTeam) zoomOut();
   }
 
   tourStartBtn.addEventListener('click', startTour);

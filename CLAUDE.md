@@ -178,3 +178,74 @@ for the actual text and visual direction before drafting either.
   pass. Nothing pushed to `main` this round — this work is left on
   `claude/pl-xg-article-commentary-cnrfz3` pending the user's picks from
   the two notes above.
+
+  **2026-08-26, done — zoom engine rewritten around one continuous camera,
+  fixing the "Other looks broken" report and the "zoom changes direction"
+  complaint.** User feedback: clicking "Other" looked broken ("everything's
+  on the left cut off"), and the zoom itself should be "smoother and not
+  change direction" — one continuous motion in two stages (blocks, then
+  individual squares coming into focus), always converging on one point.
+  **Root cause of both**: the previous engine used two incompatible
+  coordinate systems (an overview `ctx.setTransform` window vs. a separate
+  `gridState.panCol/panRow/cellsAcross` system for a team's grid), bridged
+  by a crossfade that swapped between them once a target block filled the
+  canvas — that swap was the "direction change." Other's specific bug: its
+  zoomed-in view (`otherBlocks`, squarified against the *full canvas*
+  aspect ratio) and its overview-mosaic preview (`otherMiniBlocks`,
+  squarified against Other's actual, much narrower overview rect) were two
+  *different* layouts of the same teams — squarify's row/column choices
+  depend on the container's aspect ratio — so the crossfade between them
+  visibly rearranged blocks. **Fix**: `pl-xg-simulator.html`'s section 3
+  (RENDER) and section 4 (ZOOM/GRID ENGINE) were rewritten around one
+  nested world and a single `camera = {x,y,w,h}` window into it, magnified
+  onto the canvas with the same `setTransform` trick throughout. Other's
+  children are now squarified *inside Other's own rect* (one computation,
+  reused for both the overview mosaic texture and the zoomed-in view — no
+  second layout to mismatch against). A team's grid cell `(col,row)` is now
+  just arithmetic on that team's own block rect (`x = block.x +
+  (col/cols)*block.w`, etc.) rather than a separate pan/zoom system, so
+  cells nest in the exact same coordinate space as every block. Every
+  zoom — into a block, into Other, into a specific flagged cell, and back
+  out — is the same `tweenCamera(fromRect, toRect)` converging on one
+  target; there's no second coordinate system to swap to. Which block draws
+  its flat colour+crest vs. its per-sim grid is now a live per-frame
+  decision (`gridRevealAlpha`) that cross-fades in over a bounded range of
+  "how many cells would span the camera" rather than a discrete mode
+  switch — that's the "two stages" the user asked for (blocks, then squares
+  coming into focus) without a second camera underneath it. One consequence
+  worth flagging explicitly: Other is no longer a separate navigational
+  "stop" you zoom into before picking a team from it — since its children
+  are always rendered (even zoomed out, as the mosaic texture) and tile its
+  rect with no gaps, a single click anywhere — a top-level block or one of
+  Other's — now goes directly to that team's grid in one motion, and the
+  back button is always exactly one hop (never a 2-level unwind). This is a
+  simplification beyond what the agreed plan (`purring-finding-badger.md`)
+  explicitly called for; it fell out naturally once Other's children had
+  nowhere else to "pop" into, and it directly serves the user's "always
+  zooming toward one point" ask, but is worth them knowing about since it
+  does change the interaction shape slightly (was 2-step for a pooled team,
+  now 1-step). Moving between two *different* already-zoomed teams (e.g. a
+  tour stop jumping from one team to another) is still two chained tweens
+  — out to the whole map, then in to the new team — since that's a
+  legitimate "these are two different places" motion; each leg is still one
+  camera converging on one target throughout, so there's no discontinuity
+  within either leg.
+  Desktop wheel-zoom/drag-pan and the mobile tour-tap flow were both
+  re-pointed at the same `camera` fields (previously their own
+  `gridState.panCol/panRow/cellsAcross` bookkeeping) — same bounds/behaviour,
+  simpler underneath.
+  **Verified**, not just eyeballed: all three inline `<script>` blocks
+  syntax-checked; a temporary in-page debug hook (removed before
+  finishing) sampled `camera`'s x/y/w/h every animation frame during a
+  real zoom-in and confirmed it changes monotonically toward the target
+  the entire time (no direction change, checked programmatically, not just
+  by eye) and that the grid-reveal alpha ramps from 0 to a genuine 1.0 by
+  arrival (an earlier tuning pass had the "fully opaque" threshold set
+  *tighter* than the default block-click zoom target, so a plain click
+  would arrive stuck at ~86% opacity forever — caught by this same
+  sampling and fixed by loosening the threshold above
+  `ENTRY_CELLS_ACROSS_CAP`). Clicking directly into Other now lands
+  cleanly on a pooled team's full-bleed grid with nothing clipped
+  (screenshotted); the full 20-stop guided tour, the mobile tap-in suite,
+  and desktop wheel-zoom/drag-pan were all re-run against the rewritten
+  engine and pass with zero findings.
