@@ -249,3 +249,77 @@ for the actual text and visual direction before drafting either.
   (screenshotted); the full 20-stop guided tour, the mobile tap-in suite,
   and desktop wheel-zoom/drag-pan were all re-run against the rewritten
   engine and pass with zero findings.
+
+  **2026-08-26, later — no more grid whitespace, zoom-depth floor,
+  persistent crest badge, and pinch-zoom/pan on mobile.** Four more
+  rounds of user feedback on the rewritten zoom engine above.
+  **Grid whitespace**: `gridGeometry()`'s old `ceil(sqrt(n))` column count
+  almost never divides `n` evenly, so the last row was partially empty --
+  visible dead space inside a team's block once zoomed in (487 wasted
+  cells out of Arsenal's 717,409-cell grid, worst case). New
+  `gridDimensions()` searches a window of column counts around an
+  aspect-aware estimate for the one that leaves the least waste, and the
+  last row's cells stretch a little wider to fill the block's exact width
+  regardless (`cellWidthForRow`/`colsInRow`, threaded through
+  `drawGrid`/`hitTestGridCell`/`cellRect`). Same real teams verified by
+  hand: Arsenal's waste dropped from 487 cells to 2; Fulham, Everton, and
+  Leeds (889 wins) all landed at 0-2 wasted cells.
+  **Zoom depth**: `targetRectFor()` had no floor on how tight a single
+  zoom-in could get, so a team with only a handful of wins -- Fulham (3),
+  Nottingham Forest (1) -- had a block only a few *world-units* wide,
+  and the camera would zoom in by 1000x+ to fill the screen with 2-3 blank
+  cells and nothing else ("zoom goes in too far in places"). New
+  `MIN_ZOOM_DIM` (70 world units) floors the camera window size, and the
+  clamp target changed from the block's own bounds (nonsensical once the
+  window can exceed the block) to the full canvas, so a floored window
+  centres on the target instead of pinning to one corner. Confirmed via a
+  temporary in-page debug hook: Fulham's entry window went from
+  0.57×5.23 (a ~2,000x zoom) to a sane 70×70.
+  **Crest persistence**: entering any team's grid lost its crest entirely
+  -- `drawGrid` only ever draws coloured squares, no per-team branding, so
+  once zoomed in there was no visual reminder of *whose* grid you were
+  looking at. Fixed with a small always-on-while-zoomed-in overlay badge
+  (`#grid-crest-badge`, screen-space HTML/CSS, not canvas-drawn, so it
+  stays crisp and correctly sized at any zoom depth) showing the current
+  team's crest + name, pushed to the right end of the existing tour/back
+  button row via `margin-left:auto`. Verified showing/hiding correctly
+  through zoom-in, tour stops, and back-out, including for a barely-visible
+  team like Fulham where it's the *only* on-screen identification once
+  zoomed in (see the known gap below).
+  **Mobile pinch-zoom/pan** (the user's explicit pick from three options
+  put to them, over a cheaper tap-tolerance-only fix or a roster-card
+  fallback): mobile previously had no way to zoom in before tapping, so
+  precisely tapping one of Other's smaller pooled teams -- packed into a
+  fraction of the canvas, no mouse-cursor precision to rely on -- could
+  mean hitting a genuinely tiny target blind. New touchstart/touchmove/
+  touchend/touchcancel handlers give one-finger pan and two-finger
+  pinch-zoom, working at *every* level (root/Other included, not just once
+  inside a grid like the existing desktop wheel/drag) -- reusing the same
+  `camera` fields the mouse controls already write to, plus a shared
+  `cameraZoomBounds()` extracted from the wheel handler for both to use.
+  `#treemap-canvas`'s `touch-action` changed from `manipulation` to `none`
+  so the browser's own default touch handling stays out of the way of the
+  hand-rolled gestures. A `touchMoved` flag (mirroring the existing
+  `didDrag` for mouse) suppresses the click a real pan/pinch gesture would
+  otherwise leave behind. Verified: synthetic two-finger touch events
+  confirmed pinch-out zooms in and pinch-in zooms out with no accidental
+  block-selection afterward, and one-finger pan moves the camera without
+  changing zoom level, both via a temporary debug hook (removed before
+  finishing); the existing real-touchscreen-tap mobile suite
+  (`test_mobile.js`/`test_mobile2.js`) still passes unchanged, confirming
+  normal taps still navigate correctly and aren't swallowed by the new
+  gesture handling.
+  **Known gap, not addressed this round**: the crest badge fixes losing
+  the team's identity, but doesn't fully fix "zoom too far" for a team
+  whose block is extremely elongated relative to its own tiny size (Fulham
+  is a 0.57×5.23 world-unit sliver) -- the 70×70 floor gives a sane zoom
+  *magnitude*, but Fulham's own sliver can still end up a barely-visible
+  line within that window, surrounded mostly by neighbouring teams' blocks
+  rather than clearly framing Fulham itself. Flagging rather than
+  over-fitting a fix to one pathological case; worth another look if it
+  comes up again in practice.
+  Verified end-to-end: full 20-stop guided tour, both mobile tap suites,
+  desktop wheel-zoom/drag-pan (screenshotted before/after), and the
+  Other-region flow all re-run against the final code with zero findings;
+  all three inline `<script>` blocks syntax-checked with the debug hooks
+  stripped out.

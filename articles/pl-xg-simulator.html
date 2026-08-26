@@ -51,11 +51,13 @@
     width:100%; height:auto; display:block;
     border-radius:6px;
     cursor:pointer;
-    /* without this, a tap on the canvas (entering a block, hitting a
-       flagged cell) waits out the ~300ms double-tap-zoom delay on mobile
-       browsers before it registers, and pinch/double-tap can fight with
-       our own click handling */
-    touch-action:manipulation;
+    /* Touch pan/pinch-zoom on the canvas is fully hand-rolled (see the
+       touchstart/touchmove handlers) so the browser's own default touch
+       handling needs to stay out of the way entirely -- `none` also has
+       the side effect of a tap (entering a block, hitting a flagged cell)
+       registering immediately, without the ~300ms double-tap-zoom delay
+       `manipulation` would otherwise still wait out. */
+    touch-action:none;
   }
   .treemap-caption{
     font-size:13px; color:var(--muted); font-weight:300; margin-top:10px;
@@ -118,6 +120,25 @@
     touch-action:manipulation;
   }
   .tour-detail-btn:hover{ background:rgba(255,255,255,.3); }
+
+  /* Persistent reminder of which team's grid you're looking at -- shown
+     the whole time you're zoomed into one, since the grid itself is just
+     coloured squares with no crest of its own once you're that deep in.
+     margin-left:auto pushes it to the right end of whichever line it's on
+     in the wrapping overlay row, rather than needing its own absolute
+     position to keep clear of the tour/back controls. */
+  .grid-crest-badge{
+    margin-left:auto;
+    display:flex; align-items:center; gap:8px;
+    background:rgba(0,0,0,.6); backdrop-filter:blur(4px);
+    border-radius:20px; padding:5px 14px 5px 6px;
+    color:#fff; font-size:13px; font-weight:500;
+  }
+  .grid-crest-badge[hidden]{ display:none; } /* see the note above tour-playing-controls[hidden] */
+  .grid-crest-badge img{
+    width:26px; height:26px; object-fit:contain;
+    background:#fff; border-radius:50%; padding:3px;
+  }
 
   @media (max-width:640px){
     .treemap-overlay-controls{ position:static; margin-bottom:10px; }
@@ -366,6 +387,10 @@
             <button type="button" class="tour-btn tour-exit-btn" id="tour-exit-btn">✕ Exit tour</button>
           </div>
           <button type="button" class="tour-btn" id="grid-back-btn" hidden>← Back to the whole map</button>
+          <div class="grid-crest-badge" id="grid-crest-badge" hidden>
+            <img id="grid-crest-badge-img" alt="">
+            <span id="grid-crest-badge-name"></span>
+          </div>
         </div>
 
         <div class="tour-caption" id="tour-caption" hidden>
@@ -787,6 +812,7 @@
   var MIN_CELLS_ACROSS = 3;
   var ENTRY_CELLS_ACROSS_CAP = 140; // how many grid columns a first look into a huge block shows
   var TARGET_CELLS_ACROSS = 9;      // how tight a tour stop / direct link zooms in on its cell
+  var MIN_ZOOM_DIM = 70;            // world units -- floor on a single zoom-in's camera width/height
   // Individual cells fade in over this range of "how many would span the
   // camera's own width/height" -- not shown at all above START, fully
   // opaque at or below FULL. A wide range (rather than a single hard
@@ -806,16 +832,49 @@
   var pathTeam = null; // the team whose grid we're zoomed into (nested in Other or not), else null
   var gridGeom = null; // { team, block, cols, rows, n, cellW, cellH } for pathTeam, else null
 
+  // A plain ceil(sqrt(n)) grid almost never divides n exactly, so the last
+  // row is partially empty -- visible dead space inside the block once
+  // zoomed in, worse the bigger the gap between cols*rows and the real n.
+  // Two things fix that: pick cols to both suit the block's own aspect
+  // ratio (so cells read as squares, not slivers) and land as close to a
+  // clean divisor of n as a small search finds; then stretch the last
+  // row's cells a little wider so *that* row also fills the block's full
+  // width exactly, rather than leaving cols-lastRowCount cells undrawn.
+  function gridDimensions(n, block){
+    var idealCols = Math.max(1, Math.round(Math.sqrt(n * block.w / block.h)));
+    var radius = Math.max(2, Math.round(idealCols * 0.15));
+    var bestCols = idealCols, bestWaste = Infinity;
+    for (var c = Math.max(1, idealCols - radius); c <= idealCols + radius; c++) {
+      var waste = c * Math.ceil(n / c) - n;
+      if (waste < bestWaste || (waste === bestWaste && Math.abs(c - idealCols) < Math.abs(bestCols - idealCols))) {
+        bestWaste = waste; bestCols = c;
+      }
+    }
+    return { cols: bestCols, rows: Math.ceil(n / bestCols) };
+  }
+
   function gridGeometry(team, block){
     var n = team.title_count;
-    var cols = gridCols(n);
-    var rows = Math.ceil(n / cols);
-    return { team: team, block: block, cols: cols, rows: rows, n: n, cellW: block.w / cols, cellH: block.h / rows };
+    var dims = gridDimensions(n, block);
+    var cols = dims.cols, rows = dims.rows;
+    var lastRowCount = n - (rows - 1) * cols;
+    var cellW = block.w / cols;
+    return {
+      team: team, block: block, cols: cols, rows: rows, n: n,
+      cellW: cellW, cellH: block.h / rows,
+      lastRowCellW: lastRowCount > 0 ? block.w / lastRowCount : cellW,
+    };
   }
+
+  // Every row is `cols` cells wide except the last, which is however many
+  // sims are left over -- stretched to still span the block's full width.
+  function colsInRow(g, row){ return row === g.rows - 1 ? (g.n - (g.rows - 1) * g.cols) : g.cols; }
+  function cellWidthForRow(g, row){ return row === g.rows - 1 ? g.lastRowCellW : g.cellW; }
 
   function cellRect(g, rank){
     var rc = rankToRowCol(rank, g.cols);
-    return { x: g.block.x + rc.col * g.cellW, y: g.block.y + rc.row * g.cellH, w: g.cellW, h: g.cellH };
+    var w = cellWidthForRow(g, rc.row);
+    return { x: g.block.x + rc.col * w, y: g.block.y + rc.row * g.cellH, w: w, h: g.cellH };
   }
 
   // 0 = show the flat block only, 1 = show the grid at full opacity, in
@@ -855,13 +914,10 @@
     var visX0 = Math.max(camera.x, g.block.x), visX1 = Math.min(camera.x + camera.w, g.block.x + g.block.w);
     var visY0 = Math.max(camera.y, g.block.y), visY1 = Math.min(camera.y + camera.h, g.block.y + g.block.h);
     if (visX1 <= visX0 || visY1 <= visY0) return;
-    var colStart = Math.max(0, Math.floor((visX0 - g.block.x) / g.cellW) - 1);
-    var colEnd = Math.min(g.cols - 1, Math.ceil((visX1 - g.block.x) / g.cellW) + 1);
     var rowStart = Math.max(0, Math.floor((visY0 - g.block.y) / g.cellH) - 1);
     var rowEnd = Math.min(g.rows - 1, Math.ceil((visY1 - g.block.y) / g.cellH) + 1);
 
     var sx = CW / camera.w, sy = CH / camera.h;
-    var gapX = g.cellW * sx > 8 ? 1 / sx : 0;
     var gapY = g.cellH * sy > 8 ? 1 / sy : 0;
     var flags = flaggedByTeam[g.team.team];
 
@@ -870,21 +926,25 @@
     ctx.fillStyle = g.team.color;
     var flagged = [];
     for (var row = rowStart; row <= rowEnd; row++) {
+      var rowW = cellWidthForRow(g, row);
+      var gapX = rowW * sx > 8 ? 1 / sx : 0;
+      var rowCols = colsInRow(g, row);
+      var colStart = Math.max(0, Math.floor((visX0 - g.block.x) / rowW) - 1);
+      var colEnd = Math.min(rowCols - 1, Math.ceil((visX1 - g.block.x) / rowW) + 1);
       for (var col = colStart; col <= colEnd; col++) {
         var rank = row * g.cols + col;
-        if (rank >= g.n) continue;
-        var x = g.block.x + col * g.cellW, y = g.block.y + row * g.cellH;
-        ctx.fillRect(x, y, g.cellW - gapX, g.cellH - gapY);
-        if (flags && flags.has(rank)) flagged.push({ x: x, y: y, rank: rank });
+        var x = g.block.x + col * rowW, y = g.block.y + row * g.cellH;
+        ctx.fillRect(x, y, rowW - gapX, g.cellH - gapY);
+        if (flags && flags.has(rank)) flagged.push({ x: x, y: y, rank: rank, w: rowW, gapX: gapX });
       }
     }
 
     if (flagged.length) {
-      var lw = Math.max(1.5 / sx, g.cellW * 0.1);
-      ctx.lineWidth = lw;
       ctx.strokeStyle = HIGHLIGHT_COLOR;
       flagged.forEach(function(p){
-        ctx.strokeRect(p.x + lw/2, p.y + lw/2, g.cellW - gapX - lw, g.cellH - gapY - lw);
+        var lw = Math.max(1.5 / sx, p.w * 0.1);
+        ctx.lineWidth = lw;
+        ctx.strokeRect(p.x + lw/2, p.y + lw/2, p.w - p.gapX - lw, g.cellH - gapY - lw);
       });
     }
   }
@@ -921,17 +981,25 @@
     if (targetRank != null) {
       cellsAcross = TARGET_CELLS_ACROSS; cellsDown = TARGET_CELLS_ACROSS;
       var cr = cellRect(g, Math.min(targetRank, g.n - 1));
-      cx = cr.x + g.cellW / 2; cy = cr.y + g.cellH / 2;
+      cx = cr.x + cr.w / 2; cy = cr.y + cr.h / 2;
     } else {
       cellsAcross = Math.min(g.cols, ENTRY_CELLS_ACROSS_CAP);
       cellsDown = Math.min(g.rows, ENTRY_CELLS_ACROSS_CAP);
       cx = block.x + block.w / 2; cy = block.y + block.h / 2;
     }
-    var ww = Math.min(block.w, g.cellW * cellsAcross);
-    var wh = Math.min(block.h, g.cellH * cellsDown);
+    // A tiny team (or a single flagged cell within one) can have a block
+    // only a few world-units wide -- without a floor here the camera would
+    // zoom in by a thousand-fold-plus to fill the screen with 2-3 blank
+    // cells and nothing else. MIN_ZOOM_DIM guarantees some surrounding
+    // context stays visible instead. Clamped to the full canvas (not the
+    // block's own bounds, which can't fit a window bigger than themselves)
+    // so a floored window centres on the target rather than pinning to
+    // one corner of a block smaller than it.
+    var ww = Math.max(MIN_ZOOM_DIM, Math.min(block.w, g.cellW * cellsAcross));
+    var wh = Math.max(MIN_ZOOM_DIM, Math.min(block.h, g.cellH * cellsDown));
     return {
-      x: Math.max(block.x, Math.min(block.x + block.w - ww, cx - ww / 2)),
-      y: Math.max(block.y, Math.min(block.y + block.h - wh, cy - wh / 2)),
+      x: Math.max(0, Math.min(CW - ww, cx - ww / 2)),
+      y: Math.max(0, Math.min(CH - wh, cy - wh / 2)),
       w: ww, h: wh,
     };
   }
@@ -1001,16 +1069,32 @@
   function hitTestGridCell(wx, wy){
     var g = gridGeom;
     if (wx < g.block.x || wx >= g.block.x+g.block.w || wy < g.block.y || wy >= g.block.y+g.block.h) return null;
-    var col = Math.floor((wx - g.block.x) / g.cellW), row = Math.floor((wy - g.block.y) / g.cellH);
+    var row = Math.floor((wy - g.block.y) / g.cellH);
+    if (row < 0 || row >= g.rows) return null;
+    var col = Math.floor((wx - g.block.x) / cellWidthForRow(g, row));
+    if (col < 0 || col >= colsInRow(g, row)) return null;
     var rank = row * g.cols + col;
-    if (rank >= g.n) return null;
     var flags = flaggedByTeam[g.team.team];
     return (flags && flags.has(rank)) ? flags.get(rank) : null;
   }
 
-  // Desktop-only for this pass (per the plan): wheel to zoom, drag to pan,
-  // both scoped to grid mode. Mobile still gets the overview + the guided
-  // tour (camera tweens, no manual input needed) -- just not this bit.
+  // How far the camera's allowed to zoom in/out under manual control --
+  // tight to the current team's grid once zoomed into one, or just the
+  // whole canvas at the root, so pinch/wheel can't zoom past either end.
+  function cameraZoomBounds(){
+    if (pathTeam && gridGeom) {
+      var g = gridGeom;
+      return {
+        minW: g.cellW * MIN_CELLS_ACROSS, minH: g.cellH * MIN_CELLS_ACROSS,
+        maxW: g.block.w * 1.4, maxH: g.block.h * 1.4,
+      };
+    }
+    return { minW: 30, minH: 30, maxW: CW, maxH: CH };
+  }
+
+  // Mouse: wheel to zoom, drag to pan -- scoped to grid mode, since a
+  // mouse cursor is already precise enough to click any block directly at
+  // the root/Other level without needing to zoom in first.
   var dragging = false, didDrag = false, dragStartX = 0, dragStartY = 0, dragStartCamX = 0, dragStartCamY = 0;
 
   canvas.addEventListener('wheel', function(e){
@@ -1020,11 +1104,9 @@
     var factor = Math.exp(e.deltaY * 0.0015);
     var p = canvasCoords(e);
     var worldPt = screenToWorld(p.x, p.y);
-    var g = gridGeom;
-    var minW = g.cellW * MIN_CELLS_ACROSS, minH = g.cellH * MIN_CELLS_ACROSS;
-    var maxW = g.block.w * 1.4, maxH = g.block.h * 1.4;
-    var newW = Math.max(minW, Math.min(maxW, camera.w * factor));
-    var newH = Math.max(minH, Math.min(maxH, camera.h * factor));
+    var b = cameraZoomBounds();
+    var newW = Math.max(b.minW, Math.min(b.maxW, camera.w * factor));
+    var newH = Math.max(b.minH, Math.min(b.maxH, camera.h * factor));
     // keep the point under the cursor fixed while the window resizes around it
     camera.x = worldPt.x - (worldPt.x - camera.x) * (newW / camera.w);
     camera.y = worldPt.y - (worldPt.y - camera.y) * (newH / camera.h);
@@ -1055,8 +1137,81 @@
     canvas.style.cursor = pathTeam ? 'grab' : 'pointer';
   });
 
+  // Touch: one finger pans, two fingers pinch-zoom -- unlike the mouse
+  // controls above, this works at *every* level including the root/Other
+  // overview, not just once zoomed into a grid. A finger can't aim as
+  // precisely as a mouse cursor, so tapping one of Other's smaller pooled
+  // teams (packed tightly into a fraction of the canvas) can otherwise
+  // mean hitting a genuinely tiny target with no way to zoom in on it
+  // first -- this gives touch the same "zoom in, then tap precisely"
+  // option a mouse never needed.
+  var touchState = null;   // null | {mode:'pan', ...} | {mode:'pinch', ...}
+  var touchMoved = false;  // mirrors didDrag -- suppresses the click a real gesture leaves behind
+
+  function touchMidpoint(t0, t1){ return { clientX: (t0.clientX+t1.clientX)/2, clientY: (t0.clientY+t1.clientY)/2 }; }
+  function touchDistance(t0, t1){ return Math.hypot(t1.clientX-t0.clientX, t1.clientY-t0.clientY); }
+
+  canvas.addEventListener('touchstart', function(e){
+    if (e.touches.length === 1) {
+      touchMoved = false;
+      var t = e.touches[0];
+      touchState = { mode: 'pan', startX: t.clientX, startY: t.clientY, startCamX: camera.x, startCamY: camera.y };
+    } else if (e.touches.length === 2) {
+      e.preventDefault();
+      touchMoved = true; // a second finger joining is never the start of a tap
+      pauseTourIfPlaying();
+      var mid = touchMidpoint(e.touches[0], e.touches[1]);
+      var p = canvasCoords(mid);
+      var world = screenToWorld(p.x, p.y);
+      touchState = {
+        mode: 'pinch', startDist: touchDistance(e.touches[0], e.touches[1]),
+        startWorldX: world.x, startWorldY: world.y,
+        startCamW: camera.w, startCamH: camera.h,
+      };
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', function(e){
+    if (!touchState) return;
+    e.preventDefault();
+    if (touchState.mode === 'pan' && e.touches.length === 1) {
+      var t = e.touches[0];
+      var dx = t.clientX - touchState.startX, dy = t.clientY - touchState.startY;
+      if (!touchMoved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) { touchMoved = true; pauseTourIfPlaying(); }
+      if (!touchMoved) return;
+      var rect = canvas.getBoundingClientRect();
+      camera.x = touchState.startCamX - dx * (camera.w / rect.width);
+      camera.y = touchState.startCamY - dy * (camera.h / rect.height);
+      render();
+    } else if (touchState.mode === 'pinch' && e.touches.length === 2) {
+      var factor = touchState.startDist / Math.max(1, touchDistance(e.touches[0], e.touches[1]));
+      var b = cameraZoomBounds();
+      var newW = Math.max(b.minW, Math.min(b.maxW, touchState.startCamW * factor));
+      var newH = Math.max(b.minH, Math.min(b.maxH, touchState.startCamH * factor));
+      // keep the world point that was under the fingers' midpoint at pinch
+      // start fixed under wherever that midpoint has moved to since
+      var mid = touchMidpoint(e.touches[0], e.touches[1]);
+      var p = canvasCoords(mid);
+      camera.x = touchState.startWorldX - p.x * (newW / CW);
+      camera.y = touchState.startWorldY - p.y * (newH / CH);
+      camera.w = newW; camera.h = newH;
+      render();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', function(e){
+    if (e.touches.length === 0) { touchState = null; }
+    else if (e.touches.length === 1 && touchState && touchState.mode === 'pinch') {
+      // one finger lifted mid-pinch -- carry straight on as a pan instead of ending the gesture
+      var t = e.touches[0];
+      touchState = { mode: 'pan', startX: t.clientX, startY: t.clientY, startCamX: camera.x, startCamY: camera.y };
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchcancel', function(){ touchState = null; }, { passive: true });
+
   canvas.addEventListener('click', function(e){
     if (didDrag) { didDrag = false; return; }
+    if (touchMoved) { touchMoved = false; return; }
     var p = canvasCoords(e);
     var w = screenToWorld(p.x, p.y);
     if (pathTeam && gridRevealAlpha(gridGeom) >= 0.5) {
@@ -1173,12 +1328,24 @@
   var tourCaptionEl = document.getElementById('tour-caption');
   var tourCaptionTextEl = document.getElementById('tour-caption-text');
   var tourDetailBtn = document.getElementById('tour-detail-btn');
+  var gridCrestBadge = document.getElementById('grid-crest-badge');
+  var gridCrestBadgeImg = document.getElementById('grid-crest-badge-img');
+  var gridCrestBadgeName = document.getElementById('grid-crest-badge-name');
+  var gridCrestBadgeTeam = null; // avoid re-pointing the <img> src (a re-fetch) on every call once it's already showing this team
 
   function updateControlsVisibility(){
     var active = tourActive();
     tourStartBtn.hidden = active;
     tourPlayingControls.hidden = !active;
     gridBackBtn.hidden = active || !pathTeam;
+
+    gridCrestBadge.hidden = !pathTeam;
+    if (pathTeam && gridCrestBadgeTeam !== pathTeam.team) {
+      gridCrestBadgeTeam = pathTeam.team;
+      gridCrestBadgeImg.src = '../assets/logos/clubs/' + pathTeam.crest_file;
+      gridCrestBadgeImg.alt = pathTeam.team + ' crest';
+      gridCrestBadgeName.textContent = pathTeam.team;
+    }
   }
 
   function updateTourCounter(){
