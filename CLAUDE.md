@@ -599,6 +599,5 @@ for the actual text and visual direction before drafting either.
   function removed by the later notched-treemap rewrite) was found dead
   during this pass and replaced with a fresh desktop wheel-zoom/drag-pan
   check rather than fixed in place, since none of this round's changes
-  touch what it was originally covering. Not yet pushed to `main` -- left
-  on `claude/pl-xg-article-commentary-cnrfz3` pending an explicit merge
+  touch what it was originally covering. Merged to `main` on explicit
   request.
