@@ -555,6 +555,50 @@ for the actual text and visual direction before drafting either.
   and flood-fill-connectivity suites all re-run against the fresh
   production data and still pass. Captions/tags are Claude-authored
   mechanical copy from the numbers, same convention as every prior tour
-  round -- worth the user's own pass once they've seen it live. Not yet
-  pushed to `main` -- left on `claude/pl-xg-article-commentary-cnrfz3`
-  pending an explicit merge request.
+  round -- worth the user's own pass once they've seen it live. Merged to
+  `main` on explicit request.
+
+  **2026-08-27, later still -- mobile team ID during freeform pinch/pan,
+  and a hard bound on how far the camera can be panned.** User feedback:
+  "how the user knows which team they're looking at when zoomed in on
+  mobile" and "add a bound so a user can't pan miles away from the
+  chart." **Root cause of the first**: touch pinch-zoom/pan (added a
+  couple of rounds back) works at *every* level, including the root
+  overview, with no tap required first -- so a mobile user can pinch-zoom
+  straight into a team's individual cells without ever tapping to
+  "select" one. The persistent crest badge (`#grid-crest-badge`) only
+  ever looked at `pathTeam`, which stays null the whole time in that
+  flow, and the cursor-following hover label is desktop-only by design
+  (no true hover on touch) -- so nothing on mobile ever named the team
+  during a pure pinch/pan gesture. **Fix**: `pl-xg-simulator.html` gained
+  `currentGridTeam()` -- `pathTeam` if set (unchanged for taps/the tour),
+  else hit-tests the camera's own centre point once the camera's off the
+  untouched overview -- and `updateGridCrestBadge()`, called from the
+  touch pan/pinch handlers on every move (not just at the explicit
+  select/deselect points `updateControlsVisibility()` already covered),
+  so the badge tracks whichever team is actually centred on screen live
+  during a freeform gesture. **Second issue**: the one-finger touch pan
+  and mouse-drag handlers wrote straight to `camera.x`/`camera.y` with no
+  bound at all; pinch/wheel re-centring could push position out of range
+  too. Added `clampCameraPosition()` (`camera.x/y` hard-clamped to
+  `[0, CW-camera.w]`/`[0, CH-camera.h]` -- camera.w/h are already <= CW/CH
+  by construction, so the range is never inverted) called once at the top
+  of `render()` itself rather than sprinkled into every gesture handler,
+  so it catches wheel, mouse-drag, and touch pan/pinch alike for free
+  through the one function they all already call. **Verified**: a
+  synthetic two-finger pinch-in dispatched via CDP with no tap first
+  showed the badge naming the correct team (`pathTeam` confirmed still
+  null throughout, proving it came from the new fallback, not an
+  implicit select); repeated attempts to drag/pinch the camera far off
+  in one direction (both touch, via CDP, and desktop mouse-drag) left
+  `camera.x/y` sitting exactly on the world boundary rather than
+  escaping it, with the canvas still showing real content afterward (not
+  blank); the existing pinch-zoom/pan, both real-touchscreen-tap, and
+  flood-fill-connectivity suites all re-run clean. One stale, unrelated
+  test script from an earlier round (`test_v2_wheel_drag.js`, calling a
+  function removed by the later notched-treemap rewrite) was found dead
+  during this pass and replaced with a fresh desktop wheel-zoom/drag-pan
+  check rather than fixed in place, since none of this round's changes
+  touch what it was originally covering. Not yet pushed to `main` -- left
+  on `claude/pl-xg-article-commentary-cnrfz3` pending an explicit merge
+  request.

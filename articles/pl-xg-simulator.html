@@ -1179,7 +1179,23 @@
     return (GRID_REVEAL_START_DIM - visible) / (GRID_REVEAL_START_DIM - GRID_REVEAL_FULL_DIM);
   }
 
+  // Keeps the camera window from being panned (or pinch/wheel-zoomed off-
+  // centre) somewhere past the actual chart -- a hard clamp to the world
+  // extent, not just extra slack, since there's nothing to see past those
+  // edges anyway. camera.w/h are always already <= CW/CH by the time this
+  // runs (cameraZoomBounds caps every zoom gesture before it's applied),
+  // so this range is never inverted. One choke point rather than a clamp
+  // call in every gesture handler: called from render() itself, so it
+  // catches wheel-zoom, mouse-drag, and touch pan/pinch alike, and simply
+  // has nothing to do mid-tween since tweenCamera's own targets (built by
+  // targetRectFor) are already in range.
+  function clampCameraPosition(){
+    camera.x = Math.max(0, Math.min(CW - camera.w, camera.x));
+    camera.y = Math.max(0, Math.min(CH - camera.h, camera.y));
+  }
+
   function render(){
+    clampCameraPosition();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, CW, CH);
     var sx = CW / camera.w, sy = CH / camera.h;
@@ -1523,6 +1539,7 @@
       camera.x = touchState.startCamX - dx * (camera.w / rect.width);
       camera.y = touchState.startCamY - dy * (camera.h / rect.height);
       render();
+      updateGridCrestBadge(); // freeform pan can wander into another team's territory with no tap involved -- keep the badge live
     } else if (touchState.mode === 'pinch' && e.touches.length === 2) {
       var factor = touchState.startDist / Math.max(1, touchDistance(e.touches[0], e.touches[1]));
       var b = cameraZoomBounds();
@@ -1536,6 +1553,7 @@
       camera.y = touchState.startWorldY - p.y * (newH / CH);
       camera.w = newW; camera.h = newH;
       render();
+      updateGridCrestBadge(); // pinching in past the overview can resolve straight onto a team with no tap involved -- keep the badge live
     }
   }, { passive: false });
 
@@ -1679,19 +1697,39 @@
   var gridCrestBadgeName = document.getElementById('grid-crest-badge-name');
   var gridCrestBadgeTeam = null; // avoid re-pointing the <img> src (a re-fetch) on every call once it's already showing this team
 
+  // Whichever team the badge should name right now. pathTeam covers every
+  // *explicit* way in (a tap/click, the tour): once set, that's the
+  // answer regardless of where the camera's since wandered via drag/wheel.
+  // But touch pinch/pan works at *every* level, including the root
+  // overview, with no tap required first (see the touch handlers below) --
+  // so a mobile user can freely pinch-zoom deep into a team's grid
+  // without ever "selecting" one and pathTeam stays null the whole time.
+  // Falling back to hit-testing the camera's own centre point covers that
+  // case: the moment the camera isn't at the untouched overview, whichever
+  // team's block/cells are actually centred on screen is the answer.
+  function currentGridTeam(){
+    if (pathTeam) return pathTeam;
+    if (isFullyZoomedOut()) return null;
+    return hitTestRoot(camera.x + camera.w / 2, camera.y + camera.h / 2);
+  }
+
+  function updateGridCrestBadge(){
+    var t = currentGridTeam();
+    gridCrestBadge.hidden = !t;
+    if (t && gridCrestBadgeTeam !== t.team) {
+      gridCrestBadgeTeam = t.team;
+      gridCrestBadgeImg.src = '../assets/logos/clubs/' + t.crest_file;
+      gridCrestBadgeImg.alt = t.team + ' crest';
+      gridCrestBadgeName.textContent = t.team;
+    }
+  }
+
   function updateControlsVisibility(){
     var active = tourActive();
     tourStartBtn.hidden = active;
     tourPlayingControls.hidden = !active;
     gridBackBtn.hidden = active || !pathTeam;
-
-    gridCrestBadge.hidden = !pathTeam;
-    if (pathTeam && gridCrestBadgeTeam !== pathTeam.team) {
-      gridCrestBadgeTeam = pathTeam.team;
-      gridCrestBadgeImg.src = '../assets/logos/clubs/' + pathTeam.crest_file;
-      gridCrestBadgeImg.alt = pathTeam.team + ' crest';
-      gridCrestBadgeName.textContent = pathTeam.team;
-    }
+    updateGridCrestBadge();
   }
 
   function updateTourCounter(){
