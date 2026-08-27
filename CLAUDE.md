@@ -401,6 +401,79 @@ for the actual text and visual direction before drafting either.
   screenshot showing several pooled teams' grids resolved together at the
   shared boundary, then a single-hop back to the overview) -- all zero
   findings, aside from one pre-existing, unrelated Google Fonts network
-  block in this sandbox (not caused by this change). Not yet pushed to
-  `main` -- left on `claude/pl-xg-article-commentary-cnrfz3` as with the
-  rest of this session's work, pending an explicit merge request.
+  block in this sandbox (not caused by this change). Merged to `main`
+  on explicit request.
+
+  **2026-08-27, later — every team's cells now genuinely contiguous, plus
+  a hover team-ID readout and crests restricted to the overview.** User
+  feedback on the notched treemap above: (1) "some sections aren't
+  touching" -- notchedTreemap's per-boundary notches are exact and
+  gapless but were never actually proven contiguous, and in practice
+  often weren't: a team's own given-away notch and a separately-absorbed
+  notch each anchor to whichever boundary produced them, with nothing
+  tying the two together. (2) asked for "a clean way to know what team
+  you're looking at", explicitly leaving the approach to Claude and
+  asking to keep it simple. (3) crests "go funny" on pan/zoom -- they're
+  canvas-drawn in world units under the same camera transform as
+  everything else, so mid-zoom they get magnified far past their native
+  raster resolution (blurry/pixelated) before settling back down.
+  **Contiguity**: spent a long stretch trying to make `notchedTreemap`
+  itself provably contiguous (an "attach edge" threading scheme forcing
+  each boundary-continuation to overlap its incoming fragment) -- each
+  attempt fixed the case it targeted and broke a new one a few levels of
+  nesting deeper (verified via increasingly large synthetic stress tests,
+  not just the real 16-team data, since a future season's different
+  title-count distribution could hit a case this season's numbers don't).
+  Abandoned that path as unboundedly hard to make airtight and took the
+  simpler, verifiable route instead: kept the *original* notchedTreemap
+  completely unchanged (still exact/gapless/overlap-free, proven), and
+  added a new post-process, `repairContiguity()`, operating on the
+  already-correct output at the cell level. It rasterizes the layout to a
+  1,000,000-cell `Int32Array`, and for any team whose cells land in more
+  than one 4-connected blob, hands the smallest blob wholesale to
+  whichever neighbour borders it most, then reclaims the same cell count
+  by growing the team's main blob outward one ring at a time -- taking
+  only cells currently on that neighbour's *outer* boundary, never
+  tunnelling into its interior, so the swap can't carve a new hole in the
+  neighbour. Runs to a fixed point (a reclaim can itself leave the
+  neighbour freshly disconnected elsewhere), but only re-checks teams an
+  actual swap touched rather than every team every pass, since re-scanning
+  the whole grid for every team every iteration was the difference between
+  ~0.4s and multiple minutes at this scale. The repaired grid is
+  rasterized back into rects with adjacent identical-team row-runs merged
+  into one taller rect as it goes (2,156 raw 1px rows -> 124 rects on the
+  real data) so a repaired region reads as a handful of blocks, not a
+  dense hairline-striped mess. **Verified two ways**: standalone stress
+  tests (500+ synthetic layouts, both a general random spread and a
+  sports-realistic skew, n up to 25-30 items) to catch cases the specific
+  real season's numbers happen not to trigger; then the actual criterion
+  that matters -- a true 4-directional flood-fill connectivity check
+  (not rectangle-adjacency, which the earlier "1 disconnected team"
+  finding turned out to undercount) run live against the page's real
+  constructed `blockByTeam`: exact 1,000,000-cell area, zero overlaps,
+  zero gaps, and every one of the 16 real teams a single connected
+  component. **Team ID**: added a cursor-following hover label
+  (`#treemap-hover-label`, desktop/`hover:hover` only) driven by the
+  existing `hitTestRoot`, shown only at the overview (`!pathTeam` --
+  the persistent crest badge already covers "zoomed into a team's grid").
+  Chosen over baking bigger/more labels into the canvas because it works
+  uniformly regardless of a region's size (many of the smallest teams'
+  blocks are far too small to fit a label at all) and reuses hit-testing
+  that already existed, rather than inventing a new mechanism. **Crests**:
+  `render()`'s crest/label overlay now gated on a new `isFullyZoomedOut()`
+  (camera within half a world-unit of the untouched `{0,0,CW,CH}` extent)
+  instead of the previous `alpha < 1`, so a crest is present at the exact
+  overview and gone the instant a zoom or pan begins, rather than staying
+  magnified (and blurry) through the whole early part of a zoom-in.
+  Verified: crest pixels visible in an overview screenshot, confirmed
+  absent in a screenshot immediately after zooming into Arsenal's grid
+  (only the small always-on `#grid-crest-badge` overlay remains, which is
+  a fixed-size HTML element outside the canvas transform and was never
+  affected by this problem). Full regression re-run against the final
+  code: hover label correct over two different teams' regions; strict
+  flood-fill connectivity holds after the crest/hover changes too;
+  20-stop guided tour; crest badge show/hide; desktop wheel-zoom/drag-pan;
+  mobile pinch-zoom/pan and both real-touchscreen-tap suites -- all zero
+  findings bar the one pre-existing, unrelated Google Fonts block. Not yet
+  pushed to `main` -- left on `claude/pl-xg-article-commentary-cnrfz3`
+  pending an explicit merge request.

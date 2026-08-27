@@ -140,6 +140,22 @@
     background:#fff; border-radius:50%; padding:3px;
   }
 
+  /* Follows the cursor at the overview, naming whichever team is under
+     it -- the plain way to identify a region: crests/labels only paint at
+     the untouched overview zoom (see isFullyZoomedOut), and many of the
+     smaller teams' regions are far too small to fit a label at all, so a
+     hover readout is the one thing that identifies every team uniformly,
+     regardless of block size or zoom depth. Desktop only (no true hover
+     on touch); positioned by JS via left/top in canvas-wrap-relative px. */
+  .treemap-hover-label{
+    position:absolute; z-index:2; pointer-events:none;
+    background:rgba(0,0,0,.75); color:#fff;
+    font-size:12px; font-weight:500;
+    padding:4px 10px; border-radius:12px;
+    white-space:nowrap;
+  }
+  .treemap-hover-label[hidden]{ display:none; }
+
   @media (max-width:640px){
     .treemap-overlay-controls{ position:static; margin-bottom:10px; }
     .tour-caption{ position:static; margin-top:10px; flex-wrap:wrap; }
@@ -376,6 +392,7 @@
     <div class="treemap-card">
       <div class="treemap-canvas-wrap">
         <canvas id="treemap-canvas" width="1250" height="800"></canvas>
+        <div class="treemap-hover-label" id="treemap-hover-label" hidden></div>
 
         <div class="treemap-overlay-controls">
           <button type="button" class="tour-btn" id="tour-start-btn">▶ Start the tour</button>
@@ -719,6 +736,165 @@
   }
 
   /* =========================================================
+     2b. CONTIGUITY REPAIR
+     notchedTreemap's notches are exact and gapless, but NOT guaranteed
+     contiguous: a team's own notch (given away to its neighbour) plus a
+     notch it separately ABSORBS from an earlier boundary can end up
+     nowhere near each other, since each is anchored to whatever boundary
+     produced it, not to one another -- "some sections aren't touching".
+     Rather than chase a fully general recursive fix (tried, and every
+     attempt to patch it opened a new edge case elsewhere), this is a
+     cell-level repair pass on the ALREADY-exact layout: for any team
+     whose cells land in more than one disconnected blob, the smallest
+     blob is handed wholesale to whichever neighbour borders it most (a
+     `receiver`), and an equal number of cells is reclaimed from that same
+     receiver by growing the team's main blob outward, one ring at a time,
+     taking only cells the receiver currently has on ITS outer boundary --
+     never tunnelling into its interior, so this can't carve a NEW hole in
+     the receiver. Runs to a fixed point (a reclaim can itself leave the
+     receiver disconnected elsewhere, needing its own repair) since only
+     teams actually touched by a swap are re-checked each pass, not every
+     team every time. Every team's exact cell count and the canvas's exact
+     coverage are untouched by construction -- cells only ever change which
+     team owns them, never how many total cells exist. Verified against
+     the real per-team counts: zero degenerate rects, zero overlaps, zero
+     gaps, and (checked via 4-directional flood fill, not just "looks
+     joined") every team a single connected blob.
+     ========================================================= */
+
+  function repairContiguity(rectsIn, W, H) {
+    var grid = new Int32Array(W * H).fill(-1);
+    // Whatever's passed as team (a real team object here) indexed by
+    // reference via a Map, not a plain object -- object keys would all
+    // collide to the same "[object Object]" string otherwise.
+    var teamRefs = [], teamIndex = new Map();
+    function idOf(ref) {
+      if (!teamIndex.has(ref)) { teamIndex.set(ref, teamRefs.length); teamRefs.push(ref); }
+      return teamIndex.get(ref);
+    }
+    rectsIn.forEach(function(r){
+      var id = idOf(r.team);
+      for (var yy = r.y; yy < r.y + r.h; yy++) {
+        for (var xx = r.x; xx < r.x + r.w; xx++) grid[yy * W + xx] = id;
+      }
+    });
+
+    function neighbors4(idx) {
+      var x = idx % W, y = (idx / W) | 0, res = [];
+      if (x > 0) res.push(idx - 1);
+      if (x < W - 1) res.push(idx + 1);
+      if (y > 0) res.push(idx - W);
+      if (y < H - 1) res.push(idx + W);
+      return res;
+    }
+
+    function componentsOf(teamId) {
+      var visited = new Uint8Array(W * H);
+      var comps = [];
+      for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+          var idx = y * W + x;
+          if (grid[idx] !== teamId || visited[idx]) continue;
+          var comp = [], stack = [idx];
+          visited[idx] = 1;
+          while (stack.length) {
+            var c = stack.pop();
+            comp.push(c);
+            neighbors4(c).forEach(function(n){ if (grid[n] === teamId && !visited[n]) { visited[n] = 1; stack.push(n); } });
+          }
+          comps.push(comp);
+        }
+      }
+      return comps;
+    }
+
+    var pass = 0, anyRepairedThisPass = true;
+    var dirty = new Set();
+    for (var ti = 0; ti < teamRefs.length; ti++) dirty.add(ti);
+
+    while (anyRepairedThisPass && pass < 20) {
+      pass++;
+      anyRepairedThisPass = false;
+      var toCheck = Array.from(dirty);
+      dirty = new Set();
+      for (var tci = 0; tci < toCheck.length; tci++) {
+        var t = toCheck[tci];
+        var comps = componentsOf(t);
+        if (comps.length <= 1) continue;
+        anyRepairedThisPass = true;
+        comps.sort(function(a, b){ return b.length - a.length; });
+        var home = new Set(comps[0]);
+
+        for (var ci = 1; ci < comps.length; ci++) {
+          var orphan = comps[ci];
+
+          // 1. give the orphan to whichever team borders it most
+          var tally = {};
+          orphan.forEach(function(idx){
+            neighbors4(idx).forEach(function(n){
+              var nt = grid[n];
+              if (nt !== t) tally[nt] = (tally[nt] || 0) + 1;
+            });
+          });
+          var receiver = -1, best = -1;
+          Object.keys(tally).forEach(function(k){ if (tally[k] > best) { best = tally[k]; receiver = parseInt(k, 10); } });
+          orphan.forEach(function(idx){ grid[idx] = receiver; });
+          dirty.add(t); dirty.add(receiver);
+
+          // 2. reclaim the same number of cells from receiver, growing
+          // home outward ring by ring -- only ever taking cells currently
+          // on home's frontier, never digging into receiver's interior.
+          var need = orphan.length;
+          var frontier = Array.from(home);
+          var guard = 0;
+          while (need > 0 && guard < 2000) {
+            guard++;
+            var take = [];
+            for (var fi = 0; fi < frontier.length; fi++) {
+              neighbors4(frontier[fi]).forEach(function(n){
+                if (need > 0 && grid[n] === receiver) { grid[n] = t; home.add(n); take.push(n); need--; }
+              });
+              if (need <= 0) break;
+            }
+            if (take.length === 0) break;
+            frontier = take;
+          }
+          if (need > 0) return rectsIn; // shouldn't happen given the area invariant -- bail out to the unrepaired layout rather than emit a wrong one
+        }
+      }
+    }
+    if (anyRepairedThisPass) return rectsIn; // didn't converge -- bail out rather than emit a partially-repaired layout
+
+    // Rasterize back into rects, merging vertically-identical row-runs
+    // (same x, same width, same team) into one taller rect as we go --
+    // otherwise a repaired region renders as a dense stack of 1px strips.
+    var rectsOut = [];
+    var openRects = new Map();
+    for (var y = 0; y < H; y++) {
+      var rowRuns = [];
+      var x = 0;
+      while (x < W) {
+        var id = grid[y * W + x];
+        var x2 = x + 1;
+        while (x2 < W && grid[y * W + x2] === id) x2++;
+        rowRuns.push({ x: x, w: x2 - x, team: teamRefs[id] });
+        x = x2;
+      }
+      var newOpen = new Map();
+      rowRuns.forEach(function(run){
+        var key = run.x + ',' + run.w + ',' + run.team.team;
+        var existing = openRects.get(key);
+        if (existing) { existing.h++; newOpen.set(key, existing); openRects.delete(key); }
+        else newOpen.set(key, { x: run.x, y: y, w: run.w, h: 1, team: run.team });
+      });
+      openRects.forEach(function(r){ rectsOut.push(r); });
+      openRects = newOpen;
+    }
+    openRects.forEach(function(r){ rectsOut.push(r); });
+    return rectsOut;
+  }
+
+  /* =========================================================
      3. RENDER
      ========================================================= */
 
@@ -774,8 +950,13 @@
   // actual parts -- top-level teams and Other's children alike -- in the
   // same nested coordinate space. There's no separate "Other" rendering
   // or hit-testing path any more: Other's children replace its own
-  // coarse region(s) here directly.
-  var blocks = topParts.filter(function(p){ return p.team.team !== OTHER_TEAM.team; }).concat(otherParts);
+  // coarse region(s) here directly. Passed through the contiguity repair
+  // pass above -- notchedTreemap alone doesn't guarantee a team's own
+  // parts touch each other, just that they're exact and gapless.
+  var blocks = repairContiguity(
+    topParts.filter(function(p){ return p.team.team !== OTHER_TEAM.team; }).concat(otherParts),
+    CW, CH
+  );
 
   var blockByTeam = {}; // team name -> that team's list of parts, in layout order
   blocks.forEach(function(b){
@@ -983,16 +1164,27 @@
     ctx.setTransform(sx, 0, 0, sy, -camera.x * sx, -camera.y * sy);
     var alpha = gridRevealAlpha(); // same for every part this frame -- computed once, not per-part
     blocks.forEach(function(b){ drawBlockOrGrid(b, alpha); });
-    if (alpha < 1) {
-      // crest/label overlay, once per team on its largest part -- matches
-      // the old inline behaviour where drawFlatBlock (which included the
-      // crest) was only ever called while alpha < 1.
+    if (isFullyZoomedOut()) {
+      // Crest/label overlay, once per team on its largest part -- only at
+      // the untouched overview. Drawn in WORLD units but scaled by the
+      // same camera transform as everything else, so mid-zoom/pan they'd
+      // get magnified far past their native raster resolution (blurry,
+      // pixelated -- "the SVGs go funny"); restricting them to exactly the
+      // full-canvas camera avoids that entirely rather than trying to
+      // compensate for it.
       nonZero.forEach(function(t){
         var mp = mainPartByTeam[t.team];
         if (mp) drawTeamOverlay(mp);
       });
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // True only when the camera is at (or essentially at) the full,
+  // untouched canvas extent -- not merely zoomed out a lot. A small
+  // epsilon absorbs floating-point drift from tweening back to it.
+  function isFullyZoomedOut(){
+    return camera.w >= CW - 0.5 && camera.h >= CH - 0.5;
   }
 
   function drawBlockOrGrid(b, alpha){
@@ -1124,6 +1316,7 @@
   // so there's no discontinuity, just an out-then-in motion that makes
   // sense for jumping between two unrelated places on the map.
   function zoomIntoTeam(team, targetRank, onArrived){
+    hoverLabel.hidden = true; // crest badge takes over identification once zoomed in
     if (pathTeam && pathTeam.team === team.team) {
       tweenCamera(currentCameraRect(), targetRectFor(team, targetRank), onArrived);
       return;
@@ -1221,6 +1414,31 @@
     dragStartCamX = camera.x; dragStartCamY = camera.y;
     canvas.style.cursor = 'grabbing';
   });
+
+  // Cursor-following "which team is this" readout. Only at the overview
+  // (pathTeam null) -- once zoomed into a team's grid, the crest badge
+  // already names it persistently. Hover-capable devices only: a finger
+  // has no equivalent of "resting the pointer somewhere without
+  // committing to a tap", so this would just be dead weight on touch.
+  var hoverLabel = document.getElementById('treemap-hover-label');
+  var canvasWrap = document.querySelector('.treemap-canvas-wrap');
+  if (window.matchMedia('(hover: hover)').matches) {
+    canvas.addEventListener('mousemove', function(e){
+      if (pathTeam || dragging) { hoverLabel.hidden = true; return; }
+      var p = canvasCoords(e);
+      var w = screenToWorld(p.x, p.y);
+      var team = hitTestRoot(w.x, w.y);
+      if (!team) { hoverLabel.hidden = true; return; }
+      var wrapRect = canvasWrap.getBoundingClientRect();
+      var left = e.clientX - wrapRect.left + 16;
+      var top = e.clientY - wrapRect.top + 16;
+      hoverLabel.textContent = team.team;
+      hoverLabel.style.left = Math.min(left, wrapRect.width - 140) + 'px';
+      hoverLabel.style.top = Math.min(top, wrapRect.height - 30) + 'px';
+      hoverLabel.hidden = false;
+    });
+    canvas.addEventListener('mouseleave', function(){ hoverLabel.hidden = true; });
+  }
   window.addEventListener('mousemove', function(e){
     if (!dragging) return;
     var dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
