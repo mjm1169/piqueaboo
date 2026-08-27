@@ -672,3 +672,74 @@ for the actual text and visual direction before drafting either.
   check rather than fixed in place, since none of this round's changes
   touch what it was originally covering. Merged to `main` on explicit
   request.
+
+  **2026-08-27, later still -- root-level zoom depth, and de-zigzagging
+  the notch-repaired boundaries.** User feedback from a mobile screenshot:
+  "the zoom limit should allow more zoom," "the pan boundary should be
+  bigger so I could pan to the cells in the corners," and a visibly
+  crenellated Manchester City/Manchester United boundary ("there
+  shouldn't be zigzag boundaries like this, the light blues could all be
+  together"). **Zoom depth**: `cameraZoomBounds()`'s root-level floor
+  (`pathTeam` null -- reachable on mobile via freeform pinch, which
+  works at every level with no tap required first) was a much coarser 30
+  world units than the `MIN_CELLS_ACROSS` (3) every zoomed-in team's own
+  grid already allowed -- an old, undocumented asymmetry that mobile
+  pinch was the only way to actually hit, since desktop wheel/drag are
+  gated behind `pathTeam` already being set. Now the same floor
+  everywhere. **Pan boundary**: investigated thoroughly rather than
+  assumed -- a synthetic CDP pinch-then-drag test confirmed the existing
+  clamp (added last round) already reaches every true corner exactly
+  (`camera.x/y` lands on `0`/`CW-w` precisely) and a real team is
+  identifiable there once zoomed in; a first test run that suggested
+  otherwise turned out to be the test's own gesture budget too small for
+  how many screen-pixels a drag needs at a *tight* zoom window (the same
+  "Google Maps zoomed in needs many swipes to cross a big distance"
+  effect, not a bug), and a second flaw where a pinch anchored inland of
+  the true corner naturally re-centres there instead (correct pinch
+  behaviour). Concluded this was the same root cause as the zoom-depth
+  complaint, not a second bug -- left the clamp itself untouched, since
+  loosening it would undo the previous round's explicit "can't pan miles
+  away" fix. **Zigzag boundaries**: root-caused before writing any fix --
+  a full-grid scan (rows/columns where run-count exceeds distinct-team-
+  count, the actual signature of interleaving, not just "more than 2
+  runs" which many *normal* multi-team-meeting rows also have) found
+  the pathology confined to exactly 4 rows, each with one localised
+  "pocket" where two teams' cells alternate in many small slivers,
+  always sandwiched between already-clean runs. Root cause:
+  `repairContiguity()`'s ring-growing reclaim, resolving several
+  separate small orphan fragments along the *same* seam row (two big
+  blocks stacked vertically, plus unrelated leftover notches all
+  reassigned to whichever of those two borders them), nibbles a few
+  cells from a slightly different spot each time rather than extending
+  one clean edge -- correct (every team still one component overall) but
+  visually a comb. Fix: a new post-process, `smoothInterleavedSeams()`,
+  detects each pocket and consolidates it into (at most) two clean
+  blocks, each team keeping its own existing cell count in that pocket
+  (so no area/exactness invariant is touched) -- purely a reordering.
+  Getting the *left/right order* right took two attempts: the first cut
+  (whichever team has more cells in the row above wins the left side)
+  passed 2 of 4 pockets and silently reverted the other 2 (a per-pocket,
+  not all-or-nothing, safety check -- confirmed broken instances stay
+  broken while the *other* pockets still improve) because "more cells
+  above" can trivially go to a team with full-width presence there even
+  when the *other* team is the one anchored to a specific edge below.
+  Fixed by testing each team against the pocket's own left/right edge
+  columns directly (does it occupy that exact column in the row above or
+  below), which correctly identified the edge-anchored team in every
+  case; the raw above-count comparison is now only a fallback for a
+  genuinely ambiguous pocket. **Verified**: total "excess" alternating
+  transitions across the whole grid dropped from 78 to 2 (the 2
+  remaining are a harder 3-team interaction the 2-team pocket model
+  doesn't fully resolve -- flagged as a known, much-diminished residual
+  rather than chased further); the full strict flood-fill connectivity +
+  exactness check still holds (1,000,000 cells, 0 overlaps, 0 gaps, all
+  16 teams one component each -- unaffected, since the fix never changes
+  any team's total cell count) with `maxParts` per team dropping from 22
+  to 4; a direct screenshot of the Manchester City/Manchester United
+  boundary before and after confirms a flat, clean line replacing the
+  crenellated one. Re-ran the existing pinch-zoom/pan, both
+  real-touchscreen-tap suites, the full 9-stop guided tour, and desktop
+  wheel-zoom/drag-pan against the changed code -- all zero findings bar
+  the one pre-existing, unrelated Google Fonts block. Not yet pushed to
+  `main` -- left on `claude/pl-xg-article-commentary-cnrfz3` pending an
+  explicit merge request.

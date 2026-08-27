@@ -887,6 +887,100 @@
     }
     if (anyRepairedThisPass) return rectsIn; // didn't converge -- bail out rather than emit a partially-repaired layout
 
+    // Cosmetic cleanup: resolving several separate small orphans along the
+    // *same* seam row (e.g. two big blocks stacked vertically, with a
+    // handful of unrelated leftover fragments all reassigned to whichever
+    // of those two teams borders them) can leave that one row as many
+    // alternating slivers instead of a clean split -- every team's still a
+    // single connected component overall (this isn't a contiguity bug),
+    // it just reads as a zigzag seam. Detected as a "pocket": a maximal
+    // run of 3+ consecutive same-row runs alternating between exactly two
+    // teams. Consolidating a pocket into two clean blocks -- each team
+    // keeping its own existing cell count in that pocket, just no longer
+    // interleaved -- doesn't touch any team's area, so it's purely
+    // cosmetic. Verified *per pocket* (not once at the end for everything
+    // touched) since one pocket's fix breaking contiguity doesn't mean
+    // every other pocket's would too -- reverting only the specific
+    // pocket that fails means a genuinely awkward case (e.g. one of a
+    // pocket's two teams only partially bordering it above/below, the
+    // rest of that row belonging to an unrelated third team) still leaves
+    // every *other* pocket cleaned up, rather than throwing all of them
+    // out over one hard case.
+    function smoothInterleavedSeams() {
+      // Does `teamId` occupy this column in the row directly above or
+      // below `y`? Used to test each of a pocket's two teams against the
+      // pocket's own left/right edge columns -- see the call site below.
+      function edgeAnchor(y, teamId, col) {
+        return (y > 0 && grid[(y - 1) * W + col] === teamId) ||
+               (y < H - 1 && grid[(y + 1) * W + col] === teamId);
+      }
+      for (var y = 0; y < H; y++) {
+        var runs = [];
+        var rx = 0;
+        while (rx < W) {
+          var id = grid[y * W + rx];
+          var rx2 = rx + 1;
+          while (rx2 < W && grid[y * W + rx2] === id) rx2++;
+          runs.push({ id: id, x: rx, w: rx2 - rx });
+          rx = rx2;
+        }
+        var i = 0;
+        while (i + 1 < runs.length) {
+          var a = runs[i].id, b = runs[i + 1].id;
+          var j = i + 1;
+          while (j + 1 < runs.length && (runs[j + 1].id === a || runs[j + 1].id === b)) j++;
+          if (j - i + 1 >= 3) {
+            var px0 = runs[i].x, px1 = runs[j].x + runs[j].w;
+            var countA = 0, countB = 0;
+            for (var k = i; k <= j; k++) {
+              if (runs[k].id === a) countA += runs[k].w; else countB += runs[k].w;
+            }
+            // Left/right order: a pocket almost always sits where one
+            // team's block spans the *entire* pocket width from one side
+            // (above or below) while the other's own block only borders
+            // part of it, anchored specifically to one edge -- so picking
+            // sides by raw cell-count-above isn't enough; a team with
+            // full-width presence above trivially "wins" that count even
+            // when the *other* team is the one that actually needs a
+            // specific edge to land on. Test each team against each edge
+            // column directly instead: whichever team has a matching cell
+            // (in the row above or below) at the pocket's leftmost column
+            // gets the left side, same for the rightmost column. Falls
+            // back to the coarser above-count comparison only when that's
+            // ambiguous (both/neither team touches an edge); the
+            // per-pocket revert below is the real backstop either way.
+            var aLeft = edgeAnchor(y, a, px0), bLeft = edgeAnchor(y, b, px0);
+            var aRight = edgeAnchor(y, a, px1 - 1), bRight = edgeAnchor(y, b, px1 - 1);
+            var leftId, rightId;
+            if (aLeft && !bLeft) { leftId = a; rightId = b; }
+            else if (bLeft && !aLeft) { leftId = b; rightId = a; }
+            else if (aRight && !bRight) { rightId = a; leftId = b; }
+            else if (bRight && !aRight) { rightId = b; leftId = a; }
+            else {
+              var refY = y > 0 ? y - 1 : (y + 1 < H ? y + 1 : -1);
+              var aCount = 0, bCount = 0;
+              if (refY >= 0) {
+                for (var xx = px0; xx < px1; xx++) {
+                  var t = grid[refY * W + xx];
+                  if (t === a) aCount++; else if (t === b) bCount++;
+                }
+              }
+              leftId = aCount >= bCount ? a : b;
+              rightId = leftId === a ? b : a;
+            }
+            var leftCount = leftId === a ? countA : countB;
+            var before = grid.slice(y * W + px0, y * W + px1);
+            for (var xx2 = px0; xx2 < px1; xx2++) grid[y * W + xx2] = (xx2 < px0 + leftCount) ? leftId : rightId;
+            if (componentsOf(a).length > 1 || componentsOf(b).length > 1) {
+              for (var xx3 = px0; xx3 < px1; xx3++) grid[y * W + xx3] = before[xx3 - px0];
+            }
+          }
+          i = j + 1;
+        }
+      }
+    }
+    smoothInterleavedSeams();
+
     // Rasterize back into rects, merging vertically-identical row-runs
     // (same x, same width, same team) into one taller rect as we go --
     // otherwise a repaired region renders as a dense stack of 1px strips.
@@ -1411,7 +1505,13 @@
   // How far the camera's allowed to zoom in/out under manual control --
   // tight to the current team's bounding box once zoomed into one, or
   // just the whole canvas at the root, so pinch/wheel can't zoom past
-  // either end.
+  // either end. The root-level minimum used to be a much coarser 30
+  // world units (rather than the same MIN_CELLS_ACROSS every zoomed-in
+  // team already allows) -- harmless on desktop, where the root is only
+  // ever reached before a click selects a team, but mobile pinch/pan
+  // works at the root too (see the touch handlers below), so that
+  // coarser floor was the *only* zoom depth some readers ever got stuck
+  // at, well short of individual cells. Same floor at every level now.
   function cameraZoomBounds(){
     if (pathTeam) {
       var block = teamBounds(rectForTeam(pathTeam));
@@ -1420,7 +1520,7 @@
         maxW: block.w * 1.4, maxH: block.h * 1.4,
       };
     }
-    return { minW: 30, minH: 30, maxW: CW, maxH: CH };
+    return { minW: MIN_CELLS_ACROSS, minH: MIN_CELLS_ACROSS, maxW: CW, maxH: CH };
   }
 
   // Mouse: wheel to zoom, drag to pan -- scoped to grid mode, since a
