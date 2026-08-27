@@ -474,6 +474,87 @@ for the actual text and visual direction before drafting either.
   flood-fill connectivity holds after the crest/hover changes too;
   20-stop guided tour; crest badge show/hide; desktop wheel-zoom/drag-pan;
   mobile pinch-zoom/pan and both real-touchscreen-tap suites -- all zero
-  findings bar the one pre-existing, unrelated Google Fonts block. Not yet
+  findings bar the one pre-existing, unrelated Google Fonts block. Merged
+  to `main` on explicit request.
+
+  **2026-08-27, later still -- fixed 9-stop curated guided tour, replacing
+  the old 20-stop auto-picked one.** The user specified the tour directly:
+  fewest title wins; no title wins (best-ever finish, full table only);
+  highest-scoring golden boot winner (game detail); most unexpected golden
+  boot winner, i.e. fewest real-life goals (game detail); closest title
+  race into the final gameweek (that gameweek's results); largest points
+  margin of victory; lowest goal difference to win the league (full
+  campaign detail, after an initial "no detail" instruction was reversed
+  mid-review); most teams tied on points for first; closest title race
+  decided by head-to-head/away goals. A "20 team highlights" idea in the
+  same message turned out to be the separate, already-deferred roster-card
+  feature (`notes/pl-xg-roster-card-candidates.md`) -- out of scope here.
+  Confirmed with the user that every stop must carry a real `sim` index
+  mapping onto an actual grid cell, same as every existing flagged-sim
+  story (`team = byteToTeam[champions[sim]]`, `rank = rankOfSim[sim]` --
+  the story's *subject* needn't be that sim's champion, exactly like a
+  flagged game's stop already works). Of the 9, only "fewest wins" and
+  the head-to-head tiebreak stop were answerable from data already on
+  disk; the rest needed genuinely new per-sim tracking the big pass
+  discards (a team's own position once folded into running totals; no
+  season-long per-player goal tally existed at all) -- this was the "run
+  the million again" the user flagged themselves, though it didn't need a
+  full redo: `champions.bin` and the three flagged-*.json files stayed
+  exactly as they were (`--skip-big-pass`), and two *new* sweeps
+  (`run_table_metrics_sweep`, `run_golden_boot_sweep` in
+  `simulations/export_treemap_data.py`) regenerate the *same* 1,000,000
+  sims bit-for-bit via the existing per-match seeding, writing one new
+  small output, `articles/pl-treemap-data/curated-tour.json` (9 records).
+  **A real bug found and fixed during verification, not just a scale
+  artifact**: the three new *targeted* single-sim regeneration helpers
+  (`build_campaign_for_sim`, `build_final_matchday_detail`,
+  `build_best_match_for_player`) originally requested a truncated
+  `(sim_idx+1, n_shots)`-shaped draw to save compute, on the assumption
+  (checked once, only for a single-array draw) that a smaller row count
+  from the same seeded generator reproduces the larger array's prefix
+  bit-for-bit. That holds for one array pulled off a fresh generator, but
+  these functions draw `draws_h` then `draws_a` *sequentially* from the
+  same per-match `rng_i` -- so `draws_a`'s starting position in the random
+  stream depends on how many values `draws_h` consumed, which depends on
+  the row count requested. A truncated shape and the full `(n_sims, ...)`
+  shape everything else (champions.bin, the table-metrics sweep) was built
+  with consume different amounts for `draws_h`, so `draws_a` desyncs and
+  the function silently regenerates a *different, wrong* simulated season
+  for that sim. Caught by hand-checking a targeted-regeneration campaign's
+  own W/D/L/GF/GA sums against the "official" table row for the same
+  (sim, team) from the table-metrics sweep -- they disagreed on 2 of 4
+  campaign stops at dry-run scale (22 of Arsenal's 38 games differed from
+  a from-scratch independent recompute). Fixed by requesting the full
+  `n_sims` shape in all three helpers (matching how the already-trusted
+  `run_big_pass_sweep2` always regenerates full-size campaigns), at the
+  cost of some wasted rows -- cheap here since each helper only runs a
+  handful of times, restricted to a handful of matches, not all 380.
+  **Verified thoroughly given that bug**: after the fix, every
+  campaign/table pair (fewest_wins, biggest_margin, lowest_gd,
+  closest_tiebreak) hand-checked against a from-scratch recompute at both
+  a 100,000-sim dry run and the real 1,000,000-sim production run;
+  golden-boot season totals, the no-wins team's position, and the
+  final-gameweek's before-table/results all independently recomputed and
+  matched too. Frontend: `buildItinerary()` in `pl-xg-simulator.html`
+  rewritten to fetch `curated-tour.json` and build exactly the 9 fixed
+  stops in the user's order (the old `distinctTopN`/4-category logic is
+  gone); `openStory()` gained new rendering for golden-boot stops (reuses
+  the existing game-modal markup, reframed around the player rather than
+  the match), the final-gameweek stop (a new before-table + 10 compact
+  results block), and a `no_wins`/`most_tied_first`-aware version of the
+  champion-shaped branch (a new `.story-team` table-row highlight, applied
+  to the zero-win team's own row -- distinct from the existing
+  `.champion` highlight so a non-champion "this is who the story's about"
+  row is never confused with who actually won that replay). Verified via
+  headless-Chromium Playwright: all 9 stops walked start to finish via the
+  real Start/Next tour controls (not just direct `openStory()` calls),
+  each modal's visible sections (game body vs. champion body, the
+  final-week block, the campaign block, the tiebreak block, the
+  story-team row count) checked against what that stop's `kind` should
+  show -- zero findings; the existing pinch-zoom/pan, real-touchscreen-tap,
+  and flood-fill-connectivity suites all re-run against the fresh
+  production data and still pass. Captions/tags are Claude-authored
+  mechanical copy from the numbers, same convention as every prior tour
+  round -- worth the user's own pass once they've seen it live. Not yet
   pushed to `main` -- left on `claude/pl-xg-article-commentary-cnrfz3`
   pending an explicit merge request.

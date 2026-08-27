@@ -462,6 +462,432 @@ def finalize_big_pass(sweep1, sweep2, teams, real_pos, fixture_index, seed):
     return list(flagged_champions.values()), flagged_title_ties
 
 
+# =========================================================================
+# CURATED TOUR: 9 hand-picked stories for the guided tour, each a specific
+# real-world-flavoured extreme (fewest/no title wins, golden boot, closest
+# title races, biggest/smallest margins, most teams tied for first) rather
+# than "every qualifying sim" the way flagged-*.json is. Two of the nine
+# (fewest wins, closest-by-tiebreak) come straight off data already on
+# disk; the rest need per-sim tracking the big pass above never retains
+# (a team's own position once folded into running totals; a season-long
+# per-player goal tally). Both new sweeps below regenerate the *same*
+# 1,000,000 sims bit-for-bit via the same _match_rng(seed, match_index)
+# scheme sweep 1/2 already rely on -- champions.bin and the three
+# flagged-*.json files are untouched, reused exactly as they already are.
+# =========================================================================
+
+def identify_final_matchday_indices(matches, n_teams):
+    """Match indices for the real final matchday: the calendar date shared
+    by exactly n_teams/2 matches (a real Premier League season always
+    schedules every final-day fixture simultaneously) that's latest in the
+    season. Confirmed against the real 2025/26 fixture list: exactly 10
+    matches share the season's last date, 2026-05-24, with nothing else
+    that late having anywhere near that many matches on one day."""
+    by_date = defaultdict(list)
+    for i, m in enumerate(matches):
+        day = str(m["date"])[:10] if m["date"] else None
+        by_date[day].append(i)
+    expected = n_teams // 2
+    candidates = [d for d, idxs in by_date.items() if len(idxs) == expected]
+    if not candidates:
+        raise ValueError(
+            f"couldn't identify a final matchday: no date has exactly {expected} matches "
+            f"(closest counts: {sorted((len(v) for v in by_date.values()), reverse=True)[:5]})"
+        )
+    final_date = max(candidates)
+    return by_date[final_date], final_date
+
+
+def run_table_metrics_sweep(matches, teams, n_sims, seed, final_day_indices):
+    """
+    Regenerates every match's draws (bit-identical to sweep 1/2, same
+    per-match seeding) and accumulates two parallel points/gf/ga totals
+    per sim per team: the full season, and the full season *minus* the
+    final matchday -- the "table heading into the final gameweek" stops
+    #2/#5/#6/#7/#8 below all derive from. Deliberately doesn't retain any
+    full (n_matches, n_sims) match array, same discipline as sweep 1.
+    """
+    n_teams = len(teams)
+    team_idx = {t: i for i, t in enumerate(teams)}
+    final_day_set = set(final_day_indices)
+
+    points = np.zeros((n_sims, n_teams), dtype=np.int32)
+    gf = np.zeros((n_sims, n_teams), dtype=np.int32)
+    ga = np.zeros((n_sims, n_teams), dtype=np.int32)
+    points_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
+    gf_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
+    ga_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
+
+    t0 = time.time()
+    for i, m in enumerate(matches):
+        h_idx, a_idx = team_idx[m["home_team"]], team_idx[m["away_team"]]
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, i)
+
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        home_goals = draws_h.sum(axis=1)
+        away_goals = draws_a.sum(axis=1)
+
+        h_pts = np.where(home_goals > away_goals, 3, np.where(home_goals == away_goals, 1, 0))
+        a_pts = np.where(away_goals > home_goals, 3, np.where(home_goals == away_goals, 1, 0))
+
+        points[:, h_idx] += h_pts; points[:, a_idx] += a_pts
+        gf[:, h_idx] += home_goals; ga[:, h_idx] += away_goals
+        gf[:, a_idx] += away_goals; ga[:, a_idx] += home_goals
+
+        if i not in final_day_set:
+            points_pre[:, h_idx] += h_pts; points_pre[:, a_idx] += a_pts
+            gf_pre[:, h_idx] += home_goals; ga_pre[:, h_idx] += away_goals
+            gf_pre[:, a_idx] += away_goals; ga_pre[:, a_idx] += home_goals
+
+        if (i + 1) % 50 == 0 or i + 1 == len(matches):
+            print(f"  [table metrics sweep] {i+1}/{len(matches)} matches ({time.time()-t0:.1f}s elapsed)",
+                  file=sys.stderr)
+
+    return {
+        "points": points, "gf": gf, "ga": ga, "gd": gf - ga,
+        "points_pre": points_pre, "gf_pre": gf_pre, "ga_pre": ga_pre, "gd_pre": gf_pre - ga_pre,
+    }
+
+
+def derive_table_stories(tm, champion_idx, teams, zero_win_teams):
+    """
+    Pure numpy derivation over the table-metrics sweep's output -- no I/O,
+    no match regeneration -- picking out the specific sim each of stops
+    #2/#5/#6/#7/#8 needs. `champion_idx` is the *existing*, already
+    head-to-head-resolved champions.bin array, not re-derived here, so
+    results stay consistent with the already-shipped title-tie
+    resolution; position elsewhere in the table uses plain points/GD/GF
+    ordering with no further tie-break, the same simplification already
+    documented (and accepted) for run_big_pass_sweep1's own `position`.
+    """
+    n_sims, n_teams = tm["points"].shape
+    points, gf, gd = tm["points"], tm["gf"], tm["gd"]
+
+    rank_key = points.astype(np.int64) * 10_000_000 + (gd.astype(np.int64) + 500) * 10_000 + gf.astype(np.int64)
+    order = np.argsort(-rank_key, axis=1)
+    position = np.argsort(order, axis=1) + 1
+
+    points_pre, gf_pre, gd_pre = tm["points_pre"], tm["gf_pre"], tm["gd_pre"]
+    rank_key_pre = points_pre.astype(np.int64) * 10_000_000 + (gd_pre.astype(np.int64) + 500) * 10_000 + gf_pre.astype(np.int64)
+    order_pre = np.argsort(-rank_key_pre, axis=1)
+    position_pre = np.argsort(order_pre, axis=1) + 1
+
+    # --- stop 2: no wins -- best (lowest) finish per zero-win team ---
+    no_wins = {}
+    for team in zero_win_teams:
+        ti = teams.index(team)
+        pos_col = position[:, ti]
+        best_pos = int(pos_col.min())
+        candidates = np.flatnonzero(pos_col == best_pos)
+        best_sim = int(candidates[np.argmax(points[candidates, ti])])  # most decisive among ties
+        no_wins[team] = {"sim": best_sim, "position": best_pos, "champion": teams[int(champion_idx[best_sim])]}
+
+    # --- stop 8: most teams tied on points for first (points alone, not
+    # the full points/GD/GF rank -- a plain points tie is far more common
+    # than a full rank tie, which is all flagged-title-ties.json covers) ---
+    top_points = points.max(axis=1)
+    tie_count = (points == top_points[:, None]).sum(axis=1)
+    most_tied_sim = int(np.argmax(tie_count))
+
+    # --- stop 6: largest winning margin ---
+    points_sorted = -np.sort(-points, axis=1)
+    margin = points_sorted[:, 0] - points_sorted[:, 1]
+    biggest_margin_sim = int(np.argmax(margin))
+
+    # --- stop 7: lowest GD to win the league ---
+    champ_gd = gd[np.arange(n_sims), champion_idx]
+    lowest_gd_sim = int(np.argmin(champ_gd))
+
+    # --- stop 5: closest title race heading into the final gameweek ---
+    points_pre_sorted = -np.sort(-points_pre, axis=1)
+    pre_margin = points_pre_sorted[:, 0] - points_pre_sorted[:, 1]
+    closest_final_week_sim = int(np.argmin(pre_margin))
+
+    return {
+        "no_wins": no_wins,
+        "most_tied_first": {"sim": most_tied_sim, "tie_count": int(tie_count[most_tied_sim]),
+                             "champion": teams[int(champion_idx[most_tied_sim])]},
+        "biggest_margin": {"sim": biggest_margin_sim, "margin": int(margin[biggest_margin_sim]),
+                            "champion": teams[int(champion_idx[biggest_margin_sim])]},
+        "lowest_gd": {"sim": lowest_gd_sim, "gd": int(champ_gd[lowest_gd_sim]),
+                      "champion": teams[int(champion_idx[lowest_gd_sim])]},
+        "closest_final_week": {"sim": closest_final_week_sim, "pre_margin": int(pre_margin[closest_final_week_sim]),
+                                "champion": teams[int(champion_idx[closest_final_week_sim])]},
+        "position": position, "position_pre": position_pre,
+    }
+
+
+def run_golden_boot_sweep(matches, teams, n_sims, seed, player_index, player_team):
+    """
+    Separate full-season regeneration accumulating per-*player* season
+    goal totals for every sim -- something no other pass tracks at all
+    (existing hat-trick/haul tracking is per-match, not summed across a
+    player's whole season). `player_index`: player name -> row index (0..
+    n_players-1) into the returned accumulator, covering every player who
+    took at least one real shot this season -- can't prune to "plausible"
+    scorers up front since stop #4 specifically wants the least-plausible
+    simulated winner. int16 (not int8): safe headroom over any plausible
+    single-season tally even though real per-player shot counts (max 125
+    in this season's data) make an int8 overflow astronomically unlikely.
+    """
+    n_players = len(player_index)
+    n_teams = len(teams)
+    team_idx = {t: i for i, t in enumerate(teams)}
+    season_goals = np.zeros((n_players, n_sims), dtype=np.int16)
+
+    t0 = time.time()
+    for i, m in enumerate(matches):
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, i)
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+
+        for draws, players in ((draws_h, m["players_h"]), (draws_a, m["players_a"])):
+            if draws.shape[1] == 0:
+                continue
+            for player in np.unique(players):
+                cols = players == player
+                season_goals[player_index[str(player)], :] += draws[:, cols].sum(axis=1).astype(np.int16)
+
+        if (i + 1) % 50 == 0 or i + 1 == len(matches):
+            print(f"  [golden boot sweep] {i+1}/{len(matches)} matches ({time.time()-t0:.1f}s elapsed)",
+                  file=sys.stderr)
+
+    leader_idx = np.argmax(season_goals, axis=0)
+    leader_goals = season_goals[leader_idx, np.arange(n_sims)]
+    return {"leader_idx": leader_idx, "leader_goals": leader_goals}
+
+
+def derive_golden_boot_stories(gb, player_names, real_goals_by_player):
+    """Picks stop #3 (highest simulated golden boot total) and #4 (the
+    simulated winner with the fewest *real-life* season goals -- tie-break
+    prefers the higher simulated total, the more compelling of two
+    equally-unexpected winners)."""
+    leader_idx, leader_goals = gb["leader_idx"], gb["leader_goals"]
+    n_sims = leader_idx.shape[0]
+
+    highest_sim = int(np.argmax(leader_goals))
+
+    real_goals_of_leader = np.array([real_goals_by_player.get(player_names[p], 0) for p in leader_idx])
+    # ascending real goals, descending simulated goals as the tie-break
+    order = np.lexsort((-leader_goals, real_goals_of_leader))
+    most_unexpected_sim = int(order[0])
+
+    def record(sim):
+        p = player_names[int(leader_idx[sim])]
+        return {"sim": sim, "player": p, "goals": int(leader_goals[sim]),
+                "real_goals": int(real_goals_by_player.get(p, 0))}
+
+    return {"highest": record(highest_sim), "most_unexpected": record(most_unexpected_sim)}
+
+
+def build_campaign_for_sim(matches, seed, sim_idx, team, static_xg, n_sims):
+    """Full 38-game campaign log (opponent, home/away, sim score, xG
+    score) for one team in one specific sim -- a small targeted
+    regeneration mirroring what run_big_pass_sweep2 already does in bulk
+    for every flagged champion, just for one extra (sim, team) pair.
+
+    Must request the *full* (n_sims, n_shots) shape, not a (sim_idx+1, ...)
+    truncation: draws_h and draws_a are drawn sequentially from the same
+    per-match rng_i, so draws_a's starting position in the random stream
+    depends on how many values draws_h consumed -- which depends on the
+    row count requested. Only a shape matching what champions.bin/the
+    table-metrics sweep were built with (n_sims rows) lands on the same
+    stream position and therefore the same bit-identical sim; a smaller
+    shape silently reads a *different* (wrong) simulated season. Confirmed
+    by direct reproduction: for sim_idx=88680, a (sim_idx+1, ...)-shaped
+    regeneration disagreed with the full-shape sweep on 22/38 of Arsenal's
+    matches."""
+    campaign = []
+    for i, m in enumerate(matches):
+        is_home = m["home_team"] == team
+        is_away = m["away_team"] == team
+        if not (is_home or is_away):
+            continue
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, i)
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        home_goals = int(draws_h[sim_idx].sum())
+        away_goals = int(draws_a[sim_idx].sum())
+        xg_home, xg_away = static_xg[i]
+        opponent = m["away_team"] if is_home else m["home_team"]
+        campaign.append({
+            "opponent": opponent, "home": is_home, "date": m["date"],
+            "sim_goals_for": home_goals if is_home else away_goals,
+            "sim_goals_against": away_goals if is_home else home_goals,
+            "xg_for": round(xg_home if is_home else xg_away, 2),
+            "xg_against": round(xg_away if is_home else xg_home, 2),
+        })
+    return campaign
+
+
+def build_final_matchday_detail(matches, seed, sim_idx, final_day_indices, n_sims):
+    """Full scorelines + scorecards for every one of the final matchday's
+    games, in one specific sim -- "what happened in the game week" for the
+    closest-title-race-into-the-final-week story. Full (n_sims, ...) shape
+    required -- see build_campaign_for_sim's docstring for why a truncated
+    shape silently regenerates the wrong season."""
+    games = []
+    for i in final_day_indices:
+        m = matches[i]
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, i)
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        scorers = (
+            extract_scorecard(sim_idx, draws_h, m["players_h"], m["minutes_h"], m["is_pen_h"], m["home_team"])
+            + extract_scorecard(sim_idx, draws_a, m["players_a"], m["minutes_a"], m["is_pen_a"], m["away_team"])
+        )
+        scorers.sort(key=lambda e: (e["minute"] is None, e["minute"]))
+        games.append({
+            "home_team": m["home_team"], "away_team": m["away_team"],
+            "home_goals": int(draws_h[sim_idx].sum()), "away_goals": int(draws_a[sim_idx].sum()),
+            "date": m["date"], "scorers": scorers,
+        })
+    return games
+
+
+def build_best_match_for_player(matches, seed, sim_idx, player, team, n_sims):
+    """This player's own highest-goal match within one specific sim, with
+    a full scorecard -- the "game level detail" for a golden-boot story.
+    Only checks matches where the player has at least one real shot on
+    record (0 shots there trivially means 0 simulated goals too). Full
+    (n_sims, ...) shape required -- see build_campaign_for_sim's
+    docstring for why a truncated shape silently regenerates the wrong
+    season."""
+    best = None
+    for i, m in enumerate(matches):
+        is_home = m["home_team"] == team
+        players = m["players_h"] if is_home else m["players_a"]
+        if player not in players:
+            continue
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        rng_i = _match_rng(seed, i)
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        own_draws = draws_h if is_home else draws_a
+        own_players = m["players_h"] if is_home else m["players_a"]
+        goals = int(own_draws[sim_idx, own_players == player].sum())
+        if best is None or goals > best["goals"]:
+            scorers = (
+                extract_scorecard(sim_idx, draws_h, m["players_h"], m["minutes_h"], m["is_pen_h"], m["home_team"])
+                + extract_scorecard(sim_idx, draws_a, m["players_a"], m["minutes_a"], m["is_pen_a"], m["away_team"])
+            )
+            scorers.sort(key=lambda e: (e["minute"] is None, e["minute"]))
+            best = {
+                "goals": goals, "home_team": m["home_team"], "away_team": m["away_team"],
+                "home_goals": int(draws_h[sim_idx].sum()), "away_goals": int(draws_a[sim_idx].sum()),
+                "date": m["date"], "scorers": scorers,
+            }
+    return best
+
+
+def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
+                        flagged_champions, flagged_title_ties, seed, static_xg,
+                        final_day_indices, tm, table_stories, gb_stories, player_team, n_sims):
+    """
+    Assembles the 9 curated tour records. #1 (fewest wins) and #9 (closest
+    by tiebreak) come straight from data the big pass already produced;
+    #2/#5/#6/#7/#8 come from the table-metrics sweep's derived stories
+    (`table_stories`, from derive_table_stories); #3/#4 from the golden
+    boot sweep's derived stories (`gb_stories`). Each of the latter needs
+    one small targeted regeneration for its own game/campaign detail --
+    see build_campaign_for_sim / build_final_matchday_detail /
+    build_best_match_for_player above -- data-only; presentation (modal
+    copy, captions) is entirely the frontend's job, same split as every
+    other flagged-sim record already shipped.
+    """
+    tour = []
+
+    # --- 1: fewest wins ---
+    nonzero = [(t, int(c)) for t, c in zip(teams, title_counts) if c > 0]
+    fewest_team, fewest_count = min(nonzero, key=lambda x: x[1])
+    fewest_example = next(c for c in flagged_champions if c["champion"] == fewest_team)
+    tour.append({
+        "kind": "fewest_wins", "sim": fewest_example["sim"], "champion": fewest_team,
+        "champion_real_position": fewest_example["champion_real_position"],
+        "title_count": fewest_count,
+        "final_table": fewest_example["final_table"], "campaign": fewest_example["campaign"],
+    })
+
+    # --- 2: no wins -- whichever zero-win team's own best-ever finish is
+    # the highest position among the (up to 4) zero-win teams ---
+    zero_win_teams = [t for t, c in zip(teams, title_counts) if c == 0]
+    best_team = min(zero_win_teams, key=lambda t: table_stories["no_wins"][t]["position"])
+    rec = table_stories["no_wins"][best_team]
+    final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], rec["sim"], teams)
+    tour.append({
+        "kind": "no_wins", "sim": rec["sim"], "team": best_team, "position": rec["position"],
+        "champion": rec["champion"], "final_table": final_table,
+    })
+
+    # --- 3 & 4: golden boot ---
+    for key, kind in (("highest", "golden_boot"), ("most_unexpected", "unexpected_golden_boot")):
+        g = gb_stories[key]
+        team = player_team.get(g["player"], teams[int(champion_idx[g["sim"]])])
+        match = build_best_match_for_player(matches, seed, g["sim"], g["player"], team, n_sims)
+        tour.append({
+            "kind": kind, "sim": g["sim"], "player": g["player"], "team": team,
+            "goals": g["goals"], "real_goals": g["real_goals"], "match": match,
+        })
+
+    # --- 5: closest race into the final week ---
+    r5 = table_stories["closest_final_week"]
+    table_after = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r5["sim"], teams)
+    table_before = build_final_table(tm["points_pre"], tm["gf_pre"], tm["ga_pre"], table_stories["position_pre"], r5["sim"], teams)
+    games = build_final_matchday_detail(matches, seed, r5["sim"], final_day_indices, n_sims)
+    tour.append({
+        "kind": "closest_final_week", "sim": r5["sim"], "champion": r5["champion"],
+        "pre_margin": r5["pre_margin"], "table_before": table_before, "final_table": table_after,
+        "games": games,
+    })
+
+    # --- 6: largest winning margin ---
+    r6 = table_stories["biggest_margin"]
+    tour.append({
+        "kind": "biggest_margin", "sim": r6["sim"], "champion": r6["champion"],
+        "champion_real_position": real_pos[r6["champion"]], "margin": r6["margin"],
+        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r6["sim"], teams),
+        "campaign": build_campaign_for_sim(matches, seed, r6["sim"], r6["champion"], static_xg, n_sims),
+    })
+
+    # --- 7: lowest GD to win ---
+    r7 = table_stories["lowest_gd"]
+    tour.append({
+        "kind": "lowest_gd", "sim": r7["sim"], "champion": r7["champion"],
+        "champion_real_position": real_pos[r7["champion"]], "gd": r7["gd"],
+        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r7["sim"], teams),
+        "campaign": build_campaign_for_sim(matches, seed, r7["sim"], r7["champion"], static_xg, n_sims),
+    })
+
+    # --- 8: most teams tied on points for first ---
+    r8 = table_stories["most_tied_first"]
+    tour.append({
+        "kind": "most_tied_first", "sim": r8["sim"], "champion": r8["champion"], "tie_count": r8["tie_count"],
+        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r8["sim"], teams),
+    })
+
+    # --- 9: closest by head-to-head / away goals -- prefer the deeper
+    # (away-goals) tiebreak as the "closest" of the two. Title-level ties
+    # are rare (~30 per million sims per the big-pass docstring), so a
+    # small dry run can legitimately produce zero -- that's not a bug, just
+    # not enough sims yet, so skip the stop rather than crash. At the real
+    # 1,000,000-sim scale this list is never empty in practice.
+    if flagged_title_ties:
+        by_depth = sorted(flagged_title_ties, key=lambda t: t["resolution"] != "h2h_away_goals")
+        closest_tie = by_depth[0]
+        tour.append({"kind": "closest_tiebreak", **closest_tie})
+    else:
+        print("  WARNING: no flagged title ties available -- skipping stop 9 "
+              "(closest_tiebreak). Expected at small --sims counts; must not "
+              "happen on the real 1,000,000-sim run.", file=sys.stderr)
+
+    return tour
+
+
 def run_simulation_with_matches(matches, teams, n_sims, seed=None,
                                  thriller_threshold=7, hattrick_threshold=3):
     """
@@ -677,6 +1103,9 @@ def main():
     parser.add_argument("--story-seed", type=int, default=20252027)
     parser.add_argument("--skip-big-pass", action="store_true",
                          help="Reuse an existing champions.bin in --out-dir instead of re-running the 1M-sim pass")
+    parser.add_argument("--skip-curated-tour", action="store_true",
+                         help="Reuse an existing curated-tour.json in --out-dir instead of re-running the "
+                              "table-metrics/golden-boot sweeps")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -747,6 +1176,50 @@ def main():
               f"({os.path.getsize(flagged_games_path)/1024:.0f} KB)", file=sys.stderr)
         print(f"Wrote {len(flagged_title_ties):,} flagged title ties to {flagged_title_ties_path} "
               f"({os.path.getsize(flagged_title_ties_path)/1024:.0f} KB)", file=sys.stderr)
+
+    curated_tour_path = os.path.join(args.out_dir, "curated-tour.json")
+    if args.skip_curated_tour:
+        print(f"\n=== Curated tour: skipped, reusing {curated_tour_path} ===", file=sys.stderr)
+    else:
+        print(f"\n=== Curated tour: table-metrics sweep, {args.sims:,} simulations ===", file=sys.stderr)
+        final_day_indices, final_date = identify_final_matchday_indices(matches, len(teams))
+        print(f"  final matchday identified as {final_date} ({len(final_day_indices)} matches)", file=sys.stderr)
+
+        t0 = time.time()
+        tm = run_table_metrics_sweep(matches, teams, args.sims, args.seed, final_day_indices)
+        print(f"Done in {time.time()-t0:.1f}s", file=sys.stderr)
+
+        zero_win_teams = [t for i, t in enumerate(teams) if title_counts[i] == 0]
+        table_stories = derive_table_stories(tm, champion_idx, teams, zero_win_teams)
+
+        # Player index/team/real-season-goals, built once from the real
+        # shots data -- no per-sim work here, just a lookup the golden
+        # boot sweep and the curated-tour assembly both need.
+        all_players = sorted(shots["player"].dropna().unique().tolist())
+        player_index = {p: i for i, p in enumerate(all_players)}
+        player_team = {}
+        for _, row in shots.drop_duplicates("player").iterrows():
+            player_team[row["player"]] = row["h_team"] if row["h_a"] == "h" else row["a_team"]
+        real_goals_by_player = shots[shots["result"] == "Goal"].groupby("player").size().to_dict()
+
+        print(f"\n=== Curated tour: golden-boot sweep, {args.sims:,} simulations, "
+              f"{len(all_players)} players ===", file=sys.stderr)
+        t0 = time.time()
+        gb = run_golden_boot_sweep(matches, teams, args.sims, args.seed, player_index, player_team)
+        print(f"Done in {time.time()-t0:.1f}s", file=sys.stderr)
+        gb_stories = derive_golden_boot_stories(gb, all_players, real_goals_by_player)
+
+        curated_tour = build_curated_tour(
+            matches, teams, title_counts, champion_idx, real_pos,
+            flagged_champions, flagged_title_ties, args.seed, static_xg,
+            final_day_indices, tm, table_stories, gb_stories, player_team, args.sims,
+        )
+        with open(curated_tour_path, "w") as f:
+            json.dump(curated_tour, f, separators=(",", ":"))
+        print(f"Wrote {len(curated_tour)} curated tour stops to {curated_tour_path} "
+              f"({os.path.getsize(curated_tour_path)/1024:.0f} KB)", file=sys.stderr)
+        for stop in curated_tour:
+            print(f"  [{stop['kind']}] sim #{stop['sim']:,}", file=sys.stderr)
 
     print(f"\n=== Story pass: {args.story_sims:,} simulations (full detail) ===", file=sys.stderr)
     t0 = time.time()

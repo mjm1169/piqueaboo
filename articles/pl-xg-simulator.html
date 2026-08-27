@@ -255,6 +255,11 @@
   .final-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .final-table tr.champion td{ font-weight:500; }
   .final-table tr.champion{ background:rgba(17,206,238,.08); }
+  /* a non-champion row the story is actually about (e.g. a zero-win
+     team's best-ever finish) -- distinct from .champion so the two never
+     get visually confused when both appear in the same table */
+  .final-table tr.story-team td{ font-weight:500; }
+  .final-table tr.story-team{ background:rgba(255,140,0,.08); }
 
   .game-line{ font-size:13px; padding:4px 0; display:flex; justify-content:space-between; gap:10px; }
   .game-line .score{ font-variant-numeric:tabular-nums; font-weight:500; }
@@ -294,6 +299,11 @@
   #modal-tiebreak-block{ display:none; }
   .modal-tiebreak-note{ font-size:14px; color:var(--muted); font-weight:300; margin:0 0 10px 0; }
   #modal-tiebreak-games .game-line{ background:rgba(0,0,0,.03); border-radius:8px; padding:8px 12px; margin-bottom:4px; }
+
+  /* ---------- final-gameweek detail (closest-title-race story only) ---------- */
+
+  #modal-finalweek-block{ display:none; }
+  #modal-finalweek-games .game-line{ background:rgba(0,0,0,.03); border-radius:8px; padding:8px 12px; margin-bottom:4px; }
 
   /* ---------- leicester section ---------- */
 
@@ -487,6 +497,16 @@
         <div id="modal-tiebreak-games"></div>
       </div>
 
+      <div id="modal-finalweek-block">
+        <h4>Table before the final gameweek</h4>
+        <table class="final-table">
+          <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
+          <tbody id="modal-finalweek-before-body"></tbody>
+        </table>
+        <h4>Final matchday results</h4>
+        <div id="modal-finalweek-games"></div>
+      </div>
+
       <h4>Final table</h4>
       <table class="final-table">
         <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
@@ -538,6 +558,7 @@
     fetch('pl-treemap-data/flagged-champions.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/flagged-games.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/flagged-title-ties.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/curated-tour.json').then(function(r){ return r.json(); }),
   ]);
   var data = fetched[0];
   // One byte per simulation, that byte being the champion's team index (see
@@ -547,6 +568,7 @@
   var flaggedChampionsRaw = fetched[2];
   var flaggedGamesRaw = fetched[3];
   var flaggedTitleTiesRaw = fetched[4];
+  var curatedTourRaw = fetched[5];
 
   var teams = data.teams.slice();
   var nonZero = teams.filter(function(t){ return t.title_count > 0; });
@@ -1552,84 +1574,86 @@
 
   /* =========================================================
      5. GUIDED TOUR
-     A curated sequence of stops built straight from the flagged data
-     above -- the most extreme unexpected winners, the highest-scoring
-     games, the biggest individual hauls -- so every stop is a real,
-     addressable cell rather than an illustrative example. Captions below
-     are generated mechanically from the numbers; treat them as a first
-     draft to hand-tune, same as the rest of this page's copy.
+     A fixed, curated sequence of 9 stops (replacing an earlier
+     auto-picked 20-stop tour), one per real-world-flavoured category --
+     see curated-tour.json / export_treemap_data.py's build_curated_tour.
+     Every stop still carries a real `sim` index and resolves to a grid
+     cell exactly the same way the grid's own flagged-game stories do
+     (`team = byteToTeam[champions[sim]]`, `rank = rankOfSim[sim]`) --
+     the story's *subject* isn't always that sim's champion (e.g. the
+     no-wins stop is about a team that didn't win that replay), but the
+     camera always zooms to whoever actually did, same convention as
+     every other stop kind. Captions/tags below are generated mechanically
+     from the numbers; treat them as a first draft to hand-tune, same as
+     the rest of this page's copy.
      ========================================================= */
 
   var STOP_DWELL_MS = 4500;
-
-  // The most extreme sims by a metric cluster hard on whichever single
-  // team/fixture has the most outlier shot profile (e.g. one blowout
-  // fixture supplies most of the highest-scoring-game hits) -- so ranking
-  // alone isn't enough to pick a *varied* tour. This caps to one stop per
-  // key (team, or real fixture) before taking the top N, same principle
-  // as the backend's own used_champions dedup in pick_stories().
-  function distinctTopN(sorted, keyFn, n){
-    var seen = new Set(), out = [];
-    for (var i = 0; i < sorted.length && out.length < n; i++){
-      var key = keyFn(sorted[i]);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(sorted[i]);
-    }
-    return out;
-  }
 
   // Prefixed onto every tour caption -- quoting which one of the
   // 1,000,000 this is seems to make it land better as a real, specific
   // thing that happened rather than an abstract illustration.
   function simTag(sim){ return 'Sim #' + sim.toLocaleString() + ' — '; }
 
-  function buildItinerary(){
-    var stops = [];
+  var CURATED_TOUR_ORDER = [
+    'fewest_wins', 'no_wins', 'golden_boot', 'unexpected_golden_boot',
+    'closest_final_week', 'biggest_margin', 'lowest_gd', 'most_tied_first',
+    'closest_tiebreak',
+  ];
 
-    distinctTopN(
-      flaggedChampionsRaw.slice().sort(function(a, b){ return b.champion_real_position - a.champion_real_position; }),
-      function(c){ return c.champion; }, 5
-    ).forEach(function(c){
-      var team = teams.filter(function(t){ return t.team === c.champion; })[0];
-      if (!team) return;
-      stops.push({
-        team: team, rank: rankOfSim[c.sim], kind: 'champion', record: c,
-        caption: simTag(c.sim) + c.champion + ' win the league here — in reality they finished ' + ordinal(c.champion_real_position) + '.',
-      });
-    });
+  var CURATED_TAG = {
+    fewest_wins: 'Fewest title wins',
+    no_wins: 'Best-ever finish',
+    golden_boot: 'Highest-scoring golden boot',
+    unexpected_golden_boot: 'Most unexpected golden boot',
+    closest_final_week: 'Closest race into the final day',
+    biggest_margin: 'Largest winning margin',
+    lowest_gd: 'Lowest goal difference to win it',
+    most_tied_first: 'Most teams tied for first',
+    closest_tiebreak: 'Title decided by tiebreak',
+  };
 
-    distinctTopN(flaggedTitleTiesRaw.slice(), function(t){ return t.champion; }, 5).forEach(function(t){
-      var team = teams.filter(function(x){ return x.team === t.champion; })[0];
-      if (!team) return;
-      var others = t.tied_teams.filter(function(x){ return x !== t.champion; }).join(' and ');
-      stops.push({
-        team: team, rank: rankOfSim[t.sim], kind: 'title_tie', record: t,
-        caption: simTag(t.sim) + t.champion + ' win the title on a tiebreak, level with ' + others + '.',
-      });
-    });
-
-    function makeGameStop(g){
-      var team = byteToTeam[champions[g.sim]];
-      var scoreline = g.home_team + ' ' + g.home_goals + '–' + g.away_goals + ' ' + g.away_team;
-      var caption = simTag(g.sim) + (g.haul
-        ? g.haul.player + ' scores ' + g.haul.goals + ' in ' + scoreline + '.'
-        : scoreline + ' — ' + (g.home_goals + g.away_goals) + ' goals in one simulated game.');
-      return { team: team, rank: rankOfSim[g.sim], kind: 'game', record: g, caption: caption };
+  function curatedCaption(kind, r){
+    switch (kind) {
+      case 'fewest_wins':
+        return simTag(r.sim) + r.champion + ' win the league here — one of just ' + r.title_count.toLocaleString() + ' times out of 1,000,000.';
+      case 'no_wins':
+        return simTag(r.sim) + r.team + '\'s best-ever finish: ' + ordinal(r.position) + ' (' + r.champion + ' win the league this time).';
+      case 'golden_boot':
+        return simTag(r.sim) + r.player + '\'s golden boot: ' + r.goals + ' simulated goals, ' + (r.goals - r.real_goals) + ' more than the ' + r.real_goals + ' they actually scored in 2025/26.';
+      case 'unexpected_golden_boot':
+        return simTag(r.sim) + r.player + ' wins the golden boot with ' + r.goals + ' goals here — they scored just ' + r.real_goals + ' in reality.';
+      case 'closest_final_week':
+        return simTag(r.sim) + r.champion + ' go into the final day ' + (r.pre_margin === 0 ? 'level on points with the chasing pack' : r.pre_margin + ' point' + (r.pre_margin === 1 ? '' : 's') + ' clear') + '.';
+      case 'biggest_margin':
+        return simTag(r.sim) + r.champion + ' win the league by ' + r.margin + ' points — the largest margin across 1,000,000 replays.';
+      case 'lowest_gd':
+        return simTag(r.sim) + r.champion + ' win the league with a goal difference of just ' + (r.gd > 0 ? '+' : '') + r.gd + '.';
+      case 'most_tied_first':
+        return simTag(r.sim) + r.tie_count + ' teams finish level on points for first place; ' + r.champion + ' take the title.';
+      case 'closest_tiebreak':
+        var others = r.tied_teams.filter(function(x){ return x !== r.champion; }).join(' and ');
+        return simTag(r.sim) + r.champion + ' win the title on a tiebreak, level with ' + others + '.';
+      default:
+        return simTag(r.sim) + (r.champion || '') + '.';
     }
+  }
 
-    distinctTopN(
-      flaggedGamesRaw.filter(function(g){ return g.triggers.indexOf('high_scoring') >= 0; })
-        .slice().sort(function(a, b){ return (b.home_goals+b.away_goals) - (a.home_goals+a.away_goals); }),
-      function(g){ return g.match_id; }, 5
-    ).forEach(function(g){ stops.push(makeGameStop(g)); });
+  function buildItinerary(){
+    var byKind = {};
+    curatedTourRaw.forEach(function(r){ byKind[r.kind] = r; });
 
-    distinctTopN(
-      flaggedGamesRaw.filter(function(g){ return g.haul; })
-        .slice().sort(function(a, b){ return b.haul.goals - a.haul.goals; }),
-      function(g){ return g.match_id; }, 5
-    ).forEach(function(g){ stops.push(makeGameStop(g)); });
-
+    var stops = [];
+    CURATED_TOUR_ORDER.forEach(function(kind){
+      var r = byKind[kind];
+      if (!r) return; // e.g. no title tie flagged at all -- shouldn't happen at 1,000,000 sims, but don't hard-fail the tour if it does
+      var team = byteToTeam[champions[r.sim]];
+      if (!team) return;
+      stops.push({
+        team: team, rank: rankOfSim[r.sim], kind: kind, record: r,
+        caption: curatedCaption(kind, r),
+      });
+    });
     return stops;
   }
 
@@ -1791,6 +1815,22 @@
       + '<span class="score">' + g.home_goals + '–' + g.away_goals + '</span></div>';
   }
 
+  // Shared by modal-table-body (the "after" / actual final table, every
+  // champion-shaped story) and modal-finalweek-before-body (the table
+  // heading into the final gameweek, closest_final_week only).
+  // `storyTeam` highlights a second, non-champion row the story is
+  // actually about (e.g. a zero-win team's own best-ever finish) with a
+  // distinct class from the champion row, so the two never collide.
+  function renderFinalTableRows(table, champion, storyTeam){
+    return table.map(function(r){
+      var cls = r.team === champion ? ' class="champion"'
+        : (storyTeam && r.team === storyTeam ? ' class="story-team"' : '');
+      return '<tr' + cls + '><td>' + r.position + '</td><td>' + r.team + '</td>'
+        + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
+        + '<td class="num">' + r.gf + '</td><td class="num">' + r.ga + '</td></tr>';
+    }).join('');
+  }
+
   // Groups a flat, minute-ordered scorer list (see export_treemap_data.py's
   // extract_scorecard()) into one line per player -- "Haaland (1', 31',
   // 54' (p))" -- in first-scored order, split by side.
@@ -1844,6 +1884,7 @@
     var story = entry.record;
     var champBody = document.getElementById('modal-champion-body');
     var gameBody = document.getElementById('modal-game-body');
+    var finalweekBlock = document.getElementById('modal-finalweek-block');
     var crestEl = document.getElementById('modal-crest');
 
     if (entry.kind === 'game') {
@@ -1871,26 +1912,86 @@
       return;
     }
 
+    // Golden-boot stops (#3/#4): game-shaped detail (score + scorecard),
+    // same DOM as the 'game' kind above, but framed around the leading
+    // scorer's own showcase match + season total rather than the match
+    // itself being the story.
+    if (entry.kind === 'golden_boot' || entry.kind === 'unexpected_golden_boot') {
+      champBody.style.display = 'none';
+      gameBody.style.display = 'block';
+      crestEl.style.display = '';
+      crestEl.src = crestPath(story.team);
+      crestEl.alt = story.team + ' crest';
+
+      var m = story.match;
+      document.getElementById('modal-tag').textContent = CURATED_TAG[entry.kind];
+      document.getElementById('modal-title').textContent = story.player + ' — golden boot winner';
+      document.getElementById('modal-sub').textContent =
+        'Sim #' + story.sim.toLocaleString() + ' · ' + story.goals + ' goals this season (real 2025/26 tally: ' + story.real_goals + ')';
+      var diff = story.goals - story.real_goals;
+      document.getElementById('modal-game-score').innerHTML =
+        '<span>' + m.home_team + ' vs ' + m.away_team + '</span>'
+        + '<span class="score">' + m.home_goals + '–' + m.away_goals + '</span>';
+      document.getElementById('modal-game-note').textContent =
+        story.player + ' scored ' + m.goals + ' in this match, on the way to ' + story.goals + ' for the season — '
+        + diff + ' more than the ' + story.real_goals + ' they actually scored in 2025/26.';
+      renderScorecard(m.scorers || [], m.home_team, m.away_team);
+
+      backdrop.classList.add('open');
+      return;
+    }
+
+    // Everything else is champion/table-shaped: the legacy 'champion' and
+    // 'title_tie' kinds (roster cards, grid clicks on flagged sims) plus
+    // the curated tour's fewest_wins / no_wins / closest_final_week /
+    // biggest_margin / lowest_gd / most_tied_first / closest_tiebreak.
     champBody.style.display = '';
     gameBody.style.display = 'none';
     crestEl.style.display = '';
-    crestEl.src = crestPath(story.champion);
-    crestEl.alt = story.champion + ' crest';
-    document.getElementById('modal-tag').textContent = entry.kind === 'title_tie' ? 'Title decided by tiebreak'
-      : (story.tag ? (TAG_LABEL[story.tag] || story.tag) : 'Unexpected winner');
-    document.getElementById('modal-title').textContent = story.champion + ' win the league';
-    document.getElementById('modal-sub').textContent =
-      'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
+
+    // no_wins is the one story whose *subject* isn't that sim's champion
+    // -- lead with the zero-win team's own crest/name, not the crest of
+    // whoever actually won that particular replay.
+    var subjectTeam = entry.kind === 'no_wins' ? story.team : story.champion;
+    crestEl.src = crestPath(subjectTeam);
+    crestEl.alt = subjectTeam + ' crest';
+
+    document.getElementById('modal-tag').textContent = CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak'
+      : (story.tag ? (TAG_LABEL[story.tag] || story.tag) : 'Unexpected winner'));
+
+    if (entry.kind === 'no_wins') {
+      document.getElementById('modal-title').textContent = story.team + '\'s best-ever finish';
+      document.getElementById('modal-sub').textContent =
+        'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
+    } else if (entry.kind === 'most_tied_first') {
+      document.getElementById('modal-title').textContent = story.champion + ' win the league';
+      document.getElementById('modal-sub').textContent =
+        'Sim #' + story.sim.toLocaleString() + ' · ' + story.tie_count + ' teams tied on points for first place';
+    } else if (entry.kind === 'closest_final_week') {
+      document.getElementById('modal-title').textContent = story.champion + ' win the league';
+      document.getElementById('modal-sub').textContent = 'Sim #' + story.sim.toLocaleString() + ' · '
+        + (story.pre_margin === 0 ? 'level on points' : story.pre_margin + ' point' + (story.pre_margin === 1 ? '' : 's') + ' clear')
+        + ' heading into the final gameweek';
+    } else {
+      document.getElementById('modal-title').textContent = story.champion + ' win the league';
+      document.getElementById('modal-sub').textContent =
+        'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
+    }
+
     renderTiebreak(story);
     renderCampaign(story.campaign, story.champion);
 
-    var body = document.getElementById('modal-table-body');
-    body.innerHTML = story.final_table.map(function(r){
-      var cls = r.team === story.champion ? ' class="champion"' : '';
-      return '<tr' + cls + '><td>' + r.position + '</td><td>' + r.team + '</td>'
-        + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
-        + '<td class="num">' + r.gf + '</td><td class="num">' + r.ga + '</td></tr>';
-    }).join('');
+    if (entry.kind === 'closest_final_week') {
+      finalweekBlock.style.display = 'block';
+      document.getElementById('modal-finalweek-before-body').innerHTML =
+        renderFinalTableRows(story.table_before, story.champion);
+      document.getElementById('modal-finalweek-games').innerHTML = story.games.map(gameLine).join('');
+    } else {
+      finalweekBlock.style.display = 'none';
+    }
+
+    var storyTeam = entry.kind === 'no_wins' ? story.team : null;
+    document.getElementById('modal-table-body').innerHTML = renderFinalTableRows(story.final_table, story.champion, storyTeam);
 
     var notableBlock = document.getElementById('modal-notable-block');
     if (story.notable_games) {
