@@ -554,12 +554,13 @@
      1. SPATIAL INDEX
      Every one of the 1,000,000 bytes in champions.bin is a real,
      individually-addressable simulation. This builds, in one pass, each
-     sim's rank within its champion's own cell grid (the order cells get
-     laid out in -- see gridCols() below) and a lookup from a team's grid
-     position back to whichever flagged record (unexpected winner /
-     notable game) belongs there, if any. All client-side: the export
-     pipeline only ships a global sim index on each flagged record, not a
-     precomputed grid position -- see CLAUDE.md / the plan for why.
+     sim's rank within its champion's own cell sequence (a team's ranks
+     0..title_count-1 map to specific cells via `cellRect` in section 4,
+     once that team's layout parts exist) and a lookup from a team's rank
+     back to whichever flagged record (unexpected winner / notable game)
+     belongs there, if any. All client-side: the export pipeline only
+     ships a global sim index on each flagged record, not a precomputed
+     grid position -- see CLAUDE.md / the plan for why.
      ========================================================= */
 
   var byteToTeam = {};
@@ -572,9 +573,6 @@
     var b = champions[s];
     rankOfSim[s] = teamCounters[b]++;
   }
-
-  function gridCols(n){ return Math.max(1, Math.ceil(Math.sqrt(n))); }
-  function rankToRowCol(rank, cols){ return { row: Math.floor(rank / cols), col: rank % cols }; }
 
   var flaggedByTeam = {}; // team name -> Map(rank -> {kind, record})
   function addFlag(teamName, rank, entry){
@@ -595,62 +593,129 @@
   });
 
   /* =========================================================
-     2. SQUARIFIED TREEMAP LAYOUT
-     Standard Bruls/Huizing/van Wijk algorithm: lay out a sorted list of
-     values into a rect, building each row to keep aspect ratios as close
-     to square as possible rather than naive slice-and-dice strips.
+     2. NOTCHED TREEMAP LAYOUT
+     One continuous 1,000,000-cell grid (CW*CH === n_sims exactly -- 1
+     world-unit cell = 1 sim), not one independent rectangle per team.
+     Adaptive slice-and-dice, peeling exactly one team at a time off a
+     sorted list and alternating column/row splits by aspect ratio (the
+     same "wider than tall -> split columns" test squarify used) -- that
+     alternation is what keeps the mosaic/treemap look. The difference
+     from squarify: because only one item is peeled per split (never a
+     whole row of several items at once), every boundary is between
+     exactly two teams, and wherever an item's exact cell count doesn't
+     divide evenly across that boundary, the remainder becomes a
+     1-cell-wide/tall "notch" that the next team's region absorbs --
+     rather than leaving background or distorting cell size. Every
+     recursive call's invariant (sum(items.value) === w*h) holds exactly
+     by construction, so the layout is exact everywhere -- no rounding,
+     no reconciliation pass. Verified standalone against the real
+     per-team counts before this was ported in here: exact per-team
+     areas, zero overlap, full coverage -- see CLAUDE.md / the plan.
      ========================================================= */
 
-  function squarify(items, x, y, w, h) {
-    var result = [];
-    var remaining = items.slice();
-
-    function rowWorst(row, length) {
-      var sum = 0, max = -Infinity, min = Infinity;
-      row.forEach(function(r){
-        sum += r.value;
-        if (r.value > max) max = r.value;
-        if (r.value < min) min = r.value;
-      });
-      var s2 = sum * sum, l2 = length * length;
-      return Math.max((l2 * max) / s2, s2 / (l2 * min));
+  function notchedTreemap(items, x, y, w, h, out) {
+    items = items.slice();
+    if (items.length === 0) return;
+    if (items.length === 1) {
+      out.push({ x: x, y: y, w: w, h: h, team: items[0].team });
+      return;
     }
+    var first = items[0];
+    var rest = items.slice(1);
+    var vertical = w >= h; // wider than tall -> split off a column, else a row
 
-    while (remaining.length) {
-      var length = Math.min(w, h);
-      var row = [remaining[0]];
-      var i = 1;
-      while (i < remaining.length) {
-        var testRow = row.concat([remaining[i]]);
-        if (rowWorst(testRow, length) <= rowWorst(row, length)) {
-          row = testRow;
-          i++;
-        } else break;
-      }
-
-      var rowSum = row.reduce(function(a, b){ return a + b.value; }, 0);
-      if (w >= h) {
-        var colW = rowSum / h;
-        var cy = y;
-        row.forEach(function(item){
-          var itemH = item.value / colW;
-          result.push(Object.assign({}, item, { x: x, y: cy, w: colW, h: itemH }));
-          cy += itemH;
-        });
-        x += colW; w -= colW;
+    if (vertical) {
+      var colW = Math.floor(first.value / h);
+      var rem = first.value - colW * h;
+      if (colW > 0) out.push({ x: x, y: y, w: colW, h: h, team: first.team });
+      if (rem > 0) out.push({ x: x + colW, y: y, w: 1, h: rem, team: first.team }); // first's own notch
+      var nextX, nextW;
+      if (rem > 0 && h - rem > 0) {
+        // the rest of that boundary column belongs to whoever's next
+        rest = fillColumn(rest, x + colW, y + rem, h - rem, out);
+        nextX = x + colW + 1; nextW = w - colW - 1;
       } else {
-        var rowH = rowSum / w;
-        var cx = x;
-        row.forEach(function(item){
-          var itemW = item.value / rowH;
-          result.push(Object.assign({}, item, { x: cx, y: y, w: itemW, h: rowH }));
-          cx += itemW;
-        });
-        y += rowH; h -= rowH;
+        nextX = x + colW + (rem > 0 ? 1 : 0);
+        nextW = w - colW - (rem > 0 ? 1 : 0);
       }
-      remaining = remaining.slice(row.length);
+      if (rest.length) notchedTreemap(rest, nextX, y, nextW, h, out);
+    } else {
+      var rowH = Math.floor(first.value / w);
+      var remR = first.value - rowH * w;
+      if (rowH > 0) out.push({ x: x, y: y, w: w, h: rowH, team: first.team });
+      if (remR > 0) out.push({ x: x, y: y + rowH, w: remR, h: 1, team: first.team });
+      var nextY, nextH;
+      if (remR > 0 && w - remR > 0) {
+        rest = fillRow(rest, x + remR, y + rowH, w - remR, out);
+        nextY = y + rowH + 1; nextH = h - rowH - 1;
+      } else {
+        nextY = y + rowH + (remR > 0 ? 1 : 0);
+        nextH = h - rowH - (remR > 0 ? 1 : 0);
+      }
+      if (rest.length) notchedTreemap(rest, x, nextY, w, nextH, out);
     }
-    return result;
+  }
+
+  // Fills a 1-cell-wide vertical run (fillRow: 1-cell-tall horizontal run)
+  // by consuming items off the front of the list, possibly splitting the
+  // last one consumed (its remainder carries forward to the caller).
+  function fillColumn(items, x, y, budget, out) {
+    items = items.slice();
+    var remaining = budget, i = 0;
+    while (remaining > 0 && i < items.length) {
+      var take = Math.min(items[i].value, remaining);
+      out.push({ x: x, y: y + (budget - remaining), w: 1, h: take, team: items[i].team });
+      remaining -= take;
+      if (take === items[i].value) { i++; }
+      else { items[i] = { value: items[i].value - take, team: items[i].team }; }
+    }
+    return items.slice(i);
+  }
+
+  function fillRow(items, x, y, budget, out) {
+    items = items.slice();
+    var remaining = budget, i = 0;
+    while (remaining > 0 && i < items.length) {
+      var take = Math.min(items[i].value, remaining);
+      out.push({ x: x + (budget - remaining), y: y, w: take, h: 1, team: items[i].team });
+      remaining -= take;
+      if (take === items[i].value) { i++; }
+      else { items[i] = { value: items[i].value - take, team: items[i].team }; }
+    }
+    return items.slice(i);
+  }
+
+  // Peels exactly `budget` cells' worth of value off the front of `items`,
+  // splitting the last item consumed if needed. Needed because a pooled
+  // region ("Other"'s own nested layout) isn't always a single clean
+  // rectangle -- being last in the top-level ordering only guarantees its
+  // FINAL leftover is one clean rect, not that it wasn't also pulled in
+  // earlier to absorb a preceding boundary's notch -- so its children may
+  // need to fill more than one starting region.
+  function peelForRegion(items, budget) {
+    items = items.slice();
+    var used = [], remaining = budget, i = 0;
+    while (remaining > 0 && i < items.length) {
+      var take = Math.min(items[i].value, remaining);
+      used.push({ team: items[i].team, value: take });
+      remaining -= take;
+      if (take === items[i].value) { i++; }
+      else { items[i] = { team: items[i].team, value: items[i].value - take }; }
+    }
+    return { used: used, remaining: items.slice(i) };
+  }
+
+  // Fills a LIST of regions (summing exactly to sum(items.value)) by
+  // peeling the right prefix of items for each region in turn and running
+  // the single-region algorithm on it.
+  function notchedTreemapMultiRegion(items, regions, out) {
+    var remainingItems = items.slice();
+    regions.forEach(function(r){
+      var budget = r.w * r.h;
+      var peeled = peelForRegion(remainingItems, budget);
+      notchedTreemap(peeled.used, r.x, r.y, r.w, r.h, out);
+      remainingItems = peeled.remaining;
+    });
   }
 
   /* =========================================================
@@ -668,10 +733,8 @@
 
   // "Other": pool the least-frequent champions -- the smallest teams whose
   // combined title count is <=3% of all sims -- into one region, so a
-  // one-in-a-million team doesn't get an overview block too thin to see or
-  // click. Its children live inside its own overview rect (not a separate
-  // full-canvas layout) so there's only ever one arrangement of them --
-  // see the comment above `otherBlocks` below for why that matters.
+  // one-in-a-million team doesn't get an overview region too thin to see
+  // or click.
   var OTHER_CUTOFF_FRACTION = 0.03;
   var otherBudget = data.meta.n_sims * OTHER_CUTOFF_FRACTION;
   var otherTeamsList = [], otherSum = 0;
@@ -680,38 +743,82 @@
   });
   var otherTeamNames = {};
   otherTeamsList.forEach(function(t){ otherTeamNames[t.team] = true; });
-  function isPooled(team){ return !!otherTeamNames[team.team]; }
 
-  var mainTeamsList = nonZero.filter(function(t){ return !otherTeamNames[t.team]; });
+  var mainTeamsList = nonZero.filter(function(t){ return !otherTeamNames[t.team]; })
+    .sort(function(a, b){ return b.title_count - a.title_count; });
   var OTHER_TEAM = { team: 'Other', color: '#B9B9B9', title_count: otherSum, title_odds: otherSum / data.meta.n_sims };
 
+  // Top-level layout: every real team gets an exact-area region of the
+  // whole CW*CH canvas -- Other placed last in the ordering (its own
+  // pooled total is smaller than any un-pooled team's on this data
+  // anyway) so its own children below have a sane region to work with.
   var topLayoutItems = mainTeamsList.map(function(t){ return { value: t.title_count, team: t }; });
   if (otherTeamsList.length) topLayoutItems.push({ value: otherSum, team: OTHER_TEAM });
-  var blocks = squarify(topLayoutItems, 0, 0, CW, CH);
-  var blockByTeam = {};
-  blocks.forEach(function(b){ blockByTeam[b.team.team] = b; });
+  var topParts = [];
+  notchedTreemapMultiRegion(topLayoutItems, [{ x: 0, y: 0, w: CW, h: CH }], topParts);
 
-  // Other's children, squarified *inside Other's own rect* -- not a second
-  // pass fit to the full canvas. squarify's row/column choices depend on
-  // the aspect ratio of the rect it's given, so a full-canvas layout and a
-  // layout fit to Other's (much narrower) actual overview rect produce
-  // genuinely different block arrangements for the same teams. Using only
-  // this one nested computation everywhere -- textured into the overview
-  // and shown zoomed-in -- means there's never a second arrangement to
-  // mismatch against, which is what the previous "everything jumps to the
-  // left" glitch actually was.
-  var otherRect = blockByTeam[OTHER_TEAM.team];
-  var otherLayoutItems = otherTeamsList.map(function(t){ return { value: t.title_count, team: t }; });
-  var otherBlocks = (otherRect && otherTeamsList.length)
-    ? squarify(otherLayoutItems, otherRect.x, otherRect.y, otherRect.w, otherRect.h)
-    : [];
-  var otherBlockByTeam = {};
-  otherBlocks.forEach(function(b){ otherBlockByTeam[b.team.team] = b; });
+  // Other's own region can itself be more than one rect -- being last in
+  // the ordering only guarantees its FINAL leftover is one clean
+  // rectangle, not that it wasn't also pulled in earlier to absorb a
+  // preceding boundary's notch. Lay its children out across whichever
+  // part(s) it actually got, generically.
+  var otherRegions = topParts.filter(function(p){ return p.team.team === OTHER_TEAM.team; });
+  var otherLayoutItems = otherTeamsList.slice().sort(function(a, b){ return b.title_count - a.title_count; })
+    .map(function(t){ return { value: t.title_count, team: t }; });
+  var otherParts = [];
+  if (otherRegions.length && otherLayoutItems.length) {
+    notchedTreemapMultiRegion(otherLayoutItems, otherRegions, otherParts);
+  }
 
-  // A team's rect wherever it actually lives -- top-level, or nested one
-  // level inside Other -- used both to lay out its grid and to find what
-  // to zoom the camera toward.
-  function rectForTeam(team){ return isPooled(team) ? otherBlockByTeam[team.team] : blockByTeam[team.team]; }
+  // The flat list every render/hit-test loop walks: every real team's
+  // actual parts -- top-level teams and Other's children alike -- in the
+  // same nested coordinate space. There's no separate "Other" rendering
+  // or hit-testing path any more: Other's children replace its own
+  // coarse region(s) here directly.
+  var blocks = topParts.filter(function(p){ return p.team.team !== OTHER_TEAM.team; }).concat(otherParts);
+
+  var blockByTeam = {}; // team name -> that team's list of parts, in layout order
+  blocks.forEach(function(b){
+    (blockByTeam[b.team.team] || (blockByTeam[b.team.team] = [])).push(b);
+  });
+  // Each part's offset into its team's rank space (0..title_count-1),
+  // consistent with the order cellRect below walks the same parts list --
+  // needed so drawGrid/hitTestGridCell can compute a cell's rank from
+  // whichever part it's actually in.
+  Object.keys(blockByTeam).forEach(function(name){
+    var parts = blockByTeam[name], offset = 0;
+    parts.forEach(function(p){ p.rankOffset = offset; offset += p.w * p.h; });
+  });
+
+  // Bounding box over a team's parts -- used only for framing (the first
+  // "explore this block" camera view, and the manual-zoom-out bound), not
+  // for grid math: a team's parts don't necessarily fill their own
+  // bounding box (a main-block-plus-notch union doesn't).
+  function teamBounds(parts){
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    parts.forEach(function(p){
+      if (p.x < x0) x0 = p.x;
+      if (p.y < y0) y0 = p.y;
+      if (p.x + p.w > x1) x1 = p.x + p.w;
+      if (p.y + p.h > y1) y1 = p.y + p.h;
+    });
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  // A team's parts wherever they actually live -- top-level, or nested
+  // inside what was Other's region.
+  function rectForTeam(team){ return blockByTeam[team.team] || []; }
+
+  // The one part to hang a team's crest+label off of -- its largest part
+  // by area (almost always the "main block"; a boundary notch is never
+  // worth labelling on its own).
+  var mainPartByTeam = {};
+  Object.keys(blockByTeam).forEach(function(name){
+    var parts = blockByTeam[name];
+    mainPartByTeam[name] = parts.reduce(function(best, p){
+      return (p.w * p.h > best.w * best.h) ? p : best;
+    }, parts[0]);
+  });
 
   // Crests load at wildly different sizes (a couple of these Wikipedia
   // SVGs run to several hundred KB). Drawing waits on each one individually
@@ -734,20 +841,24 @@
     });
   });
 
-  // The flat, coloured-block-plus-crest look every team starts as. Reused
-  // for top-level blocks and for Other's children -- there's no separate
-  // "Other" drawing path any more, it's just more blocks in the same
-  // nested world (see `otherBlocks` above).
+  // The flat coloured-fill look every part of every team starts as --
+  // called once per part (a team can have up to 3: a main block plus
+  // small notches it gave to or absorbed from its neighbours).
   function drawFlatBlock(b){
     ctx.fillStyle = b.team.color;
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
-    // hairline separators so adjoining same-tone blocks still read as
+    // hairline separators so adjoining same-tone parts still read as
     // distinct regions
     ctx.strokeStyle = 'rgba(255,255,255,.6)';
     ctx.lineWidth = 1;
     ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+  }
 
+  // Crest + team-name label, drawn once per team on its largest part only
+  // (`mainPartByTeam`) -- a boundary notch is too small to ever carry its
+  // own copy.
+  function drawTeamOverlay(b){
     var short = Math.min(b.w, b.h);
     if (short < 8) return; // too small for any legible content
 
@@ -780,13 +891,14 @@
 
   /* =========================================================
      4. ZOOM / GRID ENGINE
-     One nested world, one camera. Every block -- top-level, or one of
-     Other's children -- lives at a fixed rect in the same (0,0)-(CW,CH)
-     space `blocks`/`otherBlocks` already use. A team's individual sims
-     nest the same way: cell (col,row) is just arithmetic on that team's
-     own block rect (`gridGeometry`/`cellRect` below), not a separate
-     pan/zoom system:
-       x = block.x + (col/cols)*block.w,  w = block.w/cols   (and so on for y/h)
+     One nested world, one camera. Every part -- a team's main block or
+     one of its small boundary notches -- lives at a fixed rect in the
+     same (0,0)-(CW,CH) space `blocks` already uses. Because the layout
+     above is exact (CW*CH === n_sims, one world-unit cell = one sim), a
+     team's individual sims don't need any further dicing: its parts
+     directly ARE its cells. `cellRect` below maps a rank to a specific
+     cell by walking a team's parts in order, each part contributing
+     w*h ranks in row-major order -- no separate pan/zoom system.
      `camera = {x,y,w,h}` is the one window into that world, magnified onto
      the canvas with the same setTransform trick throughout. Zooming in or
      out, through Other or not, is always the same thing: tween `camera`'s
@@ -813,79 +925,55 @@
   var ENTRY_CELLS_ACROSS_CAP = 140; // how many grid columns a first look into a huge block shows
   var TARGET_CELLS_ACROSS = 9;      // how tight a tour stop / direct link zooms in on its cell
   var MIN_ZOOM_DIM = 70;            // world units -- floor on a single zoom-in's camera width/height
-  // Individual cells fade in over this range of "how many would span the
-  // camera's own width/height" -- not shown at all above START, fully
-  // opaque at or below FULL. A wide range (rather than a single hard
-  // threshold) is what makes them read as *coming into focus* through the
-  // back half of a zoom-in, not popping in right at the end; it's purely a
-  // level-of-detail decision, evaluated fresh every frame, never a mode
-  // switch. FULL sits just above ENTRY_CELLS_ACROSS_CAP so a plain click
-  // into a block (which zooms to at most that many cells across, no
-  // specific cell targeted) still arrives fully opaque, not stuck
-  // part-faded because it never gets any closer than its own entry window.
-  var GRID_REVEAL_START_CELLS = 260;
-  var GRID_REVEAL_FULL_CELLS = 145;
+  // Individual cells fade in over this range of camera width/height, in
+  // world units -- not shown at all above START, fully opaque at or below
+  // FULL. Deliberately an absolute size, not "N cells of this team's own
+  // size" -- see gridRevealAlpha below for why. A wide range (rather than
+  // a single hard threshold) is what makes cells read as *coming into
+  // focus* through the back half of a zoom-in, not popping in right at the
+  // end; it's purely a level-of-detail decision, evaluated fresh every
+  // frame, never a mode switch. FULL sits just above ENTRY_CELLS_ACROSS_CAP
+  // so a plain click into a block (which zooms to at most that many cells
+  // across, no specific cell targeted) still arrives fully opaque, not
+  // stuck part-faded because it never gets any closer than its own entry
+  // window.
+  var GRID_REVEAL_START_DIM = 260;
+  var GRID_REVEAL_FULL_DIM = 145;
 
   function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
 
   var camera = { x: 0, y: 0, w: CW, h: CH };
-  var pathTeam = null; // the team whose grid we're zoomed into (nested in Other or not), else null
-  var gridGeom = null; // { team, block, cols, rows, n, cellW, cellH } for pathTeam, else null
+  var pathTeam = null; // the team most recently zoomed/tweened to (for the crest badge, back button, and tween targeting) -- no longer gates rendering or hit-testing, see gridRevealAlpha below
 
-  // A plain ceil(sqrt(n)) grid almost never divides n exactly, so the last
-  // row is partially empty -- visible dead space inside the block once
-  // zoomed in, worse the bigger the gap between cols*rows and the real n.
-  // Two things fix that: pick cols to both suit the block's own aspect
-  // ratio (so cells read as squares, not slivers) and land as close to a
-  // clean divisor of n as a small search finds; then stretch the last
-  // row's cells a little wider so *that* row also fills the block's full
-  // width exactly, rather than leaving cols-lastRowCount cells undrawn.
-  function gridDimensions(n, block){
-    var idealCols = Math.max(1, Math.round(Math.sqrt(n * block.w / block.h)));
-    var radius = Math.max(2, Math.round(idealCols * 0.15));
-    var bestCols = idealCols, bestWaste = Infinity;
-    for (var c = Math.max(1, idealCols - radius); c <= idealCols + radius; c++) {
-      var waste = c * Math.ceil(n / c) - n;
-      if (waste < bestWaste || (waste === bestWaste && Math.abs(c - idealCols) < Math.abs(bestCols - idealCols))) {
-        bestWaste = waste; bestCols = c;
+  // A rank (0..title_count-1) to a specific 1x1 cell: walk a team's parts
+  // in the same order they were built (see the rankOffset precompute in
+  // section 3), each part contributing w*h ranks in row-major order.
+  function cellRect(parts, rank){
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i], area = p.w * p.h;
+      if (rank < area) {
+        var row = Math.floor(rank / p.w), col = rank % p.w;
+        return { x: p.x + col, y: p.y + row, w: 1, h: 1 };
       }
+      rank -= area;
     }
-    return { cols: bestCols, rows: Math.ceil(n / bestCols) };
+    var last = parts[parts.length - 1];
+    return { x: last.x, y: last.y, w: 1, h: 1 };
   }
 
-  function gridGeometry(team, block){
-    var n = team.title_count;
-    var dims = gridDimensions(n, block);
-    var cols = dims.cols, rows = dims.rows;
-    var lastRowCount = n - (rows - 1) * cols;
-    var cellW = block.w / cols;
-    return {
-      team: team, block: block, cols: cols, rows: rows, n: n,
-      cellW: cellW, cellH: block.h / rows,
-      lastRowCellW: lastRowCount > 0 ? block.w / lastRowCount : cellW,
-    };
-  }
-
-  // Every row is `cols` cells wide except the last, which is however many
-  // sims are left over -- stretched to still span the block's full width.
-  function colsInRow(g, row){ return row === g.rows - 1 ? (g.n - (g.rows - 1) * g.cols) : g.cols; }
-  function cellWidthForRow(g, row){ return row === g.rows - 1 ? g.lastRowCellW : g.cellW; }
-
-  function cellRect(g, rank){
-    var rc = rankToRowCol(rank, g.cols);
-    var w = cellWidthForRow(g, rc.row);
-    return { x: g.block.x + rc.col * w, y: g.block.y + rc.row * g.cellH, w: w, h: g.cellH };
-  }
-
-  // 0 = show the flat block only, 1 = show the grid at full opacity, in
-  // between = both, cross-fading. Cell count in view is bounded by
-  // GRID_REVEAL_START_CELLS the whole time this is > 0, regardless of how
-  // many total sims the team won.
-  function gridRevealAlpha(g){
-    var visible = Math.max(camera.w / g.cellW, camera.h / g.cellH);
-    if (visible >= GRID_REVEAL_START_CELLS) return 0;
-    if (visible <= GRID_REVEAL_FULL_CELLS) return 1;
-    return (GRID_REVEAL_START_CELLS - visible) / (GRID_REVEAL_START_CELLS - GRID_REVEAL_FULL_CELLS);
+  // 0 = every part shows its flat colour+crest, 1 = every part shows its
+  // own grid of individual cells at full opacity, in between = both,
+  // cross-fading. Deliberately a function of the *camera* alone, not any
+  // one team's own geometry -- free-zooming in near a boundary between two
+  // teams should resolve both of them into cells at exactly the same
+  // moment. (Every cell is exactly 1 world-unit anyway -- the whole canvas
+  // is exactly CW*CH = n_sims -- so there's no per-team cell-size
+  // variation to account for any more.)
+  function gridRevealAlpha(){
+    var visible = Math.max(camera.w, camera.h);
+    if (visible >= GRID_REVEAL_START_DIM) return 0;
+    if (visible <= GRID_REVEAL_FULL_DIM) return 1;
+    return (GRID_REVEAL_START_DIM - visible) / (GRID_REVEAL_START_DIM - GRID_REVEAL_FULL_DIM);
   }
 
   function render(){
@@ -893,58 +981,66 @@
     ctx.clearRect(0, 0, CW, CH);
     var sx = CW / camera.w, sy = CH / camera.h;
     ctx.setTransform(sx, 0, 0, sy, -camera.x * sx, -camera.y * sy);
-    blocks.forEach(function(b){
-      if (b.team.team === OTHER_TEAM.team) { otherBlocks.forEach(drawBlockOrGrid); return; }
-      drawBlockOrGrid(b);
-    });
+    var alpha = gridRevealAlpha(); // same for every part this frame -- computed once, not per-part
+    blocks.forEach(function(b){ drawBlockOrGrid(b, alpha); });
+    if (alpha < 1) {
+      // crest/label overlay, once per team on its largest part -- matches
+      // the old inline behaviour where drawFlatBlock (which included the
+      // crest) was only ever called while alpha < 1.
+      nonZero.forEach(function(t){
+        var mp = mainPartByTeam[t.team];
+        if (mp) drawTeamOverlay(mp);
+      });
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
-  function drawBlockOrGrid(b){
-    var alpha = (pathTeam && b.team.team === pathTeam.team) ? gridRevealAlpha(gridGeom) : 0;
+  function drawBlockOrGrid(b, alpha){
     if (alpha <= 0) { drawFlatBlock(b); return; }
     if (alpha < 1) drawFlatBlock(b); // base layer still showing through while cells fade in
     ctx.save();
     ctx.globalAlpha = alpha;
-    drawGrid(gridGeom);
+    drawGrid(b);
     ctx.restore();
   }
 
-  function drawGrid(g){
-    var visX0 = Math.max(camera.x, g.block.x), visX1 = Math.min(camera.x + camera.w, g.block.x + g.block.w);
-    var visY0 = Math.max(camera.y, g.block.y), visY1 = Math.min(camera.y + camera.h, g.block.y + g.block.h);
+  // Draws one part's individual 1x1 cells (whichever fall in view).
+  // Every part is a plain, uniform w*h grid of unit cells by construction
+  // -- no ragged last row to special-case, unlike the old squarified
+  // per-team dicing.
+  function drawGrid(b){
+    var visX0 = Math.max(camera.x, b.x), visX1 = Math.min(camera.x + camera.w, b.x + b.w);
+    var visY0 = Math.max(camera.y, b.y), visY1 = Math.min(camera.y + camera.h, b.y + b.h);
     if (visX1 <= visX0 || visY1 <= visY0) return;
-    var rowStart = Math.max(0, Math.floor((visY0 - g.block.y) / g.cellH) - 1);
-    var rowEnd = Math.min(g.rows - 1, Math.ceil((visY1 - g.block.y) / g.cellH) + 1);
+    var rowStart = Math.max(0, Math.floor(visY0 - b.y) - 1);
+    var rowEnd = Math.min(b.h - 1, Math.ceil(visY1 - b.y) + 1);
+    var colStart = Math.max(0, Math.floor(visX0 - b.x) - 1);
+    var colEnd = Math.min(b.w - 1, Math.ceil(visX1 - b.x) + 1);
 
     var sx = CW / camera.w, sy = CH / camera.h;
-    var gapY = g.cellH * sy > 8 ? 1 / sy : 0;
-    var flags = flaggedByTeam[g.team.team];
+    var gapX = sx > 8 ? 1 / sx : 0; // cell size is always 1 world-unit
+    var gapY = sy > 8 ? 1 / sy : 0;
+    var flags = flaggedByTeam[b.team.team];
 
     // Only the cells actually on screen are ever touched -- bounded by
-    // GRID_REVEAL_START_CELLS, never by how many sims this team won.
-    ctx.fillStyle = g.team.color;
+    // GRID_REVEAL_START_DIM, never by how many sims this team won.
+    ctx.fillStyle = b.team.color;
     var flagged = [];
     for (var row = rowStart; row <= rowEnd; row++) {
-      var rowW = cellWidthForRow(g, row);
-      var gapX = rowW * sx > 8 ? 1 / sx : 0;
-      var rowCols = colsInRow(g, row);
-      var colStart = Math.max(0, Math.floor((visX0 - g.block.x) / rowW) - 1);
-      var colEnd = Math.min(rowCols - 1, Math.ceil((visX1 - g.block.x) / rowW) + 1);
       for (var col = colStart; col <= colEnd; col++) {
-        var rank = row * g.cols + col;
-        var x = g.block.x + col * rowW, y = g.block.y + row * g.cellH;
-        ctx.fillRect(x, y, rowW - gapX, g.cellH - gapY);
-        if (flags && flags.has(rank)) flagged.push({ x: x, y: y, rank: rank, w: rowW, gapX: gapX });
+        var rank = b.rankOffset + row * b.w + col;
+        var x = b.x + col, y = b.y + row;
+        ctx.fillRect(x, y, 1 - gapX, 1 - gapY);
+        if (flags && flags.has(rank)) flagged.push({ x: x, y: y, rank: rank });
       }
     }
 
     if (flagged.length) {
+      var lw = Math.max(1.5 / sx, 0.1);
+      ctx.lineWidth = lw;
       ctx.strokeStyle = HIGHLIGHT_COLOR;
       flagged.forEach(function(p){
-        var lw = Math.max(1.5 / sx, p.w * 0.1);
-        ctx.lineWidth = lw;
-        ctx.strokeRect(p.x + lw/2, p.y + lw/2, p.w - p.gapX - lw, g.cellH - gapY - lw);
+        ctx.strokeRect(p.x + lw/2, p.y + lw/2, 1 - gapX - lw, 1 - gapY - lw);
       });
     }
   }
@@ -975,16 +1071,16 @@
   // (Arsenal alone is over 700,000 cells) never becomes the zoom target
   // outright -- only ever a legible window onto part of it.
   function targetRectFor(team, targetRank){
-    var block = rectForTeam(team);
-    var g = gridGeometry(team, block);
+    var parts = rectForTeam(team);
+    var block = teamBounds(parts);
     var cellsAcross, cellsDown, cx, cy;
     if (targetRank != null) {
       cellsAcross = TARGET_CELLS_ACROSS; cellsDown = TARGET_CELLS_ACROSS;
-      var cr = cellRect(g, Math.min(targetRank, g.n - 1));
+      var cr = cellRect(parts, Math.min(targetRank, team.title_count - 1));
       cx = cr.x + cr.w / 2; cy = cr.y + cr.h / 2;
     } else {
-      cellsAcross = Math.min(g.cols, ENTRY_CELLS_ACROSS_CAP);
-      cellsDown = Math.min(g.rows, ENTRY_CELLS_ACROSS_CAP);
+      cellsAcross = Math.min(block.w, ENTRY_CELLS_ACROSS_CAP);
+      cellsDown = Math.min(block.h, ENTRY_CELLS_ACROSS_CAP);
       cx = block.x + block.w / 2; cy = block.y + block.h / 2;
     }
     // A tiny team (or a single flagged cell within one) can have a block
@@ -995,8 +1091,8 @@
     // block's own bounds, which can't fit a window bigger than themselves)
     // so a floored window centres on the target rather than pinning to
     // one corner of a block smaller than it.
-    var ww = Math.max(MIN_ZOOM_DIM, Math.min(block.w, g.cellW * cellsAcross));
-    var wh = Math.max(MIN_ZOOM_DIM, Math.min(block.h, g.cellH * cellsDown));
+    var ww = Math.max(MIN_ZOOM_DIM, Math.min(block.w, cellsAcross));
+    var wh = Math.max(MIN_ZOOM_DIM, Math.min(block.h, cellsDown));
     return {
       x: Math.max(0, Math.min(CW - ww, cx - ww / 2)),
       y: Math.max(0, Math.min(CH - wh, cy - wh / 2)),
@@ -1006,10 +1102,12 @@
 
   function currentCameraRect(){ return { x: camera.x, y: camera.y, w: camera.w, h: camera.h }; }
 
+  window.__debugZoom = { camera: camera, blockByTeam: blockByTeam, gridRevealAlpha: gridRevealAlpha, zoomIntoTeam: function(name, rank, cb){ var t = teams.filter(function(x){ return x.team===name; })[0]; zoomIntoTeam(t, rank==null?null:rank, cb); }, pathTeam: function(){ return pathTeam; } }; // TEMP-DEBUG-HOOK
+
   function zoomOut(onDone){
     var from = currentCameraRect();
     tweenCamera(from, { x: 0, y: 0, w: CW, h: CH }, function(){
-      pathTeam = null; gridGeom = null;
+      pathTeam = null;
       canvas.style.cursor = 'pointer';
       updateControlsVisibility();
       if (onDone) onDone();
@@ -1034,7 +1132,6 @@
 
     var from = currentCameraRect();
     pathTeam = team;
-    gridGeom = gridGeometry(team, rectForTeam(team));
     canvas.style.cursor = 'grab';
     updateControlsVisibility();
     tweenCamera(from, targetRectFor(team, targetRank), onArrived);
@@ -1052,41 +1149,44 @@
     return { x: camera.x + px * (camera.w / CW), y: camera.y + py * (camera.h / CH) };
   }
 
+  // `blocks` is already the flat list of every real team's actual parts
+  // (Other's children included directly) -- no special-casing needed.
   function hitTestRoot(wx, wy){
     for (var i = 0; i < blocks.length; i++) {
       var b = blocks[i];
       if (wx < b.x || wx > b.x+b.w || wy < b.y || wy > b.y+b.h) continue;
-      if (b.team.team !== OTHER_TEAM.team) return b.team;
-      for (var j = 0; j < otherBlocks.length; j++) {
-        var ob = otherBlocks[j];
-        if (wx >= ob.x && wx <= ob.x+ob.w && wy >= ob.y && wy <= ob.y+ob.h) return ob.team;
-      }
-      return null; // shouldn't happen -- Other's children tile its rect with no gaps
+      return b.team;
     }
     return null;
   }
 
-  function hitTestGridCell(wx, wy){
-    var g = gridGeom;
-    if (wx < g.block.x || wx >= g.block.x+g.block.w || wy < g.block.y || wy >= g.block.y+g.block.h) return null;
-    var row = Math.floor((wy - g.block.y) / g.cellH);
-    if (row < 0 || row >= g.rows) return null;
-    var col = Math.floor((wx - g.block.x) / cellWidthForRow(g, row));
-    if (col < 0 || col >= colsInRow(g, row)) return null;
-    var rank = row * g.cols + col;
-    var flags = flaggedByTeam[g.team.team];
-    return (flags && flags.has(rank)) ? flags.get(rank) : null;
+  // Takes the team rather than reading a single "current" one off module
+  // state -- once any part on screen can resolve into its own grid (not
+  // just pathTeam's), a tap needs to be tested against whichever team it
+  // actually landed in. Tests each of the team's parts in turn (up to 3).
+  function hitTestGridCell(team, wx, wy){
+    var parts = rectForTeam(team);
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (wx < p.x || wx >= p.x + p.w || wy < p.y || wy >= p.y + p.h) continue;
+      var row = Math.floor(wy - p.y), col = Math.floor(wx - p.x);
+      var rank = p.rankOffset + row * p.w + col;
+      var flags = flaggedByTeam[team.team];
+      return (flags && flags.has(rank)) ? flags.get(rank) : null;
+    }
+    return null;
   }
 
   // How far the camera's allowed to zoom in/out under manual control --
-  // tight to the current team's grid once zoomed into one, or just the
-  // whole canvas at the root, so pinch/wheel can't zoom past either end.
+  // tight to the current team's bounding box once zoomed into one, or
+  // just the whole canvas at the root, so pinch/wheel can't zoom past
+  // either end.
   function cameraZoomBounds(){
-    if (pathTeam && gridGeom) {
-      var g = gridGeom;
+    if (pathTeam) {
+      var block = teamBounds(rectForTeam(pathTeam));
       return {
-        minW: g.cellW * MIN_CELLS_ACROSS, minH: g.cellH * MIN_CELLS_ACROSS,
-        maxW: g.block.w * 1.4, maxH: g.block.h * 1.4,
+        minW: MIN_CELLS_ACROSS, minH: MIN_CELLS_ACROSS,
+        maxW: block.w * 1.4, maxH: block.h * 1.4,
       };
     }
     return { minW: 30, minH: 30, maxW: CW, maxH: CH };
@@ -1214,12 +1314,16 @@
     if (touchMoved) { touchMoved = false; return; }
     var p = canvasCoords(e);
     var w = screenToWorld(p.x, p.y);
-    if (pathTeam && gridRevealAlpha(gridGeom) >= 0.5) {
-      var flag = hitTestGridCell(w.x, w.y);
+    var team = hitTestRoot(w.x, w.y);
+    if (!team) return;
+    // gridRevealAlpha is the same everywhere on screen right now, so
+    // whichever team the tap actually landed in is tested the same way --
+    // not just whichever team you'd previously navigated into.
+    if (gridRevealAlpha() >= 0.5) {
+      var flag = hitTestGridCell(team, w.x, w.y);
       if (flag) openStory(flag);
-    } else if (!pathTeam) {
-      var team = hitTestRoot(w.x, w.y);
-      if (team) zoomIntoTeam(team, null);
+    } else {
+      zoomIntoTeam(team, null);
     }
   });
 

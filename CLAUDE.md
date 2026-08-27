@@ -323,3 +323,84 @@ for the actual text and visual direction before drafting either.
   Other-region flow all re-run against the final code with zero findings;
   all three inline `<script>` blocks syntax-checked with the debug hooks
   stripped out.
+
+  **2026-08-27, done — exact zero-waste "notched" treemap, whole canvas as
+  one 1,000,000-cell grid.** User feedback on the squarified-per-team grid
+  above: it still wasted cells (a team's own grid rarely divides its exact
+  `title_count` evenly into `cols x rows`), and after a first attempt at a
+  centred/margin fix ("no wasted cells... fixed dimension grid, making
+  slightly smaller rectangles and filling in the boundaries") the user
+  pushed further with a hand-drawn reference image: no frame at all, the
+  *whole canvas* should be one exact 1,000,000-cell grid where a team's
+  shape is a near-rectangle and any leftover from its exact count is
+  absorbed by the *adjacent* team's colour as a stepped "notch" at the
+  shared boundary -- confirmed via `AskUserQuestion` as "whole canvas, one
+  grid, but it should have the general look of a treemap, except at the
+  boundaries which will contain notches." Planned in
+  `/root/.claude/plans/purring-finding-badger.md` (approved as-is) and
+  built accordingly. **Algorithm**: `squarify()` is gone, replaced by
+  `notchedTreemap()` -- adaptive slice-and-dice peeling exactly *one* team
+  at a time off a sorted list (not a whole strip at once, which is what
+  keeps every boundary to exactly two teams), alternating column/row
+  splits by aspect ratio same as before. Where a team's exact cell count
+  doesn't divide evenly across its strip, the remainder becomes a
+  1-cell-wide/tall notch (`fillColumn`/`fillRow`) that the *next* team's
+  region absorbs, rather than leaving background. Every recursive call's
+  invariant (`sum(items.value) === w*h`) holds exactly by construction --
+  no rounding, no reconciliation pass. `peelForRegion`/
+  `notchedTreemapMultiRegion` generalize this to a *list* of starting
+  regions, needed because "Other" (still pooled the same way, still forced
+  last in the ordering) turned out NOT to always land as a single clean
+  rect -- being last only guarantees its *final* leftover is clean, not
+  that it wasn't also pulled in earlier as `rest[0]` to absorb a preceding
+  boundary's notch (confirmed happening on the real data: Other absorbed a
+  1x44 notch from Manchester United's boundary in addition to its own main
+  block). **What this simplified, beyond what the plan anticipated**:
+  since 1 world-unit cell === 1 sim exactly, a team's layout parts *are*
+  its individually-addressable cells -- no more separate per-team grid
+  dicing (`gridDimensions`/`gridGeometry`/`colsInRow`/the old `cellRect`
+  all deleted). Every part is now a plain, uniform `w*h` grid of unit
+  cells by construction, so there's no ragged last row to special-case
+  either. "Other"'s children are folded directly into the same flat
+  `blocks` list used for top-level teams (no separate `otherBlocks`/
+  `otherBlockByTeam`/`isPooled` any more) -- `hitTestRoot` and `render()`
+  lost their Other-specific branches entirely. A team's up to 3 parts
+  (main block + boundary notches) are looked up via `blockByTeam[team]`,
+  bounded via a new `teamBounds()` helper (min/max over parts, used only
+  for camera framing -- never for grid math, since a notch+main-block
+  union doesn't fill its own bounding box), and crest/label drawing now
+  happens once per team on its largest part (`mainPartByTeam`, via a new
+  `drawTeamOverlay()` split out of the old `drawFlatBlock`) rather than
+  being drawn inline per-block. **Verified**: a standalone Node script
+  (`notchedTreemap`/`fillColumn`/`fillRow`/`peelForRegion`/
+  `notchedTreemapMultiRegion`, mirroring the plan's pseudocode exactly)
+  was run against the real per-team `title_count` values *before* touching
+  the HTML at all, asserting programmatically -- not "looks close enough"
+  -- that total area, every team's own cell count, zero overlap, and full
+  coverage all hold exactly, at both the top level and Other's nested
+  level, plus edge cases (50 tiny equal-value items, a single item filling
+  everything). After porting into `pl-xg-simulator.html`: the identical
+  exactness check re-run live against the page's actual constructed
+  `blockByTeam` (not just the standalone script) confirmed 1,000,000
+  cells total, 1,000,000 unique cells covered, 0 overlaps, on the real
+  16-champion 2025/26 data (max 3 parts for one team -- Arsenal, which
+  both gives a notch to Manchester City and separately its main block).
+  A pinch-zoom test targeted exactly at a real notch (Arsenal's 1x122
+  sliver at world x=896) confirmed via screenshot that Arsenal and
+  Manchester City resolve into individual cells at the same moment right
+  at that boundary -- the "all teams resolve at the same time" requirement
+  from the second round of feedback, still holding under the new layout.
+  Full regression re-run against the ported code: all three inline
+  `<script>` blocks `node --check`ed clean; the full 20-stop guided tour
+  (5 champion/5 title-tie/10 game stops, scorecards/campaigns/tiebreak
+  blocks all correct); crest badge show/hide across zoom-in and back-out;
+  desktop wheel-zoom and drag-pan; mobile pinch-zoom/pan
+  (`test_touch.js`); both real-touchscreen-tap mobile suites
+  (`test_mobile.js`/`test_mobile2.js`); and the "Other" region flow
+  (click straight into a pooled team's real per-sim grid, confirmed via
+  screenshot showing several pooled teams' grids resolved together at the
+  shared boundary, then a single-hop back to the overview) -- all zero
+  findings, aside from one pre-existing, unrelated Google Fonts network
+  block in this sandbox (not caused by this change). Not yet pushed to
+  `main` -- left on `claude/pl-xg-article-commentary-cnrfz3` as with the
+  rest of this session's work, pending an explicit merge request.
