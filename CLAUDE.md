@@ -11,6 +11,77 @@ structure/CSS/JS plumbing) — not authoring headings, narrative copy,
 captions, or inventing visual treatments on its own. Check with the user
 for the actual text and visual direction before drafting either.
 
+## due-date.html
+
+- **2026-08-27, done — 50% labels on the dice chart, mode-line flash fix,
+  and a real (not just visual) fix to the gestation chart's 50/50 split.**
+  User feedback: reinforce the dice chart's 50/50 framing with the same
+  blue/pink "50%" labels the gestation curve already carries, on both the
+  prior-knowledge (`dice-half`) and updated-knowledge (`dice-newhalf`)
+  steps; the mode marker ("most likely day") was flashing briefly when
+  the gestation chart reappears after the dice section; and a request to
+  check whether the gestation curve's two shaded areas are actually
+  50/50, since the pink one visually looked bigger.
+  **The pink area genuinely was bigger, not an illusion**: confirmed
+  numerically before touching any code — `due-date-pdf.csv`'s own CDF at
+  day 280 (the hardcoded due date, anchored to Naegele's-rule 40+0 weeks)
+  is 0.4825, not 0.5, because this model's curve doesn't put its true
+  median exactly on day 280 — a real, if small, mismatch between the
+  clinical convention and what this particular smoothed curve says. Over
+  the *displayed* range specifically (which excludes a sliver of mass
+  before 35+0 weeks) that's a blue/pink split of 48.2%/51.8% — a ~3.7
+  point gap, easily visible once both halves carry an explicit "50%"
+  label. **Fix**: `MEDIAN_DAY` (used everywhere as "the due date" — the
+  region split, the reference line, every label) is no longer hardcoded
+  to 280; it's now `quantile((cdfAt(DISPLAY_MIN)+cdfAt(DISPLAY_MAX))/2)`
+  — the day that bisects the *displayed* curve's own area exactly, which
+  is what the article's own opening paragraph already defines a due date
+  to be ("the median of the distribution... shown"). `MEDIAN_CALIBRATION`
+  (existing, unchanged) still keeps the scrub's conditional-median maths
+  aligned to this new value with no further changes needed, since it was
+  already written generically. **Visible consequence worth knowing**: the
+  "Due date" label now reads "40w + 1d" instead of "40w + 0d" (day 280.57
+  rather than 280) — a deliberate trade for the areas being genuinely
+  equal rather than a clean-but-wrong round number; nothing in the
+  article's own visible prose asserts "exactly 40 weeks," so this doesn't
+  contradict anything shown. A Playwright shoelace-area check on the
+  actual rendered SVG paths confirmed the fix: left/right area ratio went
+  from a clearly-visible ~1.077 (7.7% off) to ~1.008 (0.8% off, the
+  residual coming from `areaPath()`'s pre-existing day-grid quantisation
+  at STEP=0.25 days, present everywhere it's used and well under any
+  perceptible threshold — not something this round rewrote). **Mode-line
+  flash, root cause**: `renderDice()` never calls `clearRegions()` (that
+  only runs inside `renderGestation()`), so leaving the gestation chart
+  on the `mode` step left the mode marker's `.visible` class dangling the
+  whole time the dice chart was showing — invisible only because its
+  *ancestor* SVG was `opacity:0`. Returning to any other gestation step
+  re-faded that ancestor in over `.12s`, far faster than the marker's own
+  `.5s` opacity transition (which only *starts* once `clearRegions()`
+  finally runs again) could fade it back out — a brief window where both
+  were partway visible at once, reading as a flash. **Fix**: `showGroup()`
+  now clears the mode marker's `.visible` class instantly the moment the
+  gestation chart is hidden (switching to the dice group), rather than
+  waiting for the next `renderGestation()` call — by the time a reader
+  scrolls back, its fade-out finished long ago, so there's nothing stale
+  left to flash. Verified by sampling the element's live computed opacity
+  every animation frame across a scripted mode→dice→(a non-mode gestation
+  step) transition: 77 samples, opacity 0 throughout, versus what would
+  have been a visible mid-transition spike before the fix. **Dice 50%
+  labels**: new `diceLabel()`/`showDicePct()`/`hideDicePct()` helpers
+  reuse the gestation chart's own `.chart-label.pct` styling for visual
+  consistency, recomputing each label's x from the *live* bar indices in
+  its group every time (three bars each on `dice-half`, two each on
+  `dice-newhalf` once 1 and 2 are ruled out) so they genuinely track the
+  group's centre as it narrows, per the user's own note that this was a
+  requirement, not just a nicety. Verified: label x confirmed to shift
+  between the two steps (181.5→310 for blue, 438.5→481.3 for pink) rather
+  than staying fixed, and hidden (as expected) on the transitional
+  `dice-condition` step, which shows no 50/50 split. All four fixes
+  screenshotted on both desktop and a 390px-wide mobile viewport — labels
+  render cleanly, correctly centred, no clipping. Not yet pushed to
+  `main` — left on `claude/pl-xg-article-commentary-cnrfz3` pending an
+  explicit merge request.
+
 ## TODO
 
 - `articles/pl-xg-simulator.html` — replaced (2026-08-24) with a new piece

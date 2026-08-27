@@ -574,19 +574,33 @@
   }
   var MODE_DAY = grid[pdfVals.indexOf(MAX_PDF)]; // ~282, i.e. 40+2
 
-  // The due date is defined as 40+0 weeks (280 days) by convention
-  // (Naegele's rule) — anchored directly rather than read off the
-  // smoothed curve, whose data-derived median lands a few hours later
-  // (~280.4) than the clinical definition.
-  var MEDIAN_DAY = 280;
+  // The due date is the day that splits the *displayed* curve's area
+  // exactly in half — not simply quantile(0.5) (the curve's own
+  // full-domain median), and not the clinical Naegele's-rule convention
+  // of exactly 40+0 weeks either. Both of those sit a hair off because
+  // the chart only draws [DISPLAY_MIN, DISPLAY_MAX] — a small sliver of
+  // this model's probability mass falls before DISPLAY_MIN (the curve's
+  // tail below 35+0 weeks isn't drawn at all), so the point that bisects
+  // the *displayed* area isn't quite the same as the point that bisects
+  // the full domain. That sliver is only ~0.2% of the total, but it was
+  // enough to visibly unbalance the two shaded regions when anchored to
+  // 40+0 weeks instead (pink ~52% vs blue ~48% of what's on screen,
+  // confirmed both by eye and by the numbers) — worth fixing properly
+  // since those two regions get explicit "50%" labels. Solving for the
+  // day whose displayed-cdf sits exactly halfway between the two
+  // displayed endpoints' own cdf values makes the regions exactly
+  // area-equal instead.
+  var MEDIAN_DAY = quantile((cdfAt(DISPLAY_MIN) + cdfAt(DISPLAY_MAX)) / 2);
 
   // conditionalMedian() reads its answer off the smoothed curve via
-  // quantile(), so on its own it would report ~280.4 (the curve's own
-  // median) rather than exactly MEDIAN_DAY at the very start of the
-  // scrub (when today is far enough back that ~nothing is ruled out).
-  // Calibrate by that small, constant offset so "today" at the start of
-  // the range reads as exactly 40w + 0d, matching the due date shown
-  // everywhere else, instead of drifting to 40w + 1d on rounding alone.
+  // quantile(0.5) (the curve's full-domain median), which is a hair
+  // different from MEDIAN_DAY above (the *displayed*-area median) — so on
+  // its own it would report a slightly different day than MEDIAN_DAY at
+  // the very start of the scrub (when today is far enough back that
+  // ~nothing is ruled out). Calibrate by that small, constant offset so
+  // "today" at the start of the range reads as exactly the same day as
+  // the due date shown everywhere else, rather than drifting off it by a
+  // few hours on rounding alone.
   var MEDIAN_CALIBRATION = MEDIAN_DAY - quantile(0.5);
 
   function conditionalMedian(todayDay){
@@ -824,7 +838,7 @@
   var SCRUB_DAY_START = 245;    // 35+0 weeks — pin engages here
   var SCRUB_DAY_PIN_END = 265;  // 37+6 weeks — pin releases here
   var SCRUB_DAY_MILESTONE = 266; // 38+0 weeks — where the run-up hands off
-  var SCRUB_DAY_END = 280;      // 40+0 weeks, i.e. MEDIAN_DAY
+  var SCRUB_DAY_END = MEDIAN_DAY; // where "today" reaches the due date itself
 
   function renderTodayContinuous(todayDay){
     var newMedian = conditionalMedian(todayDay);
@@ -1077,9 +1091,51 @@
     });
   }
 
+  // "50%" labels for the two coloured bar groups, echoing the gestation
+  // chart's own paired area labels (same 'chart-label pct' styling) so
+  // the two 50/50 splits in this piece read as the same idea shown twice.
+  // Reused across both the prior-knowledge (dice-half) and updated
+  // (dice-newhalf) steps — only *which bars* count as each colour's group
+  // changes between them (three bars each vs. two, once 1 and 2 are ruled
+  // out), so the label's x is recomputed from the live indices each time
+  // rather than fixed, and genuinely moves with the group as it narrows.
+  var elDLabels = document.getElementById('d-labels');
+  function diceBarCenterX(i){ return DBAR.left + i*(barW+gap) + barW/2; }
+  function diceGroupCenterX(indices){
+    return (diceBarCenterX(indices[0]) + diceBarCenterX(indices[indices.length-1])) / 2;
+  }
+  // Vertically centred within the bars' own height (not floating above
+  // them) — every bar a "50%" label ever sits over is at the same full
+  // height (fullH) in both steps that use this, so one constant works for
+  // both; +8 is a small optical nudge for the text baseline.
+  var DICE_PCT_Y = DBAR.bottom - (barMaxH*0.62)/2 + 8;
+  function diceLabel(id, x, text){
+    var t = document.getElementById(id);
+    if(!t){
+      t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('id', id);
+      elDLabels.appendChild(t);
+    }
+    t.setAttribute('class', 'chart-label pct visible');
+    t.setAttribute('x', x);
+    t.setAttribute('y', DICE_PCT_Y);
+    t.textContent = text;
+  }
+  function hideDicePct(){
+    ['lbl-dice-blue50','lbl-dice-pink50'].forEach(function(id){
+      var t = document.getElementById(id);
+      if(t) t.classList.remove('visible');
+    });
+  }
+  function showDicePct(blueIdx, pinkIdx){
+    diceLabel('lbl-dice-blue50', diceGroupCenterX(blueIdx), '50%');
+    diceLabel('lbl-dice-pink50', diceGroupCenterX(pinkIdx), '50%');
+  }
+
   function renderDice(step){
     diceBars.forEach(function(b){ b.setAttribute('class','bar'); });
     elScrubReadout.classList.remove('visible');
+    hideDicePct();
 
     if(step==='dice-intro'){
       diceReset();
@@ -1092,6 +1148,7 @@
       // everywhere else (e.g. the gestation curve's before/after due date).
       [0,1,2].forEach(function(i){ diceBars[i].setAttribute('class','bar on'); });
       [3,4,5].forEach(function(i){ diceBars[i].setAttribute('class','bar split-b'); });
+      showDicePct([0,1,2], [3,4,5]);
     }
     else if(step==='dice-condition'){
       diceReset();
@@ -1113,6 +1170,7 @@
       diceBars[3].setAttribute('class','bar split-a');
       diceBars[4].setAttribute('class','bar split-b');
       diceBars[5].setAttribute('class','bar split-b');
+      showDicePct([2,3], [4,5]);
     }
   }
 
@@ -1128,6 +1186,21 @@
       gestChart.classList.add('visible');
       diceChart.classList.remove('visible');
     } else {
+      // Leaving the gestation chart entirely -- renderDice() never touches
+      // clearRegions(), so any gestation-only element left 'visible' from
+      // whatever step we're leaving stays flagged visible in the DOM the
+      // whole time we're on the dice steps, just invisible because its
+      // *ancestor* SVG is opacity:0. The mode marker is the one case that
+      // actually bites: it's the only step ('mode') that shows it, so
+      // returning to gestation at any other step re-fades the whole SVG
+      // in over .12s -- much faster than this leftover element's own .5s
+      // opacity transition can fade it back OUT (that transition only
+      // *starts* once we're back and clearRegions() runs) -- so for a
+      // moment both are true at once and the mode marker visibly flashes
+      // back in before fading away again. Clearing it here, the instant
+      // we leave, means its fade-out has long since finished by the time
+      // anyone scrolls back, so there's nothing stale left to flash.
+      elModeLine.classList.remove('visible');
       diceChart.classList.add('visible');
       gestChart.classList.remove('visible');
     }
