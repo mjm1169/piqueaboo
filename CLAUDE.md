@@ -78,9 +78,8 @@ for the actual text and visual direction before drafting either.
   than staying fixed, and hidden (as expected) on the transitional
   `dice-condition` step, which shows no 50/50 split. All four fixes
   screenshotted on both desktop and a 390px-wide mobile viewport — labels
-  render cleanly, correctly centred, no clipping. Not yet pushed to
-  `main` — left on `claude/pl-xg-article-commentary-cnrfz3` pending an
-  explicit merge request.
+  render cleanly, correctly centred, no clipping. Merged to `main` on
+  explicit request.
 
 ## TODO
 
@@ -740,6 +739,5 @@ for the actual text and visual direction before drafting either.
   crenellated one. Re-ran the existing pinch-zoom/pan, both
   real-touchscreen-tap suites, the full 9-stop guided tour, and desktop
   wheel-zoom/drag-pan against the changed code -- all zero findings bar
-  the one pre-existing, unrelated Google Fonts block. Not yet pushed to
-  `main` -- left on `claude/pl-xg-article-commentary-cnrfz3` pending an
-  explicit merge request.
+  the one pre-existing, unrelated Google Fonts block. Merged to `main`
+  on explicit request.
