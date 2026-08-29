@@ -899,4 +899,110 @@ for the actual text and visual direction before drafting either.
   `scrollWidth`/`clientWidth` measurements on 20 real campaign rows at a
   390px viewport confirm zero truncation on any Score/xG cell (only the
   one genuinely long opponent name truncates, by design). Pushed to
-  `claude/pull-latest-main-m1y2cg`, not yet merged to `main`.
+  `claude/pull-latest-main-m1y2cg`, then fast-forward merged to `main` on
+  explicit request the same round.
+
+  **2026-08-29, later still — zoom animation (pause, depth, easing),
+  W/D/L replacing GF/GA, home-team-first score order, W/D/L result
+  badges, golden-boot game-by-game.** Six pieces of user feedback in one
+  round. **Whole-map pause between two zoomed views**: `zoomIntoTeam`'s
+  cross-team path (zoom out, then in to somewhere new) chained the two
+  tweens back-to-back with nothing between them; added a
+  `WHOLE_MAP_PAUSE_MS` (500ms) `setTimeout` between `zoomOut`'s callback
+  and the second `zoomIntoTeam` call, so a reader gets a beat at the
+  untouched whole map before the next zoom-in starts. **Zoom depth**: the
+  story-target camera window was silently dominated by `MIN_ZOOM_DIM`
+  (70 world units) -- a floor meant for a plain team-explore zoom (no
+  specific cell, just "look at this team") that happened to be much
+  larger than `TARGET_CELLS_ACROSS` (9), so a story's own highlighted
+  cell always arrived inside a 70-wide window regardless of the smaller
+  number, making it a barely-visible speck. New `STORY_MIN_ZOOM_DIM`
+  (= the also-tightened `TARGET_CELLS_ACROSS`, now 6) applies only when
+  a specific cell is targeted; a plain team-explore zoom still uses the
+  original `MIN_ZOOM_DIM`. **Easing**: turned out to already be a proper
+  ease-in-out cubic (`easeInOutCubic`), applied via `tweenCamera` to
+  every automated zoom already -- confirmed, not assumed, by sampling
+  `camera.w` every animation frame through a real zoom-in and inspecting
+  the frame-to-frame deltas, which grow smoothly from ~0 to a peak then
+  shrink smoothly back to ~0 (a clean slow-fast-slow curve). No code
+  change needed there; left as-is rather than churn something already
+  correct. **W/D/L instead of GF/GA**: neither was tracked anywhere in
+  `export_treemap_data.py` -- only points/gf/ga. Added win/draw/loss
+  accumulation (vectorised, alongside the existing points/gf/ga sums) to
+  both `run_big_pass_sweep1` (plus a `_pre` variant in
+  `run_table_metrics_sweep`, for the closest-final-week "before" table)
+  and threaded the three new arrays through `build_final_table` (now
+  `w`/`d`/`l` fields) and all ten of its call sites. Caught a real bug
+  while wiring this up: the first attempt named the new arrays
+  `wins`/`draws`/`losses` in `run_big_pass_sweep1`, but that function's
+  own haul-detection loop already reuses a bare `draws` as its loop
+  variable (`for draws, players, team, opponent in (...)`) -- silently
+  rebinding the accumulator to a `(n_sims, n_shots)`-shaped array for the
+  rest of the function and crashing with an out-of-bounds index a few
+  lines later. Renamed to `win_count`/`draw_count`/`loss_count` inside
+  that function to avoid the shadow (the returned dict's keys stay
+  `wins`/`draws`/`losses`, so nothing downstream needed to change).
+  `pl-xg-simulator.html`'s two `.final-table` instances (final table,
+  and the pre-final-gameweek table) now render W/D/L columns instead of
+  GF/GA, keeping Pts/GD. **Home-team-first score order**: `renderCampaign`
+  was displaying `sim_goals_for–sim_goals_against`, which is the
+  campaign's own team's perspective (needed to work out W/D/L), not the
+  match's home/away order -- an away game showed the tracked team's own
+  score first regardless of whether they were home or away. Fixed
+  entirely in the frontend (the backend fields were already sufficient,
+  no regen needed for this one): swap for/against into home/away using
+  the existing `e.home` flag before rendering. **W/D/L result badges**:
+  replaced the old unlabelled text cell + coloured-left-border-only
+  signal with a small circular badge (green/grey/pink via the existing
+  `--positive-step`/`--muted`/`--negative-step` tokens, carrying the
+  W/D/L letter) as the campaign table's first column, per the user's
+  explicit colour spec. **Golden-boot game-by-game**: golden-boot stops
+  only ever carried the scorer's own showcase match, no season-long
+  view. `build_curated_tour`'s golden-boot loop now also calls the
+  existing `build_campaign_for_sim` for the scorer's own team, adding a
+  `campaign` field data-only, same targeted-regeneration helper every
+  other campaign-carrying record already relies on. Rendering this
+  needed a second DOM home for the campaign table
+  (`#modal-game-campaign-block`/`-body`, inside `#modal-game-body`) since
+  the original `#modal-campaign-block` lives inside `#modal-champion-body`,
+  which is hidden for a golden-boot story -- a descendant's own
+  `display:block` has no effect under a `display:none` ancestor, the
+  same pitfall CLAUDE.md has flagged before on this page. `renderCampaign`
+  gained optional `blockId`/`bodyId` parameters (defaulting to the
+  original champion-body ids) so both call sites share one render path;
+  the plain `'game'` kind (a flagged game with no campaign) explicitly
+  calls it with `null` too, so a stale golden-boot campaign table can't
+  linger visible if a reader opens a plain game story right after.
+  **Backend regeneration**: needed the full 1,000,000-sim pipeline
+  rerun (both the big pass and the table-metrics sweep embed
+  `final_table`), verified extensively before and after committing to
+  the full run -- a 100k-sim dry run first (every `final_table` row's
+  w+d+l=38, 3w+d=points, and gf-ga=gd checked programmatically; every
+  campaign's own derived W/D/L cross-checked against its team's
+  `final_table` row, exact match), then after the real run: `git status`
+  showed `champions.bin` and `flagged-games.json` byte-identical
+  (confirmed via md5sum against the committed version) and every other
+  touched file's set of flagged/curated `sim` values exactly unchanged
+  from the previously-committed data (0 added, 0 removed, spot-checked
+  fields matching) -- confirming the change was purely additive, nothing
+  about which sims get flagged or picked was disturbed. `treemap-data.json`
+  correctly left untouched via the existing `--skip-story-pass` flag.
+  **Verified end-to-end** via headless-Chromium Playwright: real
+  screenshots of both golden-boot cards (Man City's Haaland, Bournemouth's
+  Evanilson) showing the score, scorecard, and full 38-game campaign
+  table together; the champion-shaped final table showing real W/D/L
+  numbers that sum correctly (e.g. Arsenal 24W/7D/7L); a synthetic click
+  onto a real screen coordinate confirming the whole-map pause
+  (~600ms hold at the untouched camera extent, sampled frame-by-frame)
+  and the deeper story-zoom (camera landing at a genuine 6x6-world-unit
+  window, screenshotted showing the highlighted cell filling roughly a
+  sixth of the canvas); and the prior round's regression checks (tap-to-
+  ID, canvas corners, back-button spacing/text) all re-run clean against
+  the new code. One incidental fix along the way: the desktop campaign
+  table's xG column (76px) turned out to be a few px too narrow at the
+  larger 13px desktop font (visually confirmed via a high-DPI crop
+  showing a genuine ellipsis, despite `scrollWidth`/`clientWidth`
+  reporting an exact, non-overflowing fit -- a sub-pixel rounding quirk,
+  not a measurement bug) -- widened to 86px, matching-or-exceeding the
+  mobile breakpoint's already-correct 80px rather than being narrower
+  than it.

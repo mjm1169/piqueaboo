@@ -239,7 +239,7 @@
 
   /* ---------- campaign table (full season, in the champion modal) ---------- */
 
-  #modal-campaign-block{ display:none; }
+  .campaign-block{ display:none; }
   .campaign-table-wrap{ max-height:320px; overflow-y:auto; overflow-x:auto; }
   /* table-layout:fixed + explicit column widths, rather than the browser's
      default auto-sizing -- auto-layout let the unlabelled result column
@@ -250,16 +250,24 @@
   .campaign-table{ width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
   .campaign-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; border-bottom:1px solid #E5E5E5; position:sticky; top:0; background:var(--surface); }
   .campaign-table td{ padding:4px 6px; border-bottom:1px solid #EFEFEF; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .campaign-table th:nth-child(1), .campaign-table td:nth-child(1){ width:auto; }
-  .campaign-table th:nth-child(2), .campaign-table td:nth-child(2){ width:30px; }
-  .campaign-table th:nth-child(3), .campaign-table td:nth-child(3){ width:24px; }
+  .campaign-table th:nth-child(1), .campaign-table td:nth-child(1){ width:26px; padding-right:0; }
+  .campaign-table th:nth-child(2), .campaign-table td:nth-child(2){ width:auto; }
+  .campaign-table th:nth-child(3), .campaign-table td:nth-child(3){ width:30px; }
   .campaign-table th:nth-child(4), .campaign-table td:nth-child(4){ width:58px; }
-  .campaign-table th:nth-child(5), .campaign-table td:nth-child(5){ width:76px; }
+  .campaign-table th:nth-child(5), .campaign-table td:nth-child(5){ width:86px; }
   .campaign-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
-  .campaign-table tr.win td:first-child{ border-left:2px solid var(--positive-step); }
-  .campaign-table tr.loss td:first-child{ border-left:2px solid var(--negative-step); }
-  .campaign-table tr.draw td:first-child{ border-left:2px solid var(--muted); }
-  .campaign-table td.result{ font-weight:500; }
+  /* Win/draw/loss badge, one per row -- green/grey/pink circle carrying
+     the result letter, at the very start of the row (its own column
+     rather than the old unlabelled text cell + coloured-border-only
+     signal it replaces). */
+  .result-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border-radius:50%;
+    font-size:10px; font-weight:600; color:#fff; line-height:1;
+  }
+  .result-badge.win{ background:var(--positive-step); }
+  .result-badge.draw{ background:var(--muted); }
+  .result-badge.loss{ background:var(--negative-step); }
   @media (max-width:640px){
     .campaign-table{ font-size:12px; }
     .campaign-table th:nth-child(4), .campaign-table td:nth-child(4){ width:48px; }
@@ -458,7 +466,7 @@
       <div id="modal-finalweek-block">
         <h4>Table before the final gameweek</h4>
         <table class="final-table">
-          <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
+          <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr></thead>
           <tbody id="modal-finalweek-before-body"></tbody>
         </table>
         <h4>Final matchday results</h4>
@@ -467,15 +475,15 @@
 
       <h4>Final table</h4>
       <table class="final-table">
-        <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
+        <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr></thead>
         <tbody id="modal-table-body"></tbody>
       </table>
 
-      <div id="modal-campaign-block">
+      <div id="modal-campaign-block" class="campaign-block">
         <h4>Full campaign</h4>
         <div class="campaign-table-wrap">
           <table class="campaign-table">
-            <thead><tr><th>Opponent</th><th>H/A</th><th></th><th class="num">Score</th><th class="num">xG</th></tr></thead>
+            <thead><tr><th></th><th>Opponent</th><th>H/A</th><th class="num">Score</th><th class="num">xG</th></tr></thead>
             <tbody id="modal-campaign-body"></tbody>
           </table>
         </div>
@@ -501,6 +509,21 @@
         <div class="scorecard-side">
           <div class="scorecard-team" id="modal-scorecard-away-team"></div>
           <div class="scorecard-list" id="modal-scorecard-away"></div>
+        </div>
+      </div>
+
+      <!-- Game-by-game detail for a golden-boot story -- the scorer's own
+           team's full campaign in this sim, same markup/render function as
+           the champion-body's campaign table above, just a separate DOM
+           home since #modal-campaign-block lives inside #modal-champion-body,
+           which is hidden for this story kind. -->
+      <div id="modal-game-campaign-block" class="campaign-block">
+        <h4>Full campaign</h4>
+        <div class="campaign-table-wrap">
+          <table class="campaign-table">
+            <thead><tr><th></th><th>Opponent</th><th>H/A</th><th class="num">Score</th><th class="num">xG</th></tr></thead>
+            <tbody id="modal-game-campaign-body"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1276,10 +1299,21 @@
   // on desktop (mouse tracks it easily) goes past too fast to follow on a
   // small screen with no cursor to anchor on.
   var ZOOM_MS = window.matchMedia('(max-width: 640px)').matches ? 1400 : 650;
+  // How long the camera holds at the untouched whole-map view between two
+  // chained tweens (zoom out, then in to somewhere new) -- long enough for
+  // a reader to actually take in the whole grid again before the next
+  // zoom-in starts, not just a flicker mid-motion.
+  var WHOLE_MAP_PAUSE_MS = 500;
   var MIN_CELLS_ACROSS = 3;
   var ENTRY_CELLS_ACROSS_CAP = 140; // how many grid columns a first look into a huge block shows
-  var TARGET_CELLS_ACROSS = 9;      // how tight a story/direct link zooms in on its cell
-  var MIN_ZOOM_DIM = 70;            // world units -- floor on a single zoom-in's camera width/height
+  var TARGET_CELLS_ACROSS = 6;      // how tight a story/direct link zooms in on its cell
+  var MIN_ZOOM_DIM = 70;            // world units -- floor on a plain team-explore zoom-in (no specific cell targeted)
+  // A separate, much tighter floor for a story's own targeted cell --
+  // MIN_ZOOM_DIM's 70 would otherwise dominate TARGET_CELLS_ACROSS (6) and
+  // silently widen every story zoom back out to a 70-wide window, leaving
+  // the highlighted cell as a barely-visible speck. Still >0 so an
+  // oddly-shaped tiny team's block can't collapse the window to nothing.
+  var STORY_MIN_ZOOM_DIM = TARGET_CELLS_ACROSS;
   // Individual cells fade in over this range of camera width/height, in
   // world units -- not shown at all above START, fully opaque at or below
   // FULL. Deliberately an absolute size, not "N cells of this team's own
@@ -1468,13 +1502,18 @@
     // A tiny team (or a single flagged cell within one) can have a block
     // only a few world-units wide -- without a floor here the camera would
     // zoom in by a thousand-fold-plus to fill the screen with 2-3 blank
-    // cells and nothing else. MIN_ZOOM_DIM guarantees some surrounding
-    // context stays visible instead. Clamped to the full canvas (not the
-    // block's own bounds, which can't fit a window bigger than themselves)
-    // so a floored window centres on the target rather than pinning to
-    // one corner of a block smaller than it.
-    var ww = Math.max(MIN_ZOOM_DIM, Math.min(block.w, cellsAcross));
-    var wh = Math.max(MIN_ZOOM_DIM, Math.min(block.h, cellsDown));
+    // cells and nothing else. The floor guarantees some surrounding
+    // context stays visible instead. A story's own targeted cell uses the
+    // much tighter STORY_MIN_ZOOM_DIM -- MIN_ZOOM_DIM's 70 exists for a
+    // plain team-explore zoom (no cell to make obvious, just "look at this
+    // team"), and would otherwise swamp TARGET_CELLS_ACROSS entirely.
+    // Clamped to the full canvas (not the block's own bounds, which can't
+    // fit a window bigger than themselves) so a floored window centres on
+    // the target rather than pinning to one corner of a block smaller
+    // than it.
+    var floorDim = targetRank != null ? STORY_MIN_ZOOM_DIM : MIN_ZOOM_DIM;
+    var ww = Math.max(floorDim, Math.min(block.w, cellsAcross));
+    var wh = Math.max(floorDim, Math.min(block.h, cellsDown));
     return {
       x: Math.max(0, Math.min(CW - ww, cx - ww / 2)),
       y: Math.max(0, Math.min(CH - wh, cy - wh / 2)),
@@ -1504,14 +1543,23 @@
   // then in to the new team) rather than a single hop -- each of those two
   // legs is still just one camera converging on one target the whole way,
   // so there's no discontinuity, just an out-then-in motion that makes
-  // sense for jumping between two unrelated places on the map.
+  // sense for jumping between two unrelated places on the map. A
+  // WHOLE_MAP_PAUSE_MS beat sits between the two legs at the fully-zoomed-
+  // out point, so a reader actually gets a moment to take in the whole
+  // grid again rather than the zoom-out immediately reversing into the
+  // next zoom-in.
   function zoomIntoTeam(team, targetRank, onArrived){
     hoverLabel.hidden = true; // crest badge takes over identification once zoomed in
     if (pathTeam && pathTeam.team === team.team) {
       tweenCamera(currentCameraRect(), targetRectFor(team, targetRank), onArrived);
       return;
     }
-    if (pathTeam) { zoomOut(function(){ zoomIntoTeam(team, targetRank, onArrived); }); return; }
+    if (pathTeam) {
+      zoomOut(function(){
+        setTimeout(function(){ zoomIntoTeam(team, targetRank, onArrived); }, WHOLE_MAP_PAUSE_MS);
+      });
+      return;
+    }
 
     var from = currentCameraRect();
     pathTeam = team;
@@ -1905,7 +1953,7 @@
         : (storyTeam && r.team === storyTeam ? ' class="story-team"' : '');
       return '<tr' + cls + '><td>' + r.position + '</td><td>' + r.team + '</td>'
         + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
-        + '<td class="num">' + r.gf + '</td><td class="num">' + r.ga + '</td></tr>';
+        + '<td class="num">' + r.w + '</td><td class="num">' + r.d + '</td><td class="num">' + r.l + '</td></tr>';
     }).join('');
   }
 
@@ -1931,17 +1979,30 @@
     document.getElementById('modal-scorecard-away').innerHTML = renderSide(awayTeam);
   }
 
-  function renderCampaign(campaign, champion){
-    var block = document.getElementById('modal-campaign-block');
+  // blockId/bodyId default to the champion-body's own campaign table;
+  // golden-boot stories (game-shaped, champion-body hidden) pass the
+  // separate modal-game-campaign-* ids instead -- same rendering, just a
+  // different DOM home since a champion-body descendant would stay
+  // invisible under its hidden ancestor regardless of its own display.
+  function renderCampaign(campaign, blockId, bodyId){
+    var block = document.getElementById(blockId || 'modal-campaign-block');
     if (!campaign || !campaign.length) { block.style.display = 'none'; return; }
     block.style.display = 'block';
-    document.getElementById('modal-campaign-body').innerHTML = campaign.map(function(e){
+    document.getElementById(bodyId || 'modal-campaign-body').innerHTML = campaign.map(function(e){
       var result = e.sim_goals_for > e.sim_goals_against ? 'W' : (e.sim_goals_for === e.sim_goals_against ? 'D' : 'L');
       var cls = result === 'W' ? 'win' : (result === 'L' ? 'loss' : 'draw');
-      return '<tr class="' + cls + '"><td>' + e.opponent + '</td><td>' + (e.home ? 'H' : 'A') + '</td>'
-        + '<td class="result">' + result + '</td>'
-        + '<td class="num">' + e.sim_goals_for + '–' + e.sim_goals_against + '</td>'
-        + '<td class="num">' + e.xg_for.toFixed(2) + '–' + e.xg_against.toFixed(2) + '</td></tr>';
+      // sim_goals_for/against are this campaign's own team's perspective
+      // (needed above to work out W/D/L) -- but the score/xG columns
+      // should always read home team first, regardless of which side
+      // that team was actually on.
+      var homeGoals = e.home ? e.sim_goals_for : e.sim_goals_against;
+      var awayGoals = e.home ? e.sim_goals_against : e.sim_goals_for;
+      var homeXg = e.home ? e.xg_for : e.xg_against;
+      var awayXg = e.home ? e.xg_against : e.xg_for;
+      return '<tr><td><span class="result-badge ' + cls + '">' + result + '</span></td>'
+        + '<td>' + e.opponent + '</td><td>' + (e.home ? 'H' : 'A') + '</td>'
+        + '<td class="num">' + homeGoals + '–' + awayGoals + '</td>'
+        + '<td class="num">' + homeXg.toFixed(2) + '–' + awayXg.toFixed(2) + '</td></tr>';
     }).join('');
   }
 
@@ -1985,6 +2046,9 @@
         ? story.haul.player + ' scored ' + story.haul.goals + ' of ' + story.haul.team + '\'s goals in this simulated match.'
         : (story.home_goals + story.away_goals) + ' goals in this one simulated match — one of the highest-scoring games across 1,000,000 replays of the season.';
       renderScorecard(story.scorers || [], story.home_team, story.away_team);
+      // No campaign data on a plain flagged game -- explicitly clear/hide
+      // rather than leaving a previous golden-boot story's table stale.
+      renderCampaign(null, 'modal-game-campaign-block', 'modal-game-campaign-body');
 
       backdrop.classList.add('open');
       return;
@@ -2014,6 +2078,10 @@
         story.player + ' scored ' + m.goals + ' in this match, on the way to ' + story.goals + ' for the season — '
         + diff + ' more than the ' + story.real_goals + ' they actually scored in 2025/26.';
       renderScorecard(m.scorers || [], m.home_team, m.away_team);
+      // Game-by-game view for the scorer's own team's whole simulated
+      // season, when we have it (every golden-boot stop does, via
+      // build_campaign_for_sim in export_treemap_data.py's curated tour).
+      renderCampaign(story.campaign, 'modal-game-campaign-block', 'modal-game-campaign-body');
 
       backdrop.classList.add('open');
       return;
@@ -2057,7 +2125,7 @@
     }
 
     renderTiebreak(story);
-    renderCampaign(story.campaign, story.champion);
+    renderCampaign(story.campaign);
 
     if (entry.kind === 'closest_final_week') {
       finalweekBlock.style.display = 'block';

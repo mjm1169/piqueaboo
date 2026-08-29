@@ -172,6 +172,14 @@ def run_big_pass_sweep1(matches, teams, n_sims, real_pos, seed=None,
     points = np.zeros((n_sims, n_teams), dtype=np.int32)
     gf = np.zeros((n_sims, n_teams), dtype=np.int32)
     ga = np.zeros((n_sims, n_teams), dtype=np.int32)
+    # Named win_count/draw_count/loss_count, not wins/draws/losses -- the
+    # haul-detection loop below rebinds a plain `draws` as its own loop
+    # variable (one of draws_h/draws_a per iteration), which would
+    # otherwise silently shadow a same-named accumulator for the rest of
+    # this function.
+    win_count = np.zeros((n_sims, n_teams), dtype=np.int32)
+    draw_count = np.zeros((n_sims, n_teams), dtype=np.int32)
+    loss_count = np.zeros((n_sims, n_teams), dtype=np.int32)
 
     flagged_games = []
 
@@ -188,12 +196,21 @@ def run_big_pass_sweep1(matches, teams, n_sims, real_pos, seed=None,
         home_goals = draws_h.sum(axis=1)
         away_goals = draws_a.sum(axis=1)
 
-        points[:, h_idx] += np.where(home_goals > away_goals, 3, np.where(home_goals == away_goals, 1, 0))
-        points[:, a_idx] += np.where(away_goals > home_goals, 3, np.where(home_goals == away_goals, 1, 0))
+        h_win = home_goals > away_goals
+        a_win = away_goals > home_goals
+        drawn = home_goals == away_goals
+        points[:, h_idx] += np.where(h_win, 3, np.where(drawn, 1, 0))
+        points[:, a_idx] += np.where(a_win, 3, np.where(drawn, 1, 0))
         gf[:, h_idx] += home_goals
         ga[:, h_idx] += away_goals
         gf[:, a_idx] += away_goals
         ga[:, a_idx] += home_goals
+        win_count[:, h_idx] += h_win
+        win_count[:, a_idx] += a_win
+        draw_count[:, h_idx] += drawn
+        draw_count[:, a_idx] += drawn
+        loss_count[:, h_idx] += a_win
+        loss_count[:, a_idx] += h_win
 
         # --- high-scoring games: keep every qualifying sim for this match ---
         total = home_goals + away_goals
@@ -292,11 +309,12 @@ def run_big_pass_sweep1(matches, teams, n_sims, real_pos, seed=None,
             "sim": s,
             "champion": teams[champion_idx[s]],
             "champion_real_position": int(champ_real_pos[s]),
-            "final_table": build_final_table(points, gf, ga, position, s, teams),
+            "final_table": build_final_table(points, gf, ga, win_count, draw_count, loss_count, position, s, teams),
         }
 
     return {
-        "points": points, "gf": gf, "ga": ga, "position": position,
+        "points": points, "gf": gf, "ga": ga,
+        "wins": win_count, "draws": draw_count, "losses": loss_count, "position": position,
         "champion_idx": champion_idx, "rank_key": rank_key,
         "flagged_champions": flagged_champions,
         "flagged_games": flagged_games,
@@ -304,10 +322,10 @@ def run_big_pass_sweep1(matches, teams, n_sims, real_pos, seed=None,
     }
 
 
-def build_final_table(points, gf, ga, position, sim_idx, teams):
+def build_final_table(points, gf, ga, wins, draws, losses, position, sim_idx, teams):
     """Full final table for one sim, read straight out of the big pass's
-    points/gf/ga/position arrays (kept for all n_sims regardless -- see
-    run_big_pass_sweep1)."""
+    points/gf/ga/wins/draws/losses/position arrays (kept for all n_sims
+    regardless -- see run_big_pass_sweep1)."""
     rows = []
     for i, t in enumerate(teams):
         rows.append({
@@ -317,6 +335,9 @@ def build_final_table(points, gf, ga, position, sim_idx, teams):
             "gf": int(gf[sim_idx, i]),
             "ga": int(ga[sim_idx, i]),
             "gd": int(gf[sim_idx, i] - ga[sim_idx, i]),
+            "w": int(wins[sim_idx, i]),
+            "d": int(draws[sim_idx, i]),
+            "l": int(losses[sim_idx, i]),
         })
     rows.sort(key=lambda r: r["position"])
     return rows
@@ -411,6 +432,7 @@ def finalize_big_pass(sweep1, sweep2, teams, real_pos, fixture_index, seed):
     noteworthy on its own, whoever it favours).
     """
     points, gf, ga, position = sweep1["points"], sweep1["gf"], sweep1["ga"], sweep1["position"]
+    wins, draws, losses = sweep1["wins"], sweep1["draws"], sweep1["losses"]
     champion_idx = sweep1["champion_idx"]
     n_teams = len(teams)
 
@@ -432,7 +454,7 @@ def finalize_big_pass(sweep1, sweep2, teams, real_pos, fixture_index, seed):
         champ_real_position = real_pos[champion_name]
 
         campaign = sweep2["pending_candidates"][sim][champion_name]
-        final_table = build_final_table(points, gf, ga, position, sim, teams)
+        final_table = build_final_table(points, gf, ga, wins, draws, losses, position, sim, teams)
 
         if champ_real_position > (n_teams // 2):
             flagged_champions[sim] = {
@@ -514,9 +536,15 @@ def run_table_metrics_sweep(matches, teams, n_sims, seed, final_day_indices):
     points = np.zeros((n_sims, n_teams), dtype=np.int32)
     gf = np.zeros((n_sims, n_teams), dtype=np.int32)
     ga = np.zeros((n_sims, n_teams), dtype=np.int32)
+    wins = np.zeros((n_sims, n_teams), dtype=np.int32)
+    draws = np.zeros((n_sims, n_teams), dtype=np.int32)
+    losses = np.zeros((n_sims, n_teams), dtype=np.int32)
     points_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
     gf_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
     ga_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
+    wins_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
+    draws_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
+    losses_pre = np.zeros((n_sims, n_teams), dtype=np.int32)
 
     t0 = time.time()
     for i, m in enumerate(matches):
@@ -529,17 +557,26 @@ def run_table_metrics_sweep(matches, teams, n_sims, seed, final_day_indices):
         home_goals = draws_h.sum(axis=1)
         away_goals = draws_a.sum(axis=1)
 
-        h_pts = np.where(home_goals > away_goals, 3, np.where(home_goals == away_goals, 1, 0))
-        a_pts = np.where(away_goals > home_goals, 3, np.where(home_goals == away_goals, 1, 0))
+        h_win = home_goals > away_goals
+        a_win = away_goals > home_goals
+        drawn = home_goals == away_goals
+        h_pts = np.where(h_win, 3, np.where(drawn, 1, 0))
+        a_pts = np.where(a_win, 3, np.where(drawn, 1, 0))
 
         points[:, h_idx] += h_pts; points[:, a_idx] += a_pts
         gf[:, h_idx] += home_goals; ga[:, h_idx] += away_goals
         gf[:, a_idx] += away_goals; ga[:, a_idx] += home_goals
+        wins[:, h_idx] += h_win; wins[:, a_idx] += a_win
+        draws[:, h_idx] += drawn; draws[:, a_idx] += drawn
+        losses[:, h_idx] += a_win; losses[:, a_idx] += h_win
 
         if i not in final_day_set:
             points_pre[:, h_idx] += h_pts; points_pre[:, a_idx] += a_pts
             gf_pre[:, h_idx] += home_goals; ga_pre[:, h_idx] += away_goals
             gf_pre[:, a_idx] += away_goals; ga_pre[:, a_idx] += home_goals
+            wins_pre[:, h_idx] += h_win; wins_pre[:, a_idx] += a_win
+            draws_pre[:, h_idx] += drawn; draws_pre[:, a_idx] += drawn
+            losses_pre[:, h_idx] += a_win; losses_pre[:, a_idx] += h_win
 
         if (i + 1) % 50 == 0 or i + 1 == len(matches):
             print(f"  [table metrics sweep] {i+1}/{len(matches)} matches ({time.time()-t0:.1f}s elapsed)",
@@ -547,7 +584,9 @@ def run_table_metrics_sweep(matches, teams, n_sims, seed, final_day_indices):
 
     return {
         "points": points, "gf": gf, "ga": ga, "gd": gf - ga,
+        "wins": wins, "draws": draws, "losses": losses,
         "points_pre": points_pre, "gf_pre": gf_pre, "ga_pre": ga_pre, "gd_pre": gf_pre - ga_pre,
+        "wins_pre": wins_pre, "draws_pre": draws_pre, "losses_pre": losses_pre,
     }
 
 
@@ -807,7 +846,7 @@ def build_best_seasons(matches, teams, seed, static_xg, table_stories, zero_win_
     for team in zero_win_teams:
         rec = table_stories["no_wins"][team]
         sim = rec["sim"]
-        final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], sim, teams)
+        final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], sim, teams)
         campaign = build_campaign_for_sim(matches, seed, sim, team, static_xg, n_sims)
         records.append({
             "team": team, "sim": sim, "position": rec["position"], "champion": rec["champion"],
@@ -857,7 +896,7 @@ def build_champion_margin_stories(matches, teams, seed, static_xg, tm, table_sto
         if sims_as_champion.size == 0:
             continue  # shouldn't happen for a team with title_count > 0, but don't crash if it ever does
         best_sim = int(sims_as_champion[np.argmax(margin[sims_as_champion])])
-        final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], best_sim, teams)
+        final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], best_sim, teams)
         campaign = build_campaign_for_sim(matches, seed, best_sim, team, static_xg, n_sims)
         records.append({
             "team": team, "sim": best_sim, "champion": team,
@@ -901,26 +940,29 @@ def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
     zero_win_teams = [t for t, c in zip(teams, title_counts) if c == 0]
     best_team = min(zero_win_teams, key=lambda t: table_stories["no_wins"][t]["position"])
     rec = table_stories["no_wins"][best_team]
-    final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], rec["sim"], teams)
+    final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], rec["sim"], teams)
     tour.append({
         "kind": "no_wins", "sim": rec["sim"], "team": best_team, "position": rec["position"],
         "champion": rec["champion"], "final_table": final_table,
     })
 
-    # --- 3 & 4: golden boot ---
+    # --- 3 & 4: golden boot -- game-by-game detail for the scorer's own
+    # team, same targeted build_campaign_for_sim() every other
+    # campaign-carrying record already relies on ---
     for key, kind in (("highest", "golden_boot"), ("most_unexpected", "unexpected_golden_boot")):
         g = gb_stories[key]
         team = player_team.get(g["player"], teams[int(champion_idx[g["sim"]])])
         match = build_best_match_for_player(matches, seed, g["sim"], g["player"], team, n_sims)
+        campaign = build_campaign_for_sim(matches, seed, g["sim"], team, static_xg, n_sims)
         tour.append({
             "kind": kind, "sim": g["sim"], "player": g["player"], "team": team,
-            "goals": g["goals"], "real_goals": g["real_goals"], "match": match,
+            "goals": g["goals"], "real_goals": g["real_goals"], "match": match, "campaign": campaign,
         })
 
     # --- 5: closest race into the final week ---
     r5 = table_stories["closest_final_week"]
-    table_after = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r5["sim"], teams)
-    table_before = build_final_table(tm["points_pre"], tm["gf_pre"], tm["ga_pre"], table_stories["position_pre"], r5["sim"], teams)
+    table_after = build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], r5["sim"], teams)
+    table_before = build_final_table(tm["points_pre"], tm["gf_pre"], tm["ga_pre"], tm["wins_pre"], tm["draws_pre"], tm["losses_pre"], table_stories["position_pre"], r5["sim"], teams)
     games = build_final_matchday_detail(matches, seed, r5["sim"], final_day_indices, n_sims)
     tour.append({
         "kind": "closest_final_week", "sim": r5["sim"], "champion": r5["champion"],
@@ -933,7 +975,7 @@ def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
     tour.append({
         "kind": "biggest_margin", "sim": r6["sim"], "champion": r6["champion"],
         "champion_real_position": real_pos[r6["champion"]], "margin": r6["margin"],
-        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r6["sim"], teams),
+        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], r6["sim"], teams),
         "campaign": build_campaign_for_sim(matches, seed, r6["sim"], r6["champion"], static_xg, n_sims),
     })
 
@@ -942,7 +984,7 @@ def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
     tour.append({
         "kind": "lowest_gd", "sim": r7["sim"], "champion": r7["champion"],
         "champion_real_position": real_pos[r7["champion"]], "gd": r7["gd"],
-        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r7["sim"], teams),
+        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], r7["sim"], teams),
         "campaign": build_campaign_for_sim(matches, seed, r7["sim"], r7["champion"], static_xg, n_sims),
     })
 
@@ -950,7 +992,7 @@ def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
     r8 = table_stories["most_tied_first"]
     tour.append({
         "kind": "most_tied_first", "sim": r8["sim"], "champion": r8["champion"], "tie_count": r8["tie_count"],
-        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], r8["sim"], teams),
+        "final_table": build_final_table(tm["points"], tm["gf"], tm["ga"], tm["wins"], tm["draws"], tm["losses"], table_stories["position"], r8["sim"], teams),
     })
 
     # --- 9: closest by head-to-head / away goals -- prefer the deeper
