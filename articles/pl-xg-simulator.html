@@ -49,7 +49,6 @@
   .treemap-canvas-wrap{ position:relative; }
   #treemap-canvas{
     width:100%; height:auto; display:block;
-    border-radius:6px;
     cursor:pointer;
     /* Touch pan/pinch-zoom on the canvas is fully hand-rolled (see the
        touchstart/touchmove handlers) so the browser's own default touch
@@ -121,7 +120,10 @@
   .treemap-hover-label[hidden]{ display:none; }
 
   @media (max-width:640px){
-    .treemap-overlay-controls{ position:static; margin-bottom:10px; }
+    /* Static flow puts this row directly below the canvas in source order
+       (see the DOM) -- margin-bottom alone left it sitting flush against
+       the canvas's own top edge with nothing to keep them apart. */
+    .treemap-overlay-controls{ position:static; margin:10px 0; }
   }
 
   /* ---------- legend / roster ---------- */
@@ -238,15 +240,31 @@
   /* ---------- campaign table (full season, in the champion modal) ---------- */
 
   #modal-campaign-block{ display:none; }
-  .campaign-table-wrap{ max-height:320px; overflow-y:auto; }
-  .campaign-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .campaign-table-wrap{ max-height:320px; overflow-y:auto; overflow-x:auto; }
+  /* table-layout:fixed + explicit column widths, rather than the browser's
+     default auto-sizing -- auto-layout let the unlabelled result column
+     (just a single W/L/D letter) and the two-value score/xG columns size
+     themselves inconsistently from row to row, which is what read as
+     "off" spacing, and on narrow mobile widths let the xG column's
+     "0.92–1.44" shape wrap onto two lines instead of just shrinking. */
+  .campaign-table{ width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
   .campaign-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; border-bottom:1px solid #E5E5E5; position:sticky; top:0; background:var(--surface); }
-  .campaign-table td{ padding:4px 6px; border-bottom:1px solid #EFEFEF; }
+  .campaign-table td{ padding:4px 6px; border-bottom:1px solid #EFEFEF; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .campaign-table th:nth-child(1), .campaign-table td:nth-child(1){ width:auto; }
+  .campaign-table th:nth-child(2), .campaign-table td:nth-child(2){ width:30px; }
+  .campaign-table th:nth-child(3), .campaign-table td:nth-child(3){ width:24px; }
+  .campaign-table th:nth-child(4), .campaign-table td:nth-child(4){ width:58px; }
+  .campaign-table th:nth-child(5), .campaign-table td:nth-child(5){ width:76px; }
   .campaign-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .campaign-table tr.win td:first-child{ border-left:2px solid var(--positive-step); }
   .campaign-table tr.loss td:first-child{ border-left:2px solid var(--negative-step); }
   .campaign-table tr.draw td:first-child{ border-left:2px solid var(--muted); }
   .campaign-table td.result{ font-weight:500; }
+  @media (max-width:640px){
+    .campaign-table{ font-size:12px; }
+    .campaign-table th:nth-child(4), .campaign-table td:nth-child(4){ width:48px; }
+    .campaign-table th:nth-child(5), .campaign-table td:nth-child(5){ width:80px; }
+  }
 
   /* ---------- tiebreak explainer (in the champion modal, title-tie stories only) ---------- */
 
@@ -359,7 +377,7 @@
         <div class="treemap-hover-label" id="treemap-hover-label" hidden></div>
 
         <div class="treemap-overlay-controls">
-          <button type="button" class="grid-btn" id="grid-back-btn" hidden>← Back to the whole map</button>
+          <button type="button" class="grid-btn" id="grid-back-btn" hidden>← Back</button>
           <div class="grid-crest-badge" id="grid-crest-badge" hidden>
             <img id="grid-crest-badge-img" alt="">
             <span id="grid-crest-badge-name"></span>
@@ -1169,16 +1187,16 @@
 
   // The flat coloured-fill look every part of every team starts as --
   // called once per part (a team can have up to 3: a main block plus
-  // small notches it gave to or absorbed from its neighbours).
+  // small notches it gave to or absorbed from its neighbours). Used to
+  // also stroke a white hairline around every part, but `repairContiguity`
+  // can (and, after the de-zigzag pass, still sometimes does) hand a
+  // single team back as several adjoining rects rather than exactly one --
+  // stroking each of those independently drew a visible seam *inside* what
+  // should read as one solid team region, not just between different
+  // teams. Plain fills read as clean block colour at every zoom level.
   function drawFlatBlock(b){
     ctx.fillStyle = b.team.color;
     ctx.fillRect(b.x, b.y, b.w, b.h);
-
-    // hairline separators so adjoining same-tone parts still read as
-    // distinct regions
-    ctx.strokeStyle = 'rgba(255,255,255,.6)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
   }
 
   // Crest + team-name label, drawn once per team on its largest part only
@@ -1200,11 +1218,22 @@
     }
 
     if (short >= 70) {
-      ctx.fillStyle = 'rgba(0,0,0,.55)';
-      ctx.font = '500 13px Poppins, sans-serif';
+      // Fixed 13px overflowed a block's own width for longer names on a
+      // narrow block (Bournemouth was the case that showed it) -- shrink
+      // to fit instead, down to a floor below which the name would be
+      // unreadable anyway; skip the label entirely rather than draw it
+      // clipped or overlapping the block's neighbours.
+      var maxLabelWidth = b.w * 0.92;
+      var fontSize = 13;
       ctx.textAlign = 'center';
+      ctx.font = '500 ' + fontSize + 'px Poppins, sans-serif';
+      while (fontSize > 9 && ctx.measureText(b.team.team).width > maxLabelWidth) {
+        fontSize -= 1;
+        ctx.font = '500 ' + fontSize + 'px Poppins, sans-serif';
+      }
       var labelY = b.y + b.h / 2 + boxSize / 2 + 4;
-      if (labelY < b.y + b.h - 6) {
+      if (labelY < b.y + b.h - 6 && ctx.measureText(b.team.team).width <= maxLabelWidth) {
+        ctx.fillStyle = 'rgba(0,0,0,.55)';
         ctx.fillText(b.team.team, b.x + b.w / 2, labelY);
       }
     }
@@ -1706,7 +1735,15 @@
     // not just whichever team you'd previously navigated into.
     if (gridRevealAlpha() >= 0.5) {
       var flag = hitTestGridCell(team, w.x, w.y);
-      if (flag) openStory(flag);
+      if (flag) { openStory(flag); return; }
+      // No story on this particular cell -- still, a tap landing in a
+      // different team's cells than the badge currently names (the two
+      // can meet within one screen once zoomed in) should update which
+      // team is being pointed at, not just clicks that open a story.
+      if (!pathTeam || pathTeam.team !== team.team) {
+        pathTeam = team;
+        updateControlsVisibility();
+      }
     } else {
       zoomIntoTeam(team, null);
     }
@@ -1778,7 +1815,12 @@
     var team = sim != null ? teamForSim(sim) : null;
     if (!team) { openStory(entry); return; }
     canvasWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    zoomIntoTeam(team, rankOfSim[sim], function(){ openStory(entry); });
+    zoomIntoTeam(team, rankOfSim[sim], function(){
+      // A beat between the camera landing and the card covering the
+      // screen -- so the reader actually sees the one highlighted cell
+      // the story is about, not just the modal appearing over it.
+      setTimeout(function(){ openStory(entry); }, 500);
+    });
   }
 
   /* =========================================================
