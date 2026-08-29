@@ -834,3 +834,69 @@ for the actual text and visual direction before drafting either.
   autoplaying tour. `curated-tour.json` itself, and its 9 records, are
   unaffected -- still feeds both the trimmed grid highlighting and the 6
   reused-stop cards above.
+
+  **2026-08-29, later still — treemap seams/corners, tap-to-ID, label
+  overflow, story-card delay, full-campaign table spacing.** Six pieces
+  of user feedback from two screenshots (a mobile full-campaign table,
+  and the treemap overview). **White lines on the treemap**:
+  `drawFlatBlock` used to stroke a white hairline around every part it
+  drew; `repairContiguity` can (and after the de-zigzag pass, still
+  sometimes does) hand a single team back as several adjoining rects
+  rather than exactly one, and each got its own stroke -- drawing a
+  visible seam *inside* what should read as one solid team region, not
+  just between different teams. Removed outright; plain fills read as
+  clean block colour at every zoom level, matching the user's explicit
+  "or even be block colours" fallback. **Rounded corners**: removed
+  `#treemap-canvas`'s `border-radius:6px`, which was clipping the corner
+  cells with a visible rounded cut-out against the card background.
+  **Tap-to-ID**: the click handler's `gridRevealAlpha() >= 0.5` branch
+  only ever updated the crest badge when the tapped cell had a story
+  attached (via `zoomIntoTeam`/`openStory`); a tap on a plain, unflagged
+  cell belonging to a *different* team than the current `pathTeam` (the
+  two can meet on screen once zoomed in, at a team boundary) did nothing.
+  Now sets `pathTeam` and calls `updateControlsVisibility()` on any such
+  tap, not just ones that open a story. **Label overflow**:
+  `drawTeamOverlay`'s team-name label was a fixed 13px regardless of
+  block width -- Bournemouth's name overflowing its own narrow block was
+  the case that showed it. Now shrinks the font (via `ctx.measureText`)
+  down to a 9px floor to fit the block's width, and skips the label
+  entirely rather than draw it clipped if it still doesn't fit at the
+  floor. **Story-card delay**: `zoomToStory()` used to call `openStory()`
+  the instant the camera's tween landed, covering the highlighted cell
+  before it registered. Now waits a further 500ms after arrival before
+  opening the modal, per the user's explicit spec ("zoom in, see the
+  cell, pause 500ms, then the card"). **Back button**: shortened
+  "← Back to the whole map" to "← Back", and the mobile
+  `.treemap-overlay-controls` media query (which lays the row out in
+  normal flow directly below the canvas on narrow screens) gained a
+  `margin-top` alongside its existing `margin-bottom` -- it previously had
+  nothing keeping it off the canvas's own bottom edge. **Full-campaign
+  table**: browser auto-layout let the unlabelled result column (a bare
+  W/L/D letter, no header) and the two-value score/xG columns size
+  themselves inconsistently row to row, and on mobile widths let the xG
+  column's "0.92–1.44" shape wrap onto two lines, misaligning every row's
+  height. Switched to `table-layout:fixed` with explicit per-column
+  widths (opponent gets the remaining space and ellipsis-truncates a long
+  name like "Wolverhampton Wanderers" if needed; every numeric column
+  gets a width wide enough to show full precision, confirmed by
+  measuring actual rendered `scrollWidth` against `clientWidth` for real
+  campaign rows rather than eyeballing it -- an early pass sized the
+  mobile xG column 3px too narrow and still silently ellipsis-truncated
+  every xG value, caught only by that measurement, not by looking at a
+  screenshot).
+  **Verified** via headless-Chromium Playwright rather than just
+  eyeballing the diff: real desktop/mobile screenshots (including a
+  high-DPI crop of the Man Utd/Man City/Bournemouth corner) confirm no
+  white seams and no rounded canvas corners, and Bournemouth's label now
+  fits inside its own block; a synthetic click dispatched at a real
+  screen coordinate (computed from the live camera transform, landing
+  provably on `CANVAS#treemap-canvas` via `elementFromPoint`, on a cell
+  with no flag) onto a *different* team's cells than the current
+  `pathTeam` confirmed the crest badge and `pathTeam` both update to the
+  tapped team; a mobile roster-card story click measured ~3.9s from tap
+  to modal-open, consistent with the ~1400ms mobile zoom tween plus the
+  new 500ms pause (not just present in the diff); and per-cell
+  `scrollWidth`/`clientWidth` measurements on 20 real campaign rows at a
+  390px viewport confirm zero truncation on any Score/xG cell (only the
+  one genuinely long opponent name truncates, by design). Pushed to
+  `claude/pull-latest-main-m1y2cg`, not yet merged to `main`.
