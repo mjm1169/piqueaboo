@@ -741,3 +741,96 @@ for the actual text and visual direction before drafting either.
   wheel-zoom/drag-pan against the changed code -- all zero findings bar
   the one pre-existing, unrelated Google Fonts block. Merged to `main`
   on explicit request.
+
+  **2026-08-29, done — "best season" roster cards for the 4 zero-win
+  clubs.** Per the user's pick from `notes/pl-xg-roster-card-candidates.md`.
+  Cheaper than that note flagged at the time: the per-sim, per-team
+  position tracking needed already existed as a byproduct of the curated
+  tour's own "no wins" stop, just discarded after picking the single
+  best-of-4 team for that one tour slot. New `build_best_seasons()` in
+  `export_treemap_data.py` keeps all 4 (full final table + 38-game
+  campaign log each), written to `articles/pl-treemap-data/best-seasons.json`
+  via a new `--skip-best-seasons` flag (the underlying table-metrics sweep
+  is now shared between this and the curated tour, only skipped when both
+  are). `pl-xg-simulator.html`'s roster now renders a real card for each
+  zero-win club (`.roster-card.zero`, a CSS class that already existed but
+  was never wired up) with a "Best-ever finish" button into the same
+  story-modal path the tour's own no-wins stop already used; the old
+  one-line "never won it: A, B, C, D" summary text is gone, replaced by
+  the 4 cards. **Aside, not acted on**: regenerating `treemap-data.json`
+  (an unconditional side effect of running the export script at all)
+  produced different `stories[].notable_games`/`games` content than what's
+  currently committed, despite an unchanged shots CSV and a confirmed-
+  deterministic story-batch pass in isolation (two back-to-back runs in
+  the same process matched exactly) -- likely tie-break sensitivity in
+  `np.argsort`'s (unstable) quicksort differing across whatever numpy
+  build originally generated the committed file vs. this `.venv`'s numpy
+  2.0.2, given how many integer ties a 20,000-sim goal-count batch
+  produces. Reverted that file rather than ship an unexplained change;
+  worth a closer look if the story batch is revisited, but out of scope
+  here. Also left open: which framing (comparison-to-reality vs. a second
+  flagged-game story) to use for the 16 clubs that *do* win -- the user
+  wants to pick per club, not one blanket rule; a table of each club's
+  real finish/title odds/flagged-game count is now in
+  `notes/pl-xg-roster-card-candidates.md` for that.
+
+  **2026-08-29, later — second roster-card stories, picked per club.**
+  User picks, now wired as a second `roster-story-btn` on each card (data
+  in `notes/pl-xg-roster-card-candidates.md`): Crystal Palace and Aston
+  Villa get a specific flagged game each (Mateta's 10-goal haul; the 10-5
+  win over Arsenal); Manchester United, Liverpool, and Chelsea get a
+  specific flagged title-tie each (all three do win the league on a
+  tiebreak somewhere in the existing `flagged-title-ties.json`, no new
+  pass needed -- Man Utd's pick ties with Arsenal specifically, for the
+  drama of beating the real champion on a tiebreak). Tottenham, Fulham,
+  Brighton, and Brentford get something new instead of a flagged game,
+  since all of theirs read as unflattering (Tottenham's *only* flagged
+  game is a 9-0 defeat): their own biggest-margin title win. New
+  `build_champion_margin_stories()` in `export_treemap_data.py`, scoped to
+  exactly those 4 clubs (`OWN_BIGGEST_MARGIN_TEAMS`, a fixed editorial
+  list, not a derived one -- distinguishing it from `zero_win_teams`),
+  reusing the same table-metrics sweep as `best_seasons` rather than a new
+  one, written to `articles/pl-treemap-data/champion-margin-stories.json`
+  via a new `--skip-champion-margin-stories` flag. Also added
+  `--skip-story-pass`, since running the export script for any of this
+  round's additions kept unconditionally rewriting `treemap-data.json`
+  (previously worked around by just `git checkout`-ing it back afterward)
+  -- the story-batch pass and its output are now properly skippable like
+  every other stage. **Still open**: Everton has no flagged title-tie as
+  champion, so it has no equivalent free pick; a golden-boot-per-club
+  check would need a new query added to the (otherwise already-built)
+  golden-boot sweep, not done unprompted since it costs a ~3-minute rerun.
+  **Resolved same day**: user chose a plain league win over that rerun --
+  Everton added to `OWN_BIGGEST_MARGIN_TEAMS` (win the league by 4 in sim
+  #190,331), same pass, no new code. 10 of the 16 winning clubs now have a
+  second card story; the remaining 6 (Manchester City, Arsenal,
+  Bournemouth, Leeds, Newcastle United, Nottingham Forest) still have a
+  free option available (their own curated-tour stop) but aren't wired up
+  yet.
+
+  **2026-08-29, later still — last 6 clubs wired, grid highlighting
+  trimmed to only sims with a story, guided-tour player retired.** Per
+  the user's ask. (1) The remaining 6 winning clubs each now reuse their
+  own curated-tour stop as their second roster-card story (`no_wins` used
+  the same trick already; `TOUR_STOP_SECOND_STORY` in the HTML just picks
+  the matching stop out of `curatedTourRaw` -- no new data). All 16
+  winning clubs now have a second story button; full picks in
+  `notes/pl-xg-roster-card-candidates.md`. (2) The treemap grid used to
+  highlight *every* flagged-champions/flagged-games/flagged-title-ties
+  entry (1,985 + 987 + 37) as a clickable cell once zoomed into a team's
+  grid; now only the ~25 sims actually referenced by a roster card or
+  curated-tour stop get flagged (`flaggedByTeam`'s construction in
+  section 1 of the script rewritten to source from those instead).
+  `flagged-champions.json` (13MB) is no longer even fetched, since none of
+  it survives as an individually featured story post-trim.
+  (3) The standalone guided-tour player (start/pause/prev/next/exit,
+  auto-advancing itinerary, caption bar) is removed outright. In its
+  place, `zoomToStory()` (new, section 5) is the single entry point every
+  roster-card story button now goes through: scroll the treemap into
+  view, zoom the camera to that story's real cell via the same
+  `zoomIntoTeam()` manual pinch/click already used, then open the story
+  modal once the tween lands -- the cards now deliver the "one cell in a
+  million" payoff directly, card by card, rather than needing a separate
+  autoplaying tour. `curated-tour.json` itself, and its 9 records, are
+  unaffected -- still feeds both the trimmed grid highlighting and the 6
+  reused-stop cards above.

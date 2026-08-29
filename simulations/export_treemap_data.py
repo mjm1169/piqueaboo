@@ -785,6 +785,89 @@ def build_best_match_for_player(matches, seed, sim_idx, player, team, n_sims):
     return best
 
 
+def build_best_seasons(matches, teams, seed, static_xg, table_stories, zero_win_teams, tm, n_sims):
+    """
+    One full record per zero-title-win team -- Burnley/Sunderland/West
+    Ham/Wolves on the current data -- their own best-ever simulated finish
+    across the same 1,000,000 sims, feeding the roster's per-team cards for
+    the clubs that never win outright (see
+    notes/pl-xg-roster-card-candidates.md). All of the hard part
+    (per-sim, per-team position, which the big pass in run_big_pass_sweep1
+    discards once folded into running totals) already exists as a
+    byproduct of the curated tour's own "no wins" stop --
+    derive_table_stories's `no_wins` dict already holds every zero-win
+    team's best position and which sim it happened in, not just the single
+    one build_curated_tour picks for that one tour slot. This just adds
+    each team's own full final table and 38-game campaign log (the latter
+    via the same targeted build_campaign_for_sim() regeneration every
+    other campaign-carrying record already relies on) and keeps all of
+    them, not just the best-of-the-four.
+    """
+    records = []
+    for team in zero_win_teams:
+        rec = table_stories["no_wins"][team]
+        sim = rec["sim"]
+        final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], sim, teams)
+        campaign = build_campaign_for_sim(matches, seed, sim, team, static_xg, n_sims)
+        records.append({
+            "team": team, "sim": sim, "position": rec["position"], "champion": rec["champion"],
+            "final_table": final_table, "campaign": campaign,
+        })
+    return records
+
+
+# Editorial pick (see notes/pl-xg-roster-card-candidates.md): these clubs'
+# second roster-card story is their own biggest-margin title win rather than
+# a flagged game -- Tottenham's and Brighton's only flagged games are both
+# defeats (conceding a 6-goal haul in Tottenham's case), so a flagged-game
+# second story would read as unflattering for exactly the clubs that could
+# most use a positive one. Everton joined this list rather than getting a
+# golden-boot check (no flagged title-tie has them as champion either) --
+# the user's call, a straightforward league win over the cost of a new
+# per-club query on the golden-boot sweep. A fixed list, not a derived one:
+# unlike zero_win_teams this isn't "every club with some property", it's a
+# specific choice for these five.
+OWN_BIGGEST_MARGIN_TEAMS = ["Tottenham", "Fulham", "Brighton", "Brentford", "Everton"]
+
+
+def build_champion_margin_stories(matches, teams, seed, static_xg, tm, table_stories,
+                                   champion_idx, real_pos, target_teams, n_sims):
+    """
+    For each of `target_teams`, their own biggest-margin title win: the
+    largest points margin over the runner-up among just *that club's own*
+    title-winning sims -- not the single global biggest-margin instance
+    the curated tour's own `biggest_margin` stop already covers (Arsenal,
+    on the current data). Reuses the same table-metrics sweep output
+    (`tm`/`table_stories`) and already-shipped `champions.bin`
+    (`champion_idx`) as build_best_seasons / the curated tour -- no extra
+    sweep needed beyond what's already run for those. Record shape matches
+    the curated tour's own `biggest_margin` stop exactly (same `kind` on
+    the frontend, just a different team/sim), right down to the campaign
+    being the *team's own* 38-game log, not anyone else's.
+    """
+    points = tm["points"]
+    points_sorted = -np.sort(-points, axis=1)
+    margin = points_sorted[:, 0] - points_sorted[:, 1]
+    team_idx = {t: i for i, t in enumerate(teams)}
+
+    records = []
+    for team in target_teams:
+        ti = team_idx[team]
+        sims_as_champion = np.flatnonzero(champion_idx == ti)
+        if sims_as_champion.size == 0:
+            continue  # shouldn't happen for a team with title_count > 0, but don't crash if it ever does
+        best_sim = int(sims_as_champion[np.argmax(margin[sims_as_champion])])
+        final_table = build_final_table(tm["points"], tm["gf"], tm["ga"], table_stories["position"], best_sim, teams)
+        campaign = build_campaign_for_sim(matches, seed, best_sim, team, static_xg, n_sims)
+        records.append({
+            "team": team, "sim": best_sim, "champion": team,
+            "champion_real_position": int(real_pos[team]),
+            "margin": int(margin[best_sim]),
+            "final_table": final_table, "campaign": campaign,
+        })
+    return records
+
+
 def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
                         flagged_champions, flagged_title_ties, seed, static_xg,
                         final_day_indices, tm, table_stories, gb_stories, player_team, n_sims):
@@ -1106,6 +1189,13 @@ def main():
     parser.add_argument("--skip-curated-tour", action="store_true",
                          help="Reuse an existing curated-tour.json in --out-dir instead of re-running the "
                               "table-metrics/golden-boot sweeps")
+    parser.add_argument("--skip-best-seasons", action="store_true",
+                         help="Reuse an existing best-seasons.json in --out-dir instead of rebuilding it")
+    parser.add_argument("--skip-champion-margin-stories", action="store_true",
+                         help="Reuse an existing champion-margin-stories.json in --out-dir instead of rebuilding it")
+    parser.add_argument("--skip-story-pass", action="store_true",
+                         help="Skip the small 20,000-sim story-batch pass, leaving treemap-data.json untouched "
+                              "on disk instead of rewriting it (the pass is otherwise unconditional)")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -1178,10 +1268,21 @@ def main():
               f"({os.path.getsize(flagged_title_ties_path)/1024:.0f} KB)", file=sys.stderr)
 
     curated_tour_path = os.path.join(args.out_dir, "curated-tour.json")
-    if args.skip_curated_tour:
-        print(f"\n=== Curated tour: skipped, reusing {curated_tour_path} ===", file=sys.stderr)
+    best_seasons_path = os.path.join(args.out_dir, "best-seasons.json")
+    champion_margin_stories_path = os.path.join(args.out_dir, "champion-margin-stories.json")
+    zero_win_teams = [t for i, t in enumerate(teams) if title_counts[i] == 0]
+
+    # The table-metrics sweep (per-sim, per-team running position -- the one
+    # thing the big pass discards) feeds the curated tour's "no wins" stop,
+    # every zero-win team's own best-seasons.json record, and the editorial
+    # champion-margin-stories.json picks below, so it only gets skipped when
+    # none of the three outputs are wanted this run.
+    tm = table_stories = final_day_indices = None
+    if args.skip_curated_tour and args.skip_best_seasons and args.skip_champion_margin_stories:
+        print(f"\n=== Table-metrics sweep: skipped, reusing {curated_tour_path} / "
+              f"{best_seasons_path} / {champion_margin_stories_path} ===", file=sys.stderr)
     else:
-        print(f"\n=== Curated tour: table-metrics sweep, {args.sims:,} simulations ===", file=sys.stderr)
+        print(f"\n=== Table-metrics sweep: {args.sims:,} simulations ===", file=sys.stderr)
         final_day_indices, final_date = identify_final_matchday_indices(matches, len(teams))
         print(f"  final matchday identified as {final_date} ({len(final_day_indices)} matches)", file=sys.stderr)
 
@@ -1189,9 +1290,38 @@ def main():
         tm = run_table_metrics_sweep(matches, teams, args.sims, args.seed, final_day_indices)
         print(f"Done in {time.time()-t0:.1f}s", file=sys.stderr)
 
-        zero_win_teams = [t for i, t in enumerate(teams) if title_counts[i] == 0]
         table_stories = derive_table_stories(tm, champion_idx, teams, zero_win_teams)
 
+    if args.skip_best_seasons:
+        print(f"\n=== Best seasons: skipped, reusing {best_seasons_path} ===", file=sys.stderr)
+    else:
+        print(f"\n=== Best seasons: {len(zero_win_teams)} zero-win team(s) ===", file=sys.stderr)
+        best_seasons = build_best_seasons(matches, teams, args.seed, static_xg, table_stories,
+                                           zero_win_teams, tm, args.sims)
+        with open(best_seasons_path, "w") as f:
+            json.dump(best_seasons, f, separators=(",", ":"))
+        print(f"Wrote {len(best_seasons)} best-season record(s) to {best_seasons_path} "
+              f"({os.path.getsize(best_seasons_path)/1024:.0f} KB)", file=sys.stderr)
+        for r in best_seasons:
+            print(f"  [{r['team']}] best-ever position {r['position']} (sim #{r['sim']:,})", file=sys.stderr)
+
+    if args.skip_champion_margin_stories:
+        print(f"\n=== Champion margin stories: skipped, reusing {champion_margin_stories_path} ===", file=sys.stderr)
+    else:
+        print(f"\n=== Champion margin stories: {len(OWN_BIGGEST_MARGIN_TEAMS)} club(s) ===", file=sys.stderr)
+        champion_margin_stories = build_champion_margin_stories(
+            matches, teams, args.seed, static_xg, tm, table_stories,
+            champion_idx, real_pos, OWN_BIGGEST_MARGIN_TEAMS, args.sims)
+        with open(champion_margin_stories_path, "w") as f:
+            json.dump(champion_margin_stories, f, separators=(",", ":"))
+        print(f"Wrote {len(champion_margin_stories)} champion-margin record(s) to {champion_margin_stories_path} "
+              f"({os.path.getsize(champion_margin_stories_path)/1024:.0f} KB)", file=sys.stderr)
+        for r in champion_margin_stories:
+            print(f"  [{r['team']}] biggest title-winning margin {r['margin']} pts (sim #{r['sim']:,})", file=sys.stderr)
+
+    if args.skip_curated_tour:
+        print(f"\n=== Curated tour: skipped, reusing {curated_tour_path} ===", file=sys.stderr)
+    else:
         # Player index/team/real-season-goals, built once from the real
         # shots data -- no per-sim work here, just a lookup the golden
         # boot sweep and the curated-tour assembly both need.
@@ -1220,6 +1350,11 @@ def main():
               f"({os.path.getsize(curated_tour_path)/1024:.0f} KB)", file=sys.stderr)
         for stop in curated_tour:
             print(f"  [{stop['kind']}] sim #{stop['sim']:,}", file=sys.stderr)
+
+    data_path = os.path.join(args.out_dir, "treemap-data.json")
+    if args.skip_story_pass:
+        print(f"\n=== Story pass: skipped, leaving {data_path} untouched ===", file=sys.stderr)
+        return
 
     print(f"\n=== Story pass: {args.story_sims:,} simulations (full detail) ===", file=sys.stderr)
     t0 = time.time()
@@ -1264,7 +1399,6 @@ def main():
         "stories": stories,
     }
 
-    data_path = os.path.join(args.out_dir, "treemap-data.json")
     with open(data_path, "w") as f:
         json.dump(payload, f, separators=(",", ":"))
     size_kb = os.path.getsize(data_path) / 1024
