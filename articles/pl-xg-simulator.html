@@ -38,6 +38,158 @@
   .stat-line{ font-size:15px; color:var(--muted); font-weight:300; margin:4px 0 0 0; }
   .stat-line strong{ color:var(--ink); font-weight:500; }
 
+  /* ---------- shared scroll-reveal layout (re-roll one game / simulated
+     season) -- a sticky visual (pitch+scoreboard, or the league table)
+     alongside a normal-flow list that grows as the reader scrolls through
+     a fixed-height track. Simpler than due-date.html's scrub: there's no
+     pinned *text* here (only the visual is sticky), so none of that
+     page's pin/release timing math applies -- a track's scroll fraction
+     maps directly to "how many items are revealed", no calibration. ---------- */
+
+  .reveal-track{
+    display:grid; grid-template-columns: 42% 58%; gap:32px; align-items:start;
+    margin-top:28px;
+  }
+  /* top:var(--header-h) -- not a bare offset -- matters here: the site
+     header is itself position:sticky (see style.css), and nav.js sets
+     --header-h to its real rendered height for exactly this reason
+     (its own comment names due-date.html's sticky chart as the intended
+     user). A bare top:0/20px sticks this flush with the *viewport*, which
+     the also-stuck header then paints over -- the top of this content
+     (the home team's row, in the game-reroll section) ends up hidden
+     behind it, confirmed via a real screenshot before adding the var. */
+  .reveal-sticky-wrap{ position:sticky; top:calc(var(--header-h, 0px) + 20px); }
+  .reveal-visual{
+    background:var(--surface); border-radius:12px; padding:20px;
+  }
+  .reveal-list{ min-width:0; }
+
+  @media (max-width:860px){
+    .reveal-track{ grid-template-columns:1fr; gap:0; }
+    .reveal-sticky-wrap{
+      position:sticky; top:var(--header-h, 0px); z-index:2;
+      background:var(--canvas); padding:10px 0 14px 0;
+    }
+    .reveal-visual{ padding:14px; }
+  }
+
+  /* ---------- re-roll one game ---------- */
+
+  .game-scoreboard{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin-bottom:14px;
+  }
+  .scoreboard-side{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; min-width:0; }
+  .scoreboard-crest{ width:36px; height:36px; object-fit:contain; }
+  .scoreboard-team{ font-size:12px; font-weight:500; text-align:center; }
+  .scoreboard-scores{ display:flex; flex-direction:column; gap:4px; flex:none; }
+  .scoreboard-row{ display:flex; align-items:center; gap:8px; font-variant-numeric:tabular-nums; }
+  .scoreboard-row .scoreboard-label{
+    font-size:10px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--muted); width:60px; text-align:right;
+  }
+  .scoreboard-row .scoreboard-score{ font-size:20px; font-weight:500; min-width:52px; text-align:center; }
+  .scoreboard-row.sim .scoreboard-score{ color:var(--accent-step); }
+
+  @media (max-width:640px){
+    /* The 3-column row (crest+name | scores | crest+name) has no room for
+       a full team name at this width -- "Manchester United" wrapping to
+       two lines within its own narrow column pushed against the scores
+       column, cramped and hard to read. Stack instead: each team as a
+       compact horizontal crest+name row, the two scores side by side
+       (label above number) in between. */
+    .game-scoreboard{ flex-direction:column; align-items:stretch; gap:8px; }
+    .scoreboard-side{ flex-direction:row; justify-content:center; gap:8px; }
+    .scoreboard-crest{ width:24px; height:24px; }
+    .scoreboard-team{ font-size:13px; }
+    .scoreboard-scores{ flex-direction:row; justify-content:center; gap:28px; }
+    .scoreboard-row{ flex-direction:column; align-items:center; gap:2px; }
+    .scoreboard-row .scoreboard-label{ width:auto; text-align:center; }
+  }
+
+  .pitch-chart{ width:100%; height:auto; display:block; }
+  .pitch-line{ fill:none; stroke:#C9CDD3; stroke-width:1.5; }
+  /* The permanent mark a shot settles into once revealed -- team-coloured,
+     part-opacity ("fading but remaining faded"). The bright flash itself
+     is a separate, temporary circle overlaid at the same point (see
+     flashShot() below) rather than an animation on this element: a CSS
+     keyframe can't animate "back to whatever this element's own class
+     rule says" (fill:inherit resolves against the *parent*, not a sibling
+     class rule), so a transient sibling element is the simpler, correct
+     way to get flash-then-settle without fighting that. */
+  .pitch-shot{ opacity:0; transition:opacity .4s ease; }
+  .pitch-shot.revealed{ opacity:.55; }
+  .pitch-shot.home{ fill:var(--accent-step); }
+  .pitch-shot.away{ fill:var(--negative-step); }
+  .pitch-flash{ pointer-events:none; animation:pitch-flash-anim .7s ease-out forwards; }
+  .pitch-flash.goal{ fill:var(--positive-step); }
+  .pitch-flash.miss{ fill:var(--muted); }
+  @keyframes pitch-flash-anim{
+    0%{ r:16; opacity:.9; }
+    100%{ r:4; opacity:0; }
+  }
+
+  .pitch-legend{
+    display:flex; justify-content:center; gap:20px; margin-top:10px;
+    font-size:12px; color:var(--muted);
+  }
+  .pitch-legend .dot{
+    display:inline-block; width:9px; height:9px; border-radius:50%;
+    margin-right:5px; vertical-align:middle;
+  }
+  .pitch-legend .dot.home{ background:var(--accent-step); }
+  .pitch-legend .dot.away{ background:var(--negative-step); }
+
+  .game-log{ width:100%; border-collapse:collapse; font-size:13px; }
+  .game-log th{
+    text-align:left; font-weight:500; color:var(--muted); font-size:11px;
+    text-transform:uppercase; letter-spacing:.04em; padding:5px 6px;
+    border-bottom:1px solid #E5E5E5; position:sticky; top:0; background:var(--canvas);
+  }
+  /* Padding deliberately generous (not just legible-minimum) -- this row
+     height is what paces the whole scroll-driven reveal (the sticky
+     pitch+scoreboard stays pinned for as long as this list's own content
+     is taller than the viewport), so a cramped table would make all 39
+     shots dump out within less than one screen of scrolling. */
+  .game-log td{ padding:13px 6px; border-bottom:1px solid #EFEFEF; }
+  .game-log td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .game-log tr{ opacity:0; transition:opacity .25s ease; }
+  .game-log tr.revealed{ opacity:1; }
+  .game-log tr.revealed.is-goal{ background:rgba(138,170,5,.08); }
+  .game-log .real-goal{ color:var(--positive-step); font-weight:500; }
+  .game-log .sim-goal{ color:var(--accent-step); font-weight:500; }
+
+  /* ---------- simulated season ---------- */
+
+  .season-gw-label{
+    font-size:13px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--accent-step); font-weight:500; margin-bottom:10px;
+  }
+  .season-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .season-table th{
+    text-align:left; font-weight:500; color:var(--muted); font-size:10.5px;
+    text-transform:uppercase; letter-spacing:.04em; padding:4px 5px;
+    border-bottom:1px solid #E5E5E5;
+  }
+  .season-table td{ padding:3.5px 5px; border-bottom:1px solid #EFEFEF; }
+  .season-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .season-table tr.champion-row td{ font-weight:500; background:rgba(17,206,238,.08); }
+
+  .season-gw-block{ margin-bottom:18px; opacity:0; transition:opacity .3s ease; }
+  .season-gw-block.revealed{ opacity:1; }
+  .season-gw-block h4{
+    font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--muted); font-weight:500; margin:0 0 6px 0;
+  }
+  .season-result-row{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:13px; padding:4px 0; border-bottom:1px solid #F0F0F0;
+    gap:10px;
+  }
+  .season-result-row .score{ font-variant-numeric:tabular-nums; font-weight:500; flex:none; }
+  .season-result-row .home-team{ text-align:right; flex:1; }
+  .season-result-row .away-team{ text-align:left; flex:1; }
+
   /* ---------- treemap ---------- */
 
   .treemap-card{
@@ -372,6 +524,82 @@
     </details>
   </div>
 
+  <!-- ===================== re-roll one game ===================== -->
+
+  <section id="game-reroll-section">
+    <!-- HEADING: TBD -- user to fill in -->
+    <!-- INTRO COPY: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
+
+    <div class="reveal-track" id="game-reroll-track">
+      <div class="reveal-sticky-wrap">
+        <div class="reveal-visual">
+          <div class="game-scoreboard">
+            <div class="scoreboard-side">
+              <img class="scoreboard-crest" id="gr-home-crest" src="" alt="">
+              <span class="scoreboard-team" id="gr-home-name"></span>
+            </div>
+            <div class="scoreboard-scores">
+              <div class="scoreboard-row real">
+                <span class="scoreboard-label">Real</span>
+                <span class="scoreboard-score" id="gr-real-score">0–0</span>
+              </div>
+              <div class="scoreboard-row sim">
+                <span class="scoreboard-label">Simulated</span>
+                <span class="scoreboard-score" id="gr-sim-score">0–0</span>
+              </div>
+            </div>
+            <div class="scoreboard-side">
+              <img class="scoreboard-crest" id="gr-away-crest" src="" alt="">
+              <span class="scoreboard-team" id="gr-away-name"></span>
+            </div>
+          </div>
+
+          <svg id="pitch-svg" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+            <g id="pitch-markings"></g>
+            <g id="pitch-shots"></g>
+          </svg>
+
+          <div class="pitch-legend">
+            <span><i class="dot home"></i><span id="gr-home-legend"></span></span>
+            <span><i class="dot away"></i><span id="gr-away-legend"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal-list">
+        <table class="game-log">
+          <thead>
+            <tr><th>Min</th><th>Player</th><th class="num">xG</th><th>Real</th><th>Sim</th></tr>
+          </thead>
+          <tbody id="game-log-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== simulated season ===================== -->
+
+  <section id="season-reroll-section">
+    <!-- HEADING: TBD -- user to fill in -->
+    <!-- INTRO COPY: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
+
+    <div class="reveal-track" id="season-reroll-track">
+      <div class="reveal-sticky-wrap">
+        <div class="reveal-visual">
+          <div class="season-gw-label" id="season-gw-label">Kick-off</div>
+          <table class="season-table">
+            <thead>
+              <tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr>
+            </thead>
+            <tbody id="season-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="reveal-list" id="season-results-body"></div>
+    </div>
+  </section>
+
   <!-- ===================== treemap ===================== -->
 
   <section id="treemap-section">
@@ -529,6 +757,211 @@
     </div>
   </div>
 </div>
+
+<!-- ===================== re-roll one game / simulated season ===================== -->
+<script>
+(async function(){
+  var teamsMeta = await fetch('../assets/logos/clubs/teams_2025_26.json').then(function(r){ return r.json(); });
+  function crestPath(team){ return '../assets/logos/clubs/' + teamsMeta[team].crest_file; }
+
+  /* =========================================================
+     SHARED: scroll-driven reveal
+     Maps a track's own scroll fraction to a discrete step count
+     (0..totalSteps), calling onChange(count) whenever it changes.
+     Simpler than due-date.html's scrub: nothing here is *pinned* --
+     only the visual half of each section is sticky (plain CSS
+     position:sticky, no JS-calibrated height), so the list column's own
+     natural content height already *is* the scrollable distance. No
+     pin/release timing to get right, just "how far through this track
+     has the reader scrolled".
+     ========================================================= */
+  function makeScrollReveal(trackEl, totalSteps, onChange){
+    var last = -1;
+    function update(){
+      var rect = trackEl.getBoundingClientRect();
+      var vh = window.innerHeight;
+      if(rect.top > vh || rect.bottom < 0) return; // track nowhere near the viewport -- nothing to do
+      var scrollable = Math.max(1, trackEl.offsetHeight - vh);
+      var scrolled = Math.max(0, Math.min(scrollable, -rect.top));
+      var count = Math.min(totalSteps, Math.max(0, Math.round((scrolled / scrollable) * totalSteps)));
+      if(count !== last){ last = count; onChange(count); }
+    }
+    var raf = null;
+    function request(){ if(raf === null) raf = requestAnimationFrame(function(){ raf = null; update(); }); }
+    window.addEventListener('scroll', request, { passive: true });
+    window.addEventListener('resize', request);
+    request();
+  }
+
+  /* =========================================================
+     RE-ROLL ONE GAME
+     ========================================================= */
+  (function(){
+    var track = document.getElementById('game-reroll-track');
+    if(!track) return;
+
+    fetch('pl-treemap-data/game-reroll-data.json').then(function(r){ return r.json(); }).then(function(game){
+      document.getElementById('gr-home-crest').src = crestPath(game.home_team);
+      document.getElementById('gr-home-crest').alt = game.home_team + ' crest';
+      document.getElementById('gr-home-name').textContent = game.home_team;
+      document.getElementById('gr-away-crest').src = crestPath(game.away_team);
+      document.getElementById('gr-away-crest').alt = game.away_team + ' crest';
+      document.getElementById('gr-away-name').textContent = game.away_team;
+      document.getElementById('gr-home-legend').textContent = game.home_team;
+      document.getElementById('gr-away-legend').textContent = game.away_team;
+
+      /* ---- pitch markings, drawn once ---- */
+      var PW = 600, PH = 400, PAD = 10;
+      var BOX_W = 96, BOX_H = 220, SIX_W = 34, SIX_H = 96;
+      var markings = document.getElementById('pitch-markings');
+      markings.innerHTML =
+          '<rect class="pitch-line" x="' + PAD + '" y="' + PAD + '" width="' + (PW - 2*PAD) + '" height="' + (PH - 2*PAD) + '"></rect>'
+        + '<line class="pitch-line" x1="' + (PW/2) + '" y1="' + PAD + '" x2="' + (PW/2) + '" y2="' + (PH-PAD) + '"></line>'
+        + '<circle class="pitch-line" cx="' + (PW/2) + '" cy="' + (PH/2) + '" r="45"></circle>'
+        + '<circle fill="#C9CDD3" cx="' + (PW/2) + '" cy="' + (PH/2) + '" r="2.5"></circle>'
+        // left penalty box + six-yard box + spot
+        + '<rect class="pitch-line" x="' + PAD + '" y="' + ((PH-BOX_H)/2) + '" width="' + BOX_W + '" height="' + BOX_H + '"></rect>'
+        + '<rect class="pitch-line" x="' + PAD + '" y="' + ((PH-SIX_H)/2) + '" width="' + SIX_W + '" height="' + SIX_H + '"></rect>'
+        + '<circle fill="#C9CDD3" cx="' + (PAD+70) + '" cy="' + (PH/2) + '" r="2.5"></circle>'
+        // right (mirrored)
+        + '<rect class="pitch-line" x="' + (PW-PAD-BOX_W) + '" y="' + ((PH-BOX_H)/2) + '" width="' + BOX_W + '" height="' + BOX_H + '"></rect>'
+        + '<rect class="pitch-line" x="' + (PW-PAD-SIX_W) + '" y="' + ((PH-SIX_H)/2) + '" width="' + SIX_W + '" height="' + SIX_H + '"></rect>'
+        + '<circle fill="#C9CDD3" cx="' + (PW-PAD-70) + '" cy="' + (PH/2) + '" r="2.5"></circle>';
+
+      /* ---- shot markers + log rows, pre-rendered, revealed progressively ---- */
+      var shotsG = document.getElementById('pitch-shots');
+      var svgNS = 'http://www.w3.org/2000/svg';
+      function shotXY(shot){
+        // Understat's X/Y are normalised 0..1 from the SHOOTING side's own
+        // attacking perspective (always toward X=1) -- mirror the away
+        // side's so both plot correctly onto one continuous pitch, home
+        // attacking right, away attacking left.
+        var x = shot.x, y = shot.y;
+        if(!shot.is_home){ x = 1-x; y = 1-y; }
+        return [PAD + x*(PW-2*PAD), PAD + y*(PH-2*PAD)];
+      }
+      function shotRadius(xg){ return Math.max(3, Math.min(14, 3 + Math.sqrt(xg)*13)); } // area-proportional to xG
+
+      var shotEls = game.shots.map(function(shot){
+        var pos = shotXY(shot);
+        var el = document.createElementNS(svgNS, 'circle');
+        el.setAttribute('cx', pos[0]); el.setAttribute('cy', pos[1]);
+        el.setAttribute('r', shotRadius(shot.xg));
+        el.setAttribute('class', 'pitch-shot ' + (shot.is_home ? 'home' : 'away'));
+        shotsG.appendChild(el);
+        return el;
+      });
+
+      function flashShot(el, isGoal){
+        var flash = document.createElementNS(svgNS, 'circle');
+        flash.setAttribute('cx', el.getAttribute('cx'));
+        flash.setAttribute('cy', el.getAttribute('cy'));
+        flash.setAttribute('class', 'pitch-flash ' + (isGoal ? 'goal' : 'miss'));
+        flash.addEventListener('animationend', function(){ flash.remove(); });
+        shotsG.appendChild(flash);
+      }
+
+      var logBody = document.getElementById('game-log-body');
+      var logRows = game.shots.map(function(shot){
+        var tr = document.createElement('tr');
+        var realCell = shot.real_goal ? '<span class="real-goal">Goal</span>' : shot.real_result.replace(/([A-Z])/g, ' $1').trim();
+        var simCell = shot.sim_goal ? '<span class="sim-goal">Goal</span>' : 'No goal';
+        tr.innerHTML = '<td>' + shot.minute + '\'</td><td>' + shot.player + '</td>'
+          + '<td class="num">' + shot.xg.toFixed(2) + '</td><td>' + realCell + '</td><td>' + simCell + '</td>';
+        logBody.appendChild(tr);
+        return tr;
+      });
+
+      var scoreEl = { real: document.getElementById('gr-real-score'), sim: document.getElementById('gr-sim-score') };
+      var revealed = 0;
+      function revealTo(count){
+        for(var i = revealed; i < count; i++){
+          shotEls[i].classList.add('revealed');
+          flashShot(shotEls[i], game.shots[i].sim_goal);
+          logRows[i].classList.add('revealed');
+          if(game.shots[i].sim_goal) logRows[i].classList.add('is-goal');
+        }
+        for(var j = count; j < revealed; j++){
+          shotEls[j].classList.remove('revealed');
+          logRows[j].classList.remove('revealed', 'is-goal');
+        }
+        revealed = count;
+        var real = count > 0 ? game.shots[count-1].real_score : [0,0];
+        var sim = count > 0 ? game.shots[count-1].sim_score : [0,0];
+        scoreEl.real.textContent = real[0] + '–' + real[1];
+        scoreEl.sim.textContent = sim[0] + '–' + sim[1];
+      }
+
+      makeScrollReveal(track, game.shots.length, revealTo);
+    });
+  })();
+
+  /* =========================================================
+     SIMULATED SEASON
+     ========================================================= */
+  (function(){
+    var track = document.getElementById('season-reroll-track');
+    if(!track) return;
+
+    fetch('pl-treemap-data/season-reroll-data.json').then(function(r){ return r.json(); }).then(function(season){
+      var resultsBody = document.getElementById('season-results-body');
+      var tableBody = document.getElementById('season-table-body');
+      var gwLabel = document.getElementById('season-gw-label');
+
+      var gwBlocks = season.gameweeks.map(function(gw){
+        var div = document.createElement('div');
+        div.className = 'season-gw-block';
+        var rows = gw.matches.map(function(m){
+          return '<div class="season-result-row">'
+            + '<span class="home-team">' + m.home_team + '</span>'
+            + '<span class="score">' + m.home_goals + '–' + m.away_goals + '</span>'
+            + '<span class="away-team">' + m.away_team + '</span></div>';
+        }).join('');
+        div.innerHTML = '<h4>Gameweek ' + gw.gameweek + '</h4>' + rows;
+        resultsBody.appendChild(div);
+        return div;
+      });
+
+      // All-zero table, alphabetical -- shown before any gameweek has revealed.
+      var zeroTable = season.gameweeks[0].table
+        .map(function(r){ return { team: r.team, position: 0, points: 0, gd: 0, w: 0, d: 0, l: 0 }; })
+        .sort(function(a, b){ return a.team < b.team ? -1 : 1; });
+
+      function renderTable(rows, championTeam){
+        var sorted = rows.slice().sort(function(a, b){ return (a.position||99) - (b.position||99); });
+        tableBody.innerHTML = sorted.map(function(r){
+          var cls = (championTeam && r.team === championTeam) ? ' class="champion-row"' : '';
+          return '<tr' + cls + '><td>' + (r.position || '–') + '</td><td>' + r.team + '</td>'
+            + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
+            + '<td class="num">' + r.w + '</td><td class="num">' + r.d + '</td><td class="num">' + r.l + '</td></tr>';
+        }).join('');
+      }
+      renderTable(zeroTable, null);
+
+      var revealed = 0;
+      function revealTo(count){
+        for(var i = revealed; i < count; i++) gwBlocks[i].classList.add('revealed');
+        for(var j = count; j < revealed; j++) gwBlocks[j].classList.remove('revealed');
+        revealed = count;
+        if(count === 0){
+          gwLabel.textContent = 'Kick-off';
+          renderTable(zeroTable, null);
+        } else {
+          var gw = season.gameweeks[count - 1];
+          gwLabel.textContent = 'Gameweek ' + gw.gameweek;
+          // Only the truly final table gets the champion highlighted --
+          // whoever's top mid-season isn't necessarily who ends up there,
+          // and this particular season's real story is a title race that
+          // stays live deep into it.
+          renderTable(gw.table, count === season.gameweeks.length ? season.champion : null);
+        }
+      }
+
+      makeScrollReveal(track, season.gameweeks.length, revealTo);
+    });
+  })();
+})();
+</script>
 
 <script>
 (async function(){

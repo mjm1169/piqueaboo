@@ -1079,3 +1079,126 @@ for the actual text and visual direction before drafting either.
   not a measurement bug) -- widened to 86px, matching-or-exceeding the
   mobile breakpoint's already-correct 80px rather than being narrower
   than it.
+
+  **2026-08-30, done — two new scroll-driven sections: "re-roll one game"
+  and "simulated season", both with placeholder headings/copy for the
+  user to fill in.** User request: pick a match and, if shot-position
+  data is available, visualise it on a pitch as the reader scrolls, each
+  shot sized proportional to xG, flashing on its result then settling
+  into a faded, still-visible state, with an accompanying log (minute,
+  player, xG, real result, sim result) and a scoreboard; separately, a
+  380-game simulated season revealed 10 games (one gameweek) at a time
+  with an updating league table alongside, with the existing treemap
+  moved to sit underneath it. Four clarifying questions asked up front
+  (page order, which match, which season, pacing) — user picked the
+  recommended option on all four: intro → game re-roll → season re-roll
+  → treemap → (simulator/Leicester unchanged); Man Utd vs Bournemouth for
+  the game; a dramatic curated sim left to Claude's pick for the season;
+  pure one-gameweek-per-scroll-step pacing.
+  **Backend, two new scripts under `simulations/`**: `export_game_reroll.py`
+  re-rolls one real match's shots as independent Bernoulli(xG) draws under
+  a dedicated fixed seed (`GAME_REROLL_SEED = 20260051`, chosen by
+  searching a seed range for a genuinely divergent outcome, not the first
+  one tried) — real Man Utd 4-4 Bournemouth, sim 4-5 to Bournemouth.
+  Output: `articles/pl-treemap-data/game-reroll-data.json` (39 shots, each
+  carrying minute/player/team/x/y/xG/real+sim result/running scoreline).
+  `export_season_reroll.py` regenerates one full 1,000,000-sim-universe
+  season (sim #41197, the same sim already told as the curated tour's
+  `closest_tiebreak` stop — chosen so this section's climax is a title
+  race already known to be dramatic, not a fresh unvetted pick) as 38
+  real, chronologically-ordered gameweeks with a running table after
+  each. Two correctness issues caught before/during building, both by
+  deliberate verification rather than assumption: (1) a first draft used
+  a truncated `(sim+1, ...)` draw shape, which I initially reasoned was
+  safe for a single fixed sim number — recognised on reflection as the
+  same `draws_h`/`draws_a` sequential-stream-desync bug this codebase has
+  hit before (see the 2026-08-29 entries above), since `draws_a`'s
+  starting position in the RNG stream depends on how many values
+  `draws_h` consumed, which depends on the requested row count, not on
+  which row is kept; fixed by requiring the full `n_sims=1,000,000` shape
+  via a new `--n-sims` flag, matching every other script that touches
+  `champions.bin`'s universe. (2) Reconstructing "real gameweeks" from
+  380 date-sorted results is not just chunking every 10 by date — the
+  real fixture list has rearranged/rescheduled matches, so naive chunking
+  measurably broke the "every team has played the same number of games at
+  each step" property (32 inconsistencies across 10 of 38 rounds,
+  confirmed by directly counting games-played per team per round before
+  attempting any fix). A first-fit greedy placement got stuck outright
+  (a match with no legal round left); a single maximum-weight matching
+  per round always found a valid round but scrambled chronology (round
+  2 predating round 1, confirmed via printed date ranges). Landed on
+  `earliest_perfect_matching`: grow a candidate window from the front of
+  the date-sorted remaining list one match at a time, taking the
+  smallest window that contains a perfect (10-edge) matching via
+  `networkx.max_weight_matching(maxcardinality=True)` — the common case
+  (no scheduling conflict) resolves immediately from just the 10
+  earliest, and only widens when a real conflict forces it. Verified: 0
+  games-played inconsistencies across all 38 rounds × 20 teams; 380
+  unique matches; Newcastle's full 38-game campaign log cross-checked
+  exactly against the independently-generated `flagged-title-ties.json`
+  record (0 mismatches); final table matches that record exactly (the
+  final gameweek's table is deliberately overwritten with it rather than
+  this script's own simpler points/GD/GF sort, so the title-deciding
+  tiebreak is never told two slightly different ways). Runtime ~54s for
+  the full regeneration across 380 matches. Output:
+  `articles/pl-treemap-data/season-reroll-data.json` (38 gameweeks, 110KB).
+  **Frontend, `pl-xg-simulator.html`**: two new `<section>`s inserted
+  between the intro and the (already-present) treemap section, each with
+  `<!-- HEADING: TBD -->`/`<!-- INTRO COPY: TBD -->` placeholders per this
+  file's own authorship convention — no heading or narrative copy
+  authored on my own initiative. Both share a new `.reveal-track` CSS
+  grid (a sticky visual column beside a plain-flow log/results column)
+  and a shared `makeScrollReveal(trackEl, totalSteps, onChange)` helper —
+  one scroll-fraction-to-step-count mapping reused for both sections
+  rather than two bespoke ones. Game re-roll: an SVG pitch (mirrored
+  understat X/Y so home and away shots both plot correctly toward
+  opposite ends), shots pre-rendered as circles sized
+  `max(3, min(14, 3+sqrt(xG)*13))` and revealed in scroll order via a
+  `.revealed` opacity toggle; each reveal also spawns a short-lived
+  `.pitch-flash` overlay circle (goal/no-goal coloured,
+  `@keyframes pitch-flash-anim` shrinking+fading it out) — deliberately a
+  *separate* transient element rather than an animation that "returns" a
+  shot's own fill to its resting colour, since a first attempt at the
+  latter used `fill:inherit` inside a keyframe block, which resolves
+  against the parent element rather than the sibling CSS class rule and
+  silently does nothing. A scoreboard and a minute/player/xG/result/result
+  log accompany it. Season re-roll: 38 pre-rendered `.season-gw-block`
+  divs (opacity-toggled the same way) beside a sticky running table,
+  champion-row highlighting gated to the final step only.
+  **Verification, iterative and Playwright-driven throughout, not just
+  code review**: (1) reveal pacing — the game-reroll track initially came
+  out too short for its own 39-shot log (1269px, under one extra
+  scroll-screen), read as too fast; fixed by widening `.game-log td`
+  padding (5px→13px vertical), re-measured at 1893px (~1.1 extra
+  screens), then re-confirmed via a scripted scroll sweep (0/0.15/0.5/
+  0.85/1.0 fractions) that shot count, log rows, and both scorelines
+  advance together and land on the correct real/sim final scores (4-4 /
+  4-5) at the end. (2) mobile scoreboard — an initial 3-column flex row
+  let "Manchester United" wrap and crowd the score column at 390px;
+  fixed with a dedicated `@media (max-width:640px)` stacked-row layout,
+  confirmed via `getBoundingClientRect()` plus a screenshot. (3) a real,
+  non-cosmetic bug: `getBoundingClientRect()` reported the game-reroll
+  scoreboard's home-team row as on-screen (top:25.6px) while a screenshot
+  at the same scroll position showed it hidden — traced to the site's own
+  sticky header (`assets/css/style.css`) painting over content that used
+  a plain hardcoded `top:20px`/`top:0` instead of the `--header-h`
+  custom property `assets/js/nav.js` sets specifically for pages with
+  their own sticky elements (the same mechanism due-date.html's sticky
+  chart already correctly uses). Fixed
+  (`top:calc(var(--header-h, 0px) + 20px)` desktop,
+  `top:var(--header-h, 0px)` mobile) and reconciled: re-measured
+  `getBoundingClientRect()` (top:0 → top:81) and re-screenshotted both
+  the game-reroll and season-reroll sections on desktop and mobile,
+  confirming the scoreboard/table now render fully visible below the
+  header. (4) final full-page regression: a fresh scroll-through of the
+  entire page in both viewports (desktop 1280×900, mobile 390×844)
+  listening for page/console errors — zero real errors on either; the
+  one console error present on both (`ERR_CONNECTION_RESET` fetching
+  Google Fonts) is the same pre-existing, unrelated sandbox network
+  block this file's history has already flagged elsewhere (this
+  sandbox has no external network access), confirmed by finding its
+  source (`assets/css/style.css`'s `@import url('https://fonts.googleapis.com/...')`)
+  rather than assumed. Not pushed to `main` — left on
+  `claude/pull-latest-main-m1y2cg` per the user's own review-then-merge
+  pattern throughout this session; headings and intro copy for both new
+  sections are still the user's own to write.
