@@ -1202,3 +1202,106 @@ for the actual text and visual direction before drafting either.
   `claude/pull-latest-main-m1y2cg` per the user's own review-then-merge
   pattern throughout this session; headings and intro copy for both new
   sections are still the user's own to write.
+  Merged to `main` on explicit request the same round (fast-forward,
+  `4ac26c7..41f50f5`).
+
+  **2026-08-30, later — mobile fixes for both new sections: a shorter
+  match, a smaller pitch, a real scroll-pacing bug, and a compact league
+  table.** User feedback after seeing the merged sections on a phone: the
+  pitch viz "isn't working well on mobile" and should use a match with
+  fewer shots; the shot log "needs more space on mobile" with shots
+  "appearing faster and more reliably"; the season section's league table
+  "takes up too much space" on mobile, to be shrunk-and-simplified or, if
+  that's not reasonably possible, dropped there.
+  **Fewer shots**: swapped the game-reroll match from Man Utd 4-4
+  Bournemouth (39 shots) to Newcastle United 2-3 Liverpool (15 shots --
+  genuinely light against the CSV-wide median of 25, not just "a bit
+  fewer"), re-seeded (`GAME_REROLL_SEED = 20260011`, found the same way
+  as before: searching a seed range for a genuinely divergent outcome --
+  this one flips a 2-3 away loss into a 2-1 home win, a real turnaround
+  rather than just a different scoreline on the same side winning).
+  **Smaller pitch / more room for the log**: root-caused why the sticky
+  pitch+scoreboard was crowding the log off-screen on mobile before
+  touching anything -- at full column width the pitch alone (600:400
+  aspect ratio) plus the scoreboard was eating most of a 390-wide
+  viewport's height, since mobile stacks the sticky visual and the list
+  in one column rather than side-by-side. Capped `.pitch-chart`'s own
+  width (not the whole `.reveal-visual`, which would've cramped the
+  scoreboard/legend too) via a `max-width:230px` mobile rule -- shrinks
+  the pitch in both dimensions at its fixed aspect ratio without touching
+  desktop. Measured before/after rather than eyeballing it: the sticky
+  visual's own rendered height dropped from what the original 39-shot/
+  full-width pitch would have needed to 339px, leaving 505 of the 844px
+  viewport for the log -- confirmed via `offsetHeight` on the real
+  rendered page, not estimated.
+  **A real scroll-pacing regression, caught before shipping**: swapping
+  in a much shorter match (15 shots instead of 39) had an unintended
+  side effect on *both* viewports, not just mobile -- `makeScrollReveal`
+  paces the reveal across `trackEl.offsetHeight - viewport height`, and
+  with a short enough log that "scrollable" distance collapses toward
+  zero (measured: mobile dropped to 78px total, and *desktop* -- a
+  two-column layout where this hadn't been touched at all -- clamped to
+  1px, meaning the entire 15-shot reveal happened within about a single
+  pixel of scroll, effectively breaking the scroll-driven reveal
+  outright, confirmed by scroll-testing desktop and finding it stuck
+  showing 12/15 shots at the scroll position that should have been the
+  end). This is exactly the failure mode "shots appearing faster and
+  more reliably" pointed at, just more severe than the report suggested
+  once actually measured. Fixed with a new `ensureMinScrollable(trackEl,
+  minScrollablePx)` helper: tops up `.reveal-list`'s own bottom padding
+  by whatever shortfall remains between the track's real rendered height
+  and a guaranteed minimum scrollable distance (measured post-layout via
+  `requestAnimationFrame`, re-measured on resize), rather than
+  hand-tuning row padding per breakpoint to indirectly manufacture enough
+  height -- this decouples *scroll pacing* (now a deliberate, guaranteed
+  minimum, 420px for the game-reroll track) from *row density* (now a
+  free legibility choice), and works identically on both the mobile
+  stacked layout and the desktop side-by-side one since it operates on
+  the track's actual measured geometry either way. Confirmed empirically,
+  not just reasoned about: makeScrollReveal spreads a reveal across the
+  *entire* scrollable range regardless of what makes it up, so the padding
+  top-up doesn't create a "dead" scroll tail after the log finishes
+  revealing -- the last shot lands exactly as the sticky visual releases,
+  verified by scroll-sampling both viewports and confirming 15/15 shots
+  (and the correct final 2-3/2-1 scoreline) exactly at the track's own
+  computed end, not before or after. With pacing decoupled, mobile's log
+  row padding was independently retuned for density (13px down to 9px
+  vertical, a legibility choice now, not a pacing one).
+  **Season table, shrunk and simplified rather than dropped**: tried
+  shrinking first (smaller font/padding under the existing single-column
+  breakpoint), but a 20-row table can't be shrunk far without becoming
+  illegible, and shrinking alone doesn't fix the real problem -- 20 rows
+  is 20 rows regardless of font size. Simplified instead: past the same
+  860px breakpoint `.reveal-track` itself already switches to a stacked
+  single column at (the point the table actually starts competing with
+  the results feed for screen space, not an arbitrary phone-only cutoff),
+  `renderTable()` now renders a compact top 4 + bottom 3 (7 rows, plus a
+  "···" gap row) instead of all 20 -- still the two things that actually
+  carry this sim's own drama (the title race decided on a tiebreak, the
+  relegation fight), just without the mid-table noise nobody's tracking
+  gameweek to gameweek. Driven by a live `matchMedia` query (not a one-off
+  width check at load), re-rendering on a resize/rotation across the
+  breakpoint so it can't get stuck compact on a resized-wider window or
+  vice versa; verified both states directly (mobile: 8 `<tr>`s including
+  the ellipsis row at every gameweek sampled, champion row correctly
+  appearing only once the final table's own highlighting logic says so;
+  desktop: unchanged at a full 20 rows, no ellipsis, confirming the
+  breakpoint gate actually gates). Chose shrink-and-simplify over
+  dropping the section outright since the compact form still delivers
+  the section's own point (an updating table alongside the results) on
+  every viewport, just sized to what a phone screen can actually hold.
+  **Verified end-to-end**, all fixes together: mobile scroll-sampling
+  across both new sections' full tracks (shot/row counts and both
+  scorelines advancing correctly; gameweek label, compact table contents,
+  and champion highlighting all correct at every sampled point);
+  before/after screenshots on mobile showing the shrunk pitch, the now
+  clearly-visible log beneath it, and the compact league table; a fresh
+  desktop screenshot confirming the shorter match and restored reveal
+  still render correctly there too; and a final full-page scroll-through
+  regression on both viewports with zero real page errors (the one
+  console error present on both, `ERR_CONNECTION_RESET` fetching Google
+  Fonts, is the same pre-existing sandbox network block this file's
+  history has already flagged repeatedly, confirmed by its source rather
+  than assumed). Pushed to `claude/pull-latest-main-m1y2cg`; not merged
+  to `main` this round -- back on the review-then-merge pattern until the
+  user asks.

@@ -68,9 +68,9 @@
     .reveal-track{ grid-template-columns:1fr; gap:0; }
     .reveal-sticky-wrap{
       position:sticky; top:var(--header-h, 0px); z-index:2;
-      background:var(--canvas); padding:10px 0 14px 0;
+      background:var(--canvas); padding:8px 0 10px 0;
     }
-    .reveal-visual{ padding:14px; }
+    .reveal-visual{ padding:12px; }
   }
 
   /* ---------- re-roll one game ---------- */
@@ -98,13 +98,24 @@
        column, cramped and hard to read. Stack instead: each team as a
        compact horizontal crest+name row, the two scores side by side
        (label above number) in between. */
-    .game-scoreboard{ flex-direction:column; align-items:stretch; gap:8px; }
+    .game-scoreboard{ flex-direction:column; align-items:stretch; gap:6px; margin-bottom:8px; }
     .scoreboard-side{ flex-direction:row; justify-content:center; gap:8px; }
-    .scoreboard-crest{ width:24px; height:24px; }
+    .scoreboard-crest{ width:22px; height:22px; }
     .scoreboard-team{ font-size:13px; }
     .scoreboard-scores{ flex-direction:row; justify-content:center; gap:28px; }
     .scoreboard-row{ flex-direction:column; align-items:center; gap:2px; }
     .scoreboard-row .scoreboard-label{ width:auto; text-align:center; }
+
+    /* The pitch is the single biggest item in the sticky visual -- at
+       full width on a phone it (plus the scoreboard) can eat almost the
+       whole viewport, leaving barely any of the shot log visible beneath
+       it (reported directly: "the shot log needs more space on mobile").
+       Capping its own width (rather than the whole .reveal-visual, which
+       would also cramp the scoreboard/legend) shrinks it in both
+       dimensions at its fixed 600:400 aspect ratio, freeing real vertical
+       room for the log without touching desktop at all. */
+    .pitch-chart{ max-width:230px; margin:0 auto; }
+    .pitch-legend{ margin-top:6px; font-size:11px; gap:14px; }
   }
 
   .pitch-chart{ width:100%; height:auto; display:block; }
@@ -146,11 +157,12 @@
     text-transform:uppercase; letter-spacing:.04em; padding:5px 6px;
     border-bottom:1px solid #E5E5E5; position:sticky; top:0; background:var(--canvas);
   }
-  /* Padding deliberately generous (not just legible-minimum) -- this row
-     height is what paces the whole scroll-driven reveal (the sticky
-     pitch+scoreboard stays pinned for as long as this list's own content
-     is taller than the viewport), so a cramped table would make all 39
-     shots dump out within less than one screen of scrolling. */
+  /* Row padding here is purely a legibility/density choice -- it no
+     longer has to double as the reveal's scroll-pacing lever (that used
+     to be true: a cramped table meant all the shots dumping out within
+     less than one screen of scrolling), since ensureMinScrollable now
+     guarantees a real minimum scroll-linked distance directly, however
+     tall this table happens to render. */
   .game-log td{ padding:13px 6px; border-bottom:1px solid #EFEFEF; }
   .game-log td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .game-log tr{ opacity:0; transition:opacity .25s ease; }
@@ -158,6 +170,15 @@
   .game-log tr.revealed.is-goal{ background:rgba(138,170,5,.08); }
   .game-log .real-goal{ color:var(--positive-step); font-weight:500; }
   .game-log .sim-goal{ color:var(--accent-step); font-weight:500; }
+
+  @media (max-width:640px){
+    /* Denser than desktop's rows -- pure legibility/space trade for a
+       narrow screen (more of the log visible at once), safe to do on its
+       own now that row height and scroll pacing are decoupled (see
+       ensureMinScrollable). */
+    .game-log{ font-size:12.5px; }
+    .game-log td{ padding:9px 5px; }
+  }
 
   /* ---------- simulated season ---------- */
 
@@ -174,6 +195,30 @@
   .season-table td{ padding:3.5px 5px; border-bottom:1px solid #EFEFEF; }
   .season-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .season-table tr.champion-row td{ font-weight:500; background:rgba(17,206,238,.08); }
+  /* The gap row standing in for the hidden mid-table in compact mode (see
+     renderTable's isCompact branch) -- a plain row, not a <tbody> split,
+     so it stays inside the same table/columns rather than needing its
+     own layout. */
+  .season-table tr.table-ellipsis td{
+    text-align:center; color:var(--muted); font-size:11px;
+    padding:2px 5px; letter-spacing:.1em;
+  }
+
+  @media (max-width:860px){
+    /* All 20 rows of a full table, sticky above the results feed, was
+       reported as taking up too much of the screen on mobile -- shrinking
+       font/padding alone (below) helps but a 20-row table is still a
+       20-row table. Past this breakpoint (matching .reveal-track's own
+       single-column switch, which is when the table actually competes
+       with the feed for screen space) renderTable() renders a compact
+       top 4 + bottom 3 instead of all 20 -- still the two things that
+       actually carry the drama here (the title race, the relegation
+       fight), just without the mid-table noise. */
+    .season-gw-label{ font-size:12px; margin-bottom:6px; }
+    .season-table{ font-size:11.5px; }
+    .season-table th{ font-size:9.5px; padding:3px 4px; }
+    .season-table td{ padding:3px 4px; }
+  }
 
   .season-gw-block{ margin-bottom:18px; opacity:0; transition:opacity .3s ease; }
   .season-gw-block.revealed{ opacity:1; }
@@ -773,7 +818,9 @@
      position:sticky, no JS-calibrated height), so the list column's own
      natural content height already *is* the scrollable distance. No
      pin/release timing to get right, just "how far through this track
-     has the reader scrolled".
+     has the reader scrolled" -- though see ensureMinScrollable just
+     below for what happens when that natural distance is too short to
+     make a real reveal out of.
      ========================================================= */
   function makeScrollReveal(trackEl, totalSteps, onChange){
     var last = -1;
@@ -791,6 +838,36 @@
     window.addEventListener('scroll', request, { passive: true });
     window.addEventListener('resize', request);
     request();
+  }
+
+  /* Guarantees a track has at least minScrollablePx of real scroll-linked
+     reveal distance, regardless of how tall its own content happens to
+     render. Needed once the game-reroll match was swapped for a shorter
+     one (15 shots, not 39, per mobile feedback): makeScrollReveal spreads
+     a reveal across trackEl.offsetHeight minus the viewport height, and a
+     short-enough log can leave that at (or clamped to) almost nothing --
+     confirmed happening on the shorter match, both viewports, before this
+     existed (desktop: the whole 15-shot reveal completed within about a
+     pixel of scroll) -- the whole point of a *scroll-driven* reveal lost
+     to a table that just wasn't tall enough to need scrolling through.
+     Tops up .reveal-list's own bottom padding by exactly the shortfall
+     (measured against real post-layout geometry, not a guessed constant)
+     rather than inflating row padding by hand -- keeps row density a
+     legibility choice, independent of scroll pacing, and adapts
+     automatically to viewport height/orientation. Not a "dead" scroll
+     tail: makeScrollReveal spreads the reveal across the *entire*
+     scrollable range regardless of what makes it up, so the last item
+     still lands exactly as the sticky visual releases, whether that
+     range is real content or this top-up. */
+  function ensureMinScrollable(trackEl, minScrollablePx){
+    var list = trackEl.querySelector('.reveal-list');
+    function apply(){
+      list.style.paddingBottom = '0px';
+      var shortfall = (window.innerHeight + minScrollablePx) - trackEl.offsetHeight;
+      list.style.paddingBottom = Math.max(0, shortfall) + 'px';
+    }
+    requestAnimationFrame(apply);
+    window.addEventListener('resize', function(){ requestAnimationFrame(apply); });
   }
 
   /* =========================================================
@@ -892,6 +969,7 @@
         scoreEl.sim.textContent = sim[0] + '–' + sim[1];
       }
 
+      ensureMinScrollable(track, 420);
       makeScrollReveal(track, game.shots.length, revealTo);
     });
   })();
@@ -927,16 +1005,38 @@
         .map(function(r){ return { team: r.team, position: 0, points: 0, gd: 0, w: 0, d: 0, l: 0 }; })
         .sort(function(a, b){ return a.team < b.team ? -1 : 1; });
 
+      // Full 20-row table reported as taking up too much of the mobile
+      // screen (sticky above the results feed, competing with it for the
+      // same viewport). Past this breakpoint -- the same one .reveal-track
+      // itself switches to a single stacked column at, since that's when
+      // the table genuinely starts costing feed space rather than sitting
+      // harmlessly beside it -- render a compact top 4 + bottom 3 instead
+      // of all 20: still the two things that actually carry this sim's
+      // drama (the title race, the relegation fight), just without the
+      // mid-table rows nobody's watching. matchMedia (not a one-off width
+      // check) so a resize/rotation across the breakpoint re-renders too.
+      var compactQuery = window.matchMedia('(max-width:860px)');
+      function rowHtml(r, championTeam){
+        var cls = (championTeam && r.team === championTeam) ? ' class="champion-row"' : '';
+        return '<tr' + cls + '><td>' + (r.position || '–') + '</td><td>' + r.team + '</td>'
+          + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
+          + '<td class="num">' + r.w + '</td><td class="num">' + r.d + '</td><td class="num">' + r.l + '</td></tr>';
+      }
+      var lastRows = zeroTable, lastChampion = null;
       function renderTable(rows, championTeam){
+        lastRows = rows; lastChampion = championTeam;
         var sorted = rows.slice().sort(function(a, b){ return (a.position||99) - (b.position||99); });
-        tableBody.innerHTML = sorted.map(function(r){
-          var cls = (championTeam && r.team === championTeam) ? ' class="champion-row"' : '';
-          return '<tr' + cls + '><td>' + (r.position || '–') + '</td><td>' + r.team + '</td>'
-            + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
-            + '<td class="num">' + r.w + '</td><td class="num">' + r.d + '</td><td class="num">' + r.l + '</td></tr>';
-        }).join('');
+        if(compactQuery.matches && sorted.length > 8){
+          var top = sorted.slice(0, 4), bottom = sorted.slice(-3);
+          tableBody.innerHTML = top.map(function(r){ return rowHtml(r, championTeam); }).join('')
+            + '<tr class="table-ellipsis"><td colspan="7">···</td></tr>'
+            + bottom.map(function(r){ return rowHtml(r, championTeam); }).join('');
+        } else {
+          tableBody.innerHTML = sorted.map(function(r){ return rowHtml(r, championTeam); }).join('');
+        }
       }
       renderTable(zeroTable, null);
+      compactQuery.addEventListener('change', function(){ renderTable(lastRows, lastChampion); });
 
       var revealed = 0;
       function revealTo(count){
