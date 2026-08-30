@@ -81,6 +81,79 @@ for the actual text and visual direction before drafting either.
   render cleanly, correctly centred, no clipping. Merged to `main` on
   explicit request.
 
+- **2026-08-30, done — dice labels above the bars, moving 50% labels on
+  the scrub chart, and a real mobile-only sync bug behind the "38-week
+  commentary" report.** Three pieces of user feedback.
+  **Dice labels**: `DICE_PCT_Y` was vertically centred *inside* the bars'
+  own height (straddling the coloured fill); moved to sit a fixed 18px
+  above the bars' shared top edge instead — plenty of headroom already
+  existed there since the bars only ever reach 62% of the chart's own
+  vertical space.
+  **Scrub chart 50% labels**: the continuous "today" scrub
+  (`renderTodayContinuous`) shaded the same 50/50 split the static
+  `regions` step does, but never labelled it — only the static step had
+  "50%" text (`lbl-left50`/`lbl-right50`, fixed at `quantile(0.25)`/
+  `quantile(0.75)`). Added a new `conditionalQuantile(todayDay, p)`
+  (generalises the existing `conditionalMedian` to any p, not just 0.5)
+  and call it every frame in `renderTodayContinuous` with p=0.25/0.75 for
+  the two regions' own centres — reusing the *same* label ids as the
+  static step (never active at the same time) rather than inventing new
+  ones. Verified the labels' x-coordinates genuinely shift right as the
+  scrub advances (e.g. left label 267.6→400.5 px across the scrub) rather
+  than staying fixed, and screenshotted three points through the scrub
+  confirming both labels stay legible and centred in their own
+  (narrowing) region even near the very end.
+  **Mobile "38-week commentary" desync — real root cause, not the
+  suspected one**: first hypothesis (today-38/39/41's rendered heights
+  differing, throwing off `pickScrubStep`'s equal-day-thirds assumption)
+  was checked and ruled out — all three measured exactly equal on both
+  mobile and desktop. The real bug: `calibrateScrubTiming()` sizes
+  `#pin-wrap` (the sticky 'return' text's container) to `pinDays*rate`px
+  and `updateScrub()` treats that *entire* height as "how long 'return'
+  stays visually pinned" — but a `position:sticky` child only stays stuck
+  for `(wrapperHeight - childHeight)` px after it engages, not
+  `wrapperHeight` px (standard CSS sticky mechanics: release happens once
+  the wrapper's bottom edge scrolls up to the stuck child's own bottom
+  edge). On desktop the sticky child is ~100vh tall, close enough to
+  whatever gets calibrated there that this was never very visible; on
+  mobile, `.step.pin-step`'s height is capped to `100vh` *minus* the
+  sticky chart band's own 36vh, so the child is far shorter than the
+  wrapper — confirmed directly (dispatched real scroll positions and
+  watched `return`'s own `getBoundingClientRect().top`): it unstuck and
+  started scrolling normally ~300px into a wrapper calibrated for ~790px,
+  meaning `today-38`'s paragraph was scrolling into view, and getting
+  read, while `updateScrub()` still thought the reader was deep in the
+  pin phase — the chart showed ~37w while the on-screen text already
+  said "Say we reach 38 weeks". **Fix**: pad `#pin-wrap`'s calibrated
+  height by the sticky child's own measured height
+  (`stickyReturnHeight()`, new helper) so the *real* release point lands
+  exactly at `pinDays*rate`; correspondingly, `updateScrub()` now splits
+  `scrubPinWrap.offsetHeight` back into a `pinHeight` (minus that same
+  gap) and folds the gap onto `runupHeight` instead — attributing the
+  dead scroll after the real release point to "still blank, still
+  advancing toward 38w0d" rather than "still pinned", without changing
+  their sum, so the milestone phase's own boundary (and its already-
+  working day-rate) is completely untouched. Deliberately a general fix
+  (grounded in real sticky-release mechanics, not a mobile-only special
+  case), so desktop's calibration becomes exactly consistent too, not
+  just mobile's. **Verified empirically before and after**: a dense
+  60-sample sweep through the whole mobile milestone track, measuring
+  which of today-38/39/41 actually has the most on-screen overlap with
+  the readable (below-chart) strip at each point (not just "nearest",
+  which gives false positives for off-screen elements) — before the fix,
+  `today-38`→`today-39` crossed over at day 264.0 against an intended
+  milestone boundary of 266 (and, worse, `today-38`'s text was already
+  dominant on screen from as early as day ~257, nowhere near 38 weeks);
+  after the fix, the same crossover lands at day 265.8, essentially exact.
+  Binary-searched the precise scroll position where the chart first shows
+  "37w + 6d" (one day short of the milestone) and screenshotted it: the
+  full, un-clipped `today-38` paragraph ("Say we reach 38 weeks...") is
+  now the dominant on-screen text at that exact point, not a fragment cut
+  off mid-sentence with the chart lagging a full week+ behind as before.
+  Full page scroll-throughs on both viewports (200px increments) with a
+  page-error listener attached confirmed zero JS errors from any of the
+  three changes.
+
 ## TODO
 
 - `articles/pl-xg-simulator.html` — replaced (2026-08-24) with a new piece

@@ -609,6 +609,16 @@
     return quantile(target) + MEDIAN_CALIBRATION;
   }
 
+  // Generalises conditionalMedian to any p: the day at which a p share of
+  // the probability *remaining* after todayDay has been reached — e.g.
+  // p=0.5 is conditionalMedian itself, p=0.25/0.75 are the centres of the
+  // scrub's own two 50/50-split regions (their own "50%" label positions,
+  // same idea as leftDay50/rightDay50 for the static 'regions' step).
+  function conditionalQuantile(todayDay, p){
+    var base = cdfAt(todayDay);
+    return quantile(base + (1-base)*p) + MEDIAN_CALIBRATION;
+  }
+
   function weeksLabel(day){
     day = Math.round(day); // day may be fractional during continuous scrubbing
     var w = Math.floor(day/7);
@@ -855,6 +865,17 @@
     elRegionRight.classList.add('visible');
     elModeLine.classList.remove('visible');
 
+    // Same "50%" treatment as the static 'regions' step, reusing its label
+    // ids (the two steps are never active at once) — but recomputed every
+    // frame from todayDay, since both regions narrow and slide right as
+    // the scrub advances, unlike the static step's fixed quantile(0.25)/
+    // quantile(0.75).
+    var leftDay50 = conditionalQuantile(todayDay, 0.25), rightDay50 = conditionalQuantile(todayDay, 0.75);
+    var y50 = pairedAreaLabelY(leftDay50, rightDay50);
+    label('lbl-left50', xScale(leftDay50), y50, '50%', 'pct');
+    label('lbl-right50', xScale(rightDay50), y50, '50%', 'pct');
+    showLabel('lbl-left50'); showLabel('lbl-right50');
+
     // reference lines: always show the very original due date as a faint marker
     setLineX(elLineOriginal, MEDIAN_DAY);
     elLineOriginal.classList.add('visible');
@@ -957,6 +978,12 @@
   // being, and recalculated on resize since it also depends on viewport
   // height (the sticky chart "eats" one viewport-height of scroll
   // distance at the very end of the track).
+  // The sticky 'return' text's own rendered height -- fixed by its CSS
+  // (100vh minus the header, minus the mobile-only sticky chart band too)
+  // regardless of scroll position, so it's measurable independent of
+  // #pin-wrap's own sizing below.
+  function stickyReturnHeight(){ return stepReturn ? stepReturn.offsetHeight : 0; }
+
   function calibrateScrubTiming(){
     if(!scrubLead || !scrubTrack) return;
     var pinHeight0 = scrubPinWrap ? scrubPinWrap.offsetHeight : 0;
@@ -968,7 +995,21 @@
 
     var pinDays = SCRUB_DAY_PIN_END - SCRUB_DAY_START;
     var runupDays = SCRUB_DAY_MILESTONE - SCRUB_DAY_PIN_END;
-    if(scrubPinWrap) scrubPinWrap.style.minHeight = (pinDays*rate) + 'px';
+    // #pin-wrap's height being *set to* pinDays*rate doesn't mean the
+    // sticky 'return' text actually stays visually pinned for that whole
+    // distance -- a position:sticky child releases once its CONTAINER's
+    // bottom edge scrolls up to the child's own (fixed) bottom edge, which
+    // happens (wrapperHeight - childHeight) px after it first engages, not
+    // wrapperHeight px. On desktop the sticky child is ~100vh tall, close
+    // enough to whatever height gets calibrated here that this was never
+    // very visible; on mobile the child is capped to 100vh minus the
+    // sticky chart's own 36vh band, so it releases *far* short of
+    // wrapperHeight -- 'today-38' was scrolling into view, and the reader
+    // reading it, while updateScrub() still thought we were deep in the
+    // pin phase (chart showing ~37w, not yet 38w). Padding the wrapper by
+    // the child's own height makes the real release point land exactly at
+    // pinDays*rate, matching what updateScrub() (below) now assumes.
+    if(scrubPinWrap) scrubPinWrap.style.minHeight = (pinDays*rate + stickyReturnHeight()) + 'px';
     scrubLead.style.minHeight = (runupDays*rate) + 'px';
   }
 
@@ -995,8 +1036,18 @@
     // another source of unevenness, subtly misplacing each handoff point.
     var totalScrollable = rect.height - vh;
     var scrolled = Math.max(0, Math.min(totalScrollable, 0 - rect.top));
-    var pinHeight = scrubPinWrap ? scrubPinWrap.offsetHeight : 0;
-    var runupHeight = scrubLead ? scrubLead.offsetHeight : 0;
+    // #pin-wrap's full rendered height isn't how long 'return' actually
+    // stays visually pinned for -- see calibrateScrubTiming()'s comment.
+    // pinReleaseGap (the sticky child's own height) is the same padding
+    // added there; splitting it back out here of pinHeight and onto
+    // runupHeight attributes the dead scroll after the real release point
+    // to "still blank, still advancing toward 38w0d" (exactly what it is)
+    // rather than "still pinned" -- without changing pinHeight+runupHeight's
+    // sum, so the milestone phase's own boundary is untouched.
+    var pinWrapHeight = scrubPinWrap ? scrubPinWrap.offsetHeight : 0;
+    var pinReleaseGap = Math.min(pinWrapHeight, stickyReturnHeight());
+    var pinHeight = pinWrapHeight - pinReleaseGap;
+    var runupHeight = (scrubLead ? scrubLead.offsetHeight : 0) + pinReleaseGap;
 
     var day;
     if(pinHeight > 0 && scrolled <= pinHeight){
@@ -1104,11 +1155,13 @@
   function diceGroupCenterX(indices){
     return (diceBarCenterX(indices[0]) + diceBarCenterX(indices[indices.length-1])) / 2;
   }
-  // Vertically centred within the bars' own height (not floating above
-  // them) — every bar a "50%" label ever sits over is at the same full
-  // height (fullH) in both steps that use this, so one constant works for
-  // both; +8 is a small optical nudge for the text baseline.
-  var DICE_PCT_Y = DBAR.bottom - (barMaxH*0.62)/2 + 8;
+  // Sits just above the bars' own (shared) top edge, not straddling them —
+  // every bar a "50%" label ever sits over is at the same full height
+  // (fullH) in both steps that use this, so one constant works for both.
+  // There's plenty of headroom for it: the bars themselves only reach 62%
+  // of the chart's own vertical space (barMaxH), leaving DBAR.top clear
+  // above that.
+  var DICE_PCT_Y = DBAR.bottom - barMaxH*0.62 - 18;
   function diceLabel(id, x, text){
     var t = document.getElementById(id);
     if(!t){
