@@ -1421,3 +1421,79 @@ for the actual text and visual direction before drafting either.
   concentrated jump that was actually reported, and fixing it would mean
   changing a site-wide layout convention out of scope for this round;
   left as-is. Pushed to `claude/pull-latest-main-m1y2cg`.
+  Merged to `main` on explicit request the same round.
+
+  **2026-08-30, later still — the actual bug: a site-wide `--header-h`
+  race, not the mobile-toolbar fix from the previous entry.** User
+  report after the merge above: "looks like that didn't work." Asked a
+  clarifying question this time before another blind round of Chromium
+  probing -- iPhone Safari, both new sections, "same way" -- since the
+  previous round's fix was for a Chromium-reproducible mechanism
+  (address-bar-resize scroll clamp) that might simply not be what a real
+  iPhone does at all, and a second guess without new information would
+  have been exactly that: a guess. With "both sections, same way"
+  confirmed, the common ground between them stopped being anything
+  scroll-dynamics-related (game-reroll and season-reroll don't share
+  `ensureMinScrollable` or the CSS Grid `order` trick) and became the one
+  thing every sticky element on the page actually depends on:
+  `var(--header-h, 0px)`. Reproduced directly: forcing `--header-h` to
+  `0px` on an already-loaded page produces the *exact* reported symptom
+  on both sections -- the scoreboard/pitch card and the season table both
+  render with their top portion sliced off, hidden behind the site's own
+  sticky header (`z-index:10` vs. the cards' `z-index:2`), the rest of
+  each card sitting where a reader would expect it "much lower" than
+  where it actually shows. **Root cause**: `nav.js` is deliberately the
+  very last thing to run on every page (so it doesn't block anything
+  above it from parsing) -- it injects the header and only *then* sets
+  `--header-h` via `element.style.setProperty(...)`. Every
+  `position:sticky` element elsewhere on the page that reads
+  `var(--header-h, 0px)` -- both new sections here, and due-date.html's
+  own sticky chart -- gets its *first* layout pass before that property
+  has ever been set, falling back to the literal `0px` in that fallback
+  clause. Chromium correctly re-triggers the sticky offset once the
+  property is set moments later (confirmed -- this is exactly why every
+  previous Chromium-based check here, including the sticky-release
+  sampling two entries back, never caught it); Safari has a real,
+  documented history of *not* reliably redoing that recalculation for a
+  sticky element once its first layout has already happened, leaving it
+  stuck at the stale `0px` offset for good, with nothing to force a
+  second look. **Fix**: `assets/css/style.css` gains a real, *measured*
+  (not guessed) static default for `--header-h` on `:root` --
+  `107px` above the site's existing 600px nav breakpoint, `81px` at or
+  below it, both read directly off `.site-header`'s actual rendered
+  height at each width via Playwright before writing the numbers down.
+  `nav.js`'s inline `element.style.setProperty(...)` still wins over this
+  (inline styles always beat stylesheet rules), so nothing changes for a
+  browser that *does* pick up the later update -- this only changes what
+  every sticky element gets *before* nav.js has run, and what it's stuck
+  with forever on a browser that never revisits it. Fixing this in the
+  shared stylesheet (not just this article) means due-date.html's own
+  sticky chart -- built on the identical pattern, and never reported
+  broken, but never confirmed working on a real iPhone either -- is
+  covered by the same fix rather than leaving a second, unreported
+  instance of the same bug in place. **Verified two ways**: the original
+  repro (forcing `--header-h` to `0px` after load) is no longer the
+  relevant failure mode to chase, since the fix targets *before nav.js
+  runs at all* -- so verified that specific window instead, by aborting
+  the request for `nav.js` outright (the worst case: the JS-based
+  measurement never runs, ever) and confirming `--header-h` still
+  resolves to `81px` from the CSS default alone, with the game-reroll
+  card rendering fully intact, nothing clipped. Then confirmed the
+  normal path (`nav.js` running as usual) is pixel-identical to before on
+  both sections/both viewports and on due-date.html specifically (its
+  own `--header-h` reads and screenshot unchanged, zero page errors) --
+  this is a purely additive fallback, not a behaviour change for the
+  common case. Full existing verification suite (scroll-sampled
+  progression, sticky-release timing, row counts, full-page regression)
+  re-run clean on top of it. Considered and deliberately left alone: the
+  season sidebar's CSS Grid `order:1`/`order:2` trick, the one genuinely
+  unprecedented pattern introduced this session (nothing else on the
+  site reorders a sticky grid item this way, and WebKit does have its
+  own separate history of sticky+order quirks) -- but it doesn't explain
+  the *specific* symptom actually reproduced (a content clip under the
+  header, not a layout scramble), removing it would mean un-mirroring
+  desktop's matching left/right convention across both new sections too,
+  and there's now a confirmed, precisely-targeted explanation that
+  doesn't need it. Flagging it here rather than touching it speculatively
+  on top of an already-identified fix. Pushed to
+  `claude/pull-latest-main-m1y2cg`.

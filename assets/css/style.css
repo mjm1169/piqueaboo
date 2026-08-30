@@ -14,6 +14,33 @@
   --positive-step: #8AAA05;
   --negative: #EE11CE;
   --negative-step: #B8009E;
+  /* Static fallback for --header-h, matching .site-header's real rendered
+     height at each breakpoint (107px above 600px width, 81px at/below --
+     measured directly, not guessed). nav.js (below) sets the real,
+     JS-measured value as an inline style on this same element once it
+     runs, which always wins over this rule regardless of specificity --
+     but nav.js only runs once the *whole* page has parsed (it's injected
+     at the very end of body, deliberately, so it doesn't block anything
+     above it), meaning every position:sticky element elsewhere on a page
+     that offsets itself with var(--header-h, 0px) gets its *first*
+     layout pass with the property still unset, falling back to that
+     literal 0px -- on Chromium a later change to the custom property
+     correctly re-triggers sticky's own offset recalculation, but Safari
+     has a real, confirmed history of not reliably doing that, leaving
+     the element sticking at the stale 0px offset (and therefore behind
+     the header, which sits on top at a higher z-index) for good. Caught
+     directly on pl-xg-simulator.html's two scroll-reveal sections,
+     reported as "missing off the top... should be much lower" and
+     reproduced by forcing --header-h to 0px, which lands on this exact
+     failure. This rule means every such element has a *correct* value
+     from its very first layout pass instead, so there's nothing for
+     Safari to fail to pick up later even if nav.js's own refinement
+     never lands. */
+  --header-h: 107px;
+}
+
+@media (max-width: 600px) {
+  :root { --header-h: 81px; }
 }
 
 * {
