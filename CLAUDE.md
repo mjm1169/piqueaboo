@@ -1351,3 +1351,73 @@ for the actual text and visual direction before drafting either.
   on both viewports with zero real page errors (same pre-existing Google
   Fonts sandbox block as every prior round, nothing new). Pushed to
   `claude/pull-latest-main-m1y2cg`; not merged to `main` this round.
+  Merged to `main` on explicit request the same round.
+
+  **2026-08-30, later still — a real, confirmed scroll-position bug: the
+  mobile browser chrome (address bar) hiding/showing mid-scroll was
+  causing the page to involuntarily yank itself around.** User report:
+  "the scroll doesn't work properly... it's missing off the top and
+  should be much lower" on both new sections. Automated Chromium testing
+  (jump-scrolling, sampling reveal counts and sticky-release points
+  against scroll position) found nothing -- the underlying reveal math
+  was smooth and monotonic throughout, on both viewports. That itself
+  was the clue: headless Chromium has no real browser chrome to hide or
+  show, so anything caused specifically by that would be invisible to
+  it. Reproduced directly instead, using Playwright's `setViewportSize`
+  (which fires the same real resize path a mobile address-bar toggle
+  does) to simulate one mid-scroll: scrolled to the very bottom of the
+  page, shrank the viewport by 64px (a plausible chrome-bar height) with
+  no scroll input given -- `scrollY` snapped down by exactly 64px on its
+  own. Root cause: `ensureMinScrollable` (added last round, to guarantee
+  the game-reroll reveal a minimum scroll distance) recomputed
+  `.reveal-list`'s own bottom padding on every `resize` event using the
+  live `window.innerHeight` -- and mobile browsers fire `resize`
+  continuously as their address bar hides/shows *during* an ordinary
+  scroll gesture, with no real layout change behind it. Recomputing that
+  padding shrinks or grows the *whole page's* document height, and
+  browsers respond to a shrinking document by force-clamping the current
+  scroll position -- an involuntary jump mid-scroll, exactly matching
+  "missing off the top... should be much lower". **Fix**: a new shared
+  `stableViewportHeight()` only trusts a new `window.innerHeight`
+  reading when the width also changed (address-bar toggling only ever
+  touches height) or the height moved by more than a chrome-bar-sized
+  amount (150px) -- filtering out the toggle while still tracking a
+  genuine orientation flip or desktop window resize. Both
+  `makeScrollReveal` (previously read `window.innerHeight` live on every
+  scroll tick, a smaller version of the same problem) and
+  `ensureMinScrollable` now read this instead. `ensureMinScrollable`
+  also lost a second, related anti-pattern while in there: it used to
+  reset padding-bottom to `0px` before every recompute to get an
+  unpadded height reading, which briefly shrinks the document on *every*
+  resize by itself, even a trusted one -- now the unpadded base height
+  is measured once, on the very first call, and cached, so a later
+  recompute never needs to zero anything out first. Also swapped the
+  season sidebar's `min-height:calc(100vh - ...)` for a redeclared
+  `100svh` version (kept the `100vh` line first as a fallback for
+  browsers that don't recognise the unit) -- `svh` ("small viewport
+  height") always assumes the browser chrome is visible, so it can't
+  grow/shrink from chrome toggling the way plain `vh` does; confirmed
+  this specific rule wasn't actually the trigger for the scroll-clamp
+  bug (the sidebar was never the taller of its track's two columns, so
+  its own height fluctuating didn't move the *track's* height), but it's
+  the same class of problem and the standard purpose-built fix, cheap to
+  apply regardless. **Verified the fix, not just the theory**: re-ran
+  the exact repro (bottom-of-page, then a 64px viewport shrink) --
+  `scrollY` no longer moves at all (was -64px, now 0px); confirmed a
+  *genuine* resize (a real orientation flip, width and height swapped)
+  still recalibrates correctly, so the fix suppresses the toggle without
+  breaking real resize handling; and reconfirmed the full existing
+  verification suite (scroll-sampled progression on both sections/both
+  viewports, sticky-release timing, full-page regression) all still
+  pass. **One small residual, disclosed rather than chased**: a
+  much smaller (~40px) document-height fluctuation on resize remains,
+  traced to `.intro`/`section`'s own `vh`-based padding and margins --
+  pre-existing site-wide spacing conventions that predate this session
+  entirely, used throughout every section on the page, not something
+  introduced by the new sections. Confirmed this residual causes no
+  scroll-clamp on its own (scrollY delta measured at exactly 0 in the
+  same repro) and can nudge a reveal count by at most one step in an
+  edge case -- real, but far smaller and more diffuse than the
+  concentrated jump that was actually reported, and fixing it would mean
+  changing a site-wide layout convention out of scope for this round;
+  left as-is. Pushed to `claude/pull-latest-main-m1y2cg`.
