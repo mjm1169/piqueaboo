@@ -195,29 +195,36 @@
   .season-table td{ padding:3.5px 5px; border-bottom:1px solid #EFEFEF; }
   .season-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .season-table tr.champion-row td{ font-weight:500; background:rgba(17,206,238,.08); }
-  /* The gap row standing in for the hidden mid-table in compact mode (see
-     renderTable's isCompact branch) -- a plain row, not a <tbody> split,
-     so it stays inside the same table/columns rather than needing its
-     own layout. */
-  .season-table tr.table-ellipsis td{
-    text-align:center; color:var(--muted); font-size:11px;
-    padding:2px 5px; letter-spacing:.1em;
-  }
 
   @media (max-width:860px){
-    /* All 20 rows of a full table, sticky above the results feed, was
-       reported as taking up too much of the screen on mobile -- shrinking
-       font/padding alone (below) helps but a 20-row table is still a
-       20-row table. Past this breakpoint (matching .reveal-track's own
-       single-column switch, which is when the table actually competes
-       with the feed for screen space) renderTable() renders a compact
-       top 4 + bottom 3 instead of all 20 -- still the two things that
-       actually carry the drama here (the title race, the relegation
-       fight), just without the mid-table noise. */
-    .season-gw-label{ font-size:12px; margin-bottom:6px; }
-    .season-table{ font-size:11.5px; }
-    .season-table th{ font-size:9.5px; padding:3px 4px; }
-    .season-table td{ padding:3px 4px; }
+    /* A full 20-row table sticky *above* the results feed (the shared
+       .reveal-track single-column stacking every section here otherwise
+       uses) was reported as taking up too much of the mobile screen --
+       first tried compacting it to a top-4/bottom-3 view, but the user's
+       own follow-up asked for something better: keep every row, put the
+       table beside the feed instead of above it (like desktop already
+       does), as a persistent full-height right-hand strip, narrow enough
+       that it can afford to at three columns -- a 3-letter team code,
+       points, and a single combined "W-D-L" field (still built from the
+       exact same per-gameweek data everything else here uses, just
+       formatted tighter). Scoped to #season-reroll-track specifically
+       (an ID beats the shared .reveal-track class on specificity) so
+       none of this touches the game-reroll section's own mobile
+       stacking, which stays as-is. */
+    #season-reroll-track{ grid-template-columns:1fr 112px; column-gap:14px; }
+    /* order:2 puts the table visually on the right despite being first
+       in the DOM (source order still gives it focus-order priority,
+       which is fine -- the table is genuinely the primary content). */
+    #season-reroll-track .reveal-sticky-wrap{ order:2; background:none; padding:0; }
+    #season-reroll-track .reveal-list{ order:1; }
+    #season-reroll-track .reveal-visual{
+      min-height:calc(100vh - var(--header-h, 0px) - 20px);
+      padding:10px 6px;
+    }
+    #season-reroll-track .season-gw-label{ font-size:10px; margin-bottom:6px; }
+    #season-reroll-track .season-table{ font-size:10.5px; }
+    #season-reroll-track .season-table th{ font-size:8.5px; padding:2px 3px; }
+    #season-reroll-track .season-table td{ padding:2px 3px; }
   }
 
   .season-gw-block{ margin-bottom:18px; opacity:0; transition:opacity .3s ease; }
@@ -634,7 +641,7 @@
           <div class="season-gw-label" id="season-gw-label">Kick-off</div>
           <table class="season-table">
             <thead>
-              <tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr>
+              <tr id="season-table-head"><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr>
             </thead>
             <tbody id="season-table-body"></tbody>
           </table>
@@ -1005,35 +1012,53 @@
         .map(function(r){ return { team: r.team, position: 0, points: 0, gd: 0, w: 0, d: 0, l: 0 }; })
         .sort(function(a, b){ return a.team < b.team ? -1 : 1; });
 
-      // Full 20-row table reported as taking up too much of the mobile
-      // screen (sticky above the results feed, competing with it for the
-      // same viewport). Past this breakpoint -- the same one .reveal-track
-      // itself switches to a single stacked column at, since that's when
-      // the table genuinely starts costing feed space rather than sitting
-      // harmlessly beside it -- render a compact top 4 + bottom 3 instead
-      // of all 20: still the two things that actually carry this sim's
-      // drama (the title race, the relegation fight), just without the
-      // mid-table rows nobody's watching. matchMedia (not a one-off width
-      // check) so a resize/rotation across the breakpoint re-renders too.
+      // A full 20-row table sticky *above* the results feed was reported
+      // as taking up too much of the mobile screen. First cut this down
+      // to a compact top-4/bottom-3 view; the user's own follow-up asked
+      // for something better -- keep every row, and put the table beside
+      // the feed as a persistent full-height right-hand strip (like
+      // desktop's layout, just narrow) instead of trimming it. Narrow
+      // enough at that width to only afford three columns, so past this
+      // breakpoint (the ID-scoped CSS for #season-reroll-track) rows
+      // render as a 3-letter team code / points / a single combined
+      // "W-D-L" field rather than the full 7-column desktop table --
+      // same underlying per-gameweek data, just formatted tighter.
+      // matchMedia (not a one-off width check) so a resize/rotation
+      // across the breakpoint re-renders both the header and the rows.
+      var TEAM_CODE = {
+        'Arsenal':'ARS', 'Aston Villa':'AVL', 'Bournemouth':'BOU', 'Brentford':'BRE',
+        'Brighton':'BHA', 'Burnley':'BUR', 'Chelsea':'CHE', 'Crystal Palace':'CRY',
+        'Everton':'EVE', 'Fulham':'FUL', 'Leeds':'LEE', 'Liverpool':'LIV',
+        'Manchester City':'MCI', 'Manchester United':'MUN', 'Newcastle United':'NEW',
+        'Nottingham Forest':'NFO', 'Sunderland':'SUN', 'Tottenham':'TOT',
+        'West Ham':'WHU', 'Wolverhampton Wanderers':'WOL'
+      };
       var compactQuery = window.matchMedia('(max-width:860px)');
-      function rowHtml(r, championTeam){
+      var tableHead = document.getElementById('season-table-head');
+      function rowHtml(r, championTeam, compact){
         var cls = (championTeam && r.team === championTeam) ? ' class="champion-row"' : '';
+        if(compact){
+          var code = TEAM_CODE[r.team] || r.team.slice(0, 3).toUpperCase();
+          return '<tr' + cls + '><td>' + code + '</td>'
+            + '<td class="num">' + r.points + '</td>'
+            + '<td class="num">' + r.w + '-' + r.d + '-' + r.l + '</td></tr>';
+        }
         return '<tr' + cls + '><td>' + (r.position || '–') + '</td><td>' + r.team + '</td>'
           + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
           + '<td class="num">' + r.w + '</td><td class="num">' + r.d + '</td><td class="num">' + r.l + '</td></tr>';
       }
+      function renderHeader(compact){
+        tableHead.innerHTML = compact
+          ? '<th></th><th class="num">Pts</th><th class="num">W-D-L</th>'
+          : '<th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th>';
+      }
       var lastRows = zeroTable, lastChampion = null;
       function renderTable(rows, championTeam){
         lastRows = rows; lastChampion = championTeam;
+        var compact = compactQuery.matches;
+        renderHeader(compact);
         var sorted = rows.slice().sort(function(a, b){ return (a.position||99) - (b.position||99); });
-        if(compactQuery.matches && sorted.length > 8){
-          var top = sorted.slice(0, 4), bottom = sorted.slice(-3);
-          tableBody.innerHTML = top.map(function(r){ return rowHtml(r, championTeam); }).join('')
-            + '<tr class="table-ellipsis"><td colspan="7">···</td></tr>'
-            + bottom.map(function(r){ return rowHtml(r, championTeam); }).join('');
-        } else {
-          tableBody.innerHTML = sorted.map(function(r){ return rowHtml(r, championTeam); }).join('');
-        }
+        tableBody.innerHTML = sorted.map(function(r){ return rowHtml(r, championTeam, compact); }).join('');
       }
       renderTable(zeroTable, null);
       compactQuery.addEventListener('change', function(){ renderTable(lastRows, lastChampion); });

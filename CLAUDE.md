@@ -1305,3 +1305,49 @@ for the actual text and visual direction before drafting either.
   than assumed). Pushed to `claude/pull-latest-main-m1y2cg`; not merged
   to `main` this round -- back on the review-then-merge pattern until the
   user asks.
+
+  **2026-08-30, later still — season table redesigned as a persistent
+  full-height right-hand sidebar on mobile, replacing the top-4/bottom-3
+  compact view.** User follow-up, proposing a concrete alternative to the
+  compaction above: put the table to the right of the screen, full
+  height, with just a 3-letter team code, points, and a "W-D-L" combined
+  record. Measured before committing to it rather than assuming it'd
+  fit: at that column's width, 20 real rows (small font, tight padding)
+  render at 455px tall against 743px of available height below the site
+  header on a 390-wide/844-tall viewport -- comfortably under, with no
+  overflow -- so there's no need to trim any rows after all; the earlier
+  top-4/bottom-3 compaction is gone entirely, replaced by this.
+  **Layout**: `#season-reroll-track` gets an ID-scoped override (an ID
+  beats the shared `.reveal-track` class the generic mobile stacking
+  rule uses, so this doesn't touch the game-reroll section) switching
+  mobile from the shared single stacked column back to two columns --
+  `1fr` for the results feed, a fixed `112px` for the table -- with
+  `order:2`/`order:1` putting the table visually on the right despite
+  being first in the DOM. `.reveal-visual`'s `min-height:calc(100vh -
+  var(--header-h) - 20px)` is what makes it read as a persistent
+  full-height strip rather than a compact card, mirroring the desktop
+  layout's own two-column shape rather than inventing a third.
+  **Columns**: `TEAM_CODE`, a small new lookup (standard PL 3-letter
+  codes -- ARS, MUN, NEW, etc., matching what BBC/Sky/the league itself
+  use, with a same-file fallback to the team name's own first 3 letters
+  for safety if a team is ever missing from it) plus `W-D-L` formatted as
+  a single `w-d-l` string, both rendered only past the same breakpoint
+  via a live `matchMedia` check -- same mechanism the earlier compaction
+  used, now driving column *format* rather than row count. The `<thead>`
+  row (`id="season-table-head"`, new) is rewritten by the same
+  `renderHeader(compact)` call rather than hidden/shown via CSS, since
+  compact and full modes have a genuinely different column count (3 vs
+  7), not just different widths for the same columns.
+  **Verified**: real geometry measurement (not assumption) confirming
+  all 20 rows render with zero overflow inside the available height;
+  scroll-sampled progression through the whole track confirming row
+  count stays at 20 throughout, the champion row highlights correctly at
+  the final gameweek, and the visible team-code/pts/record values track
+  the correct gameweek at each sampled point; before/after screenshots
+  at kick-off, mid-season and the final table; desktop confirmed
+  completely unaffected (still the original 7-column table, unchanged
+  42%/58% grid, via a live `getComputedStyle` check, not just "the CSS
+  looks scoped right"); and a fresh full-page regression scroll-through
+  on both viewports with zero real page errors (same pre-existing Google
+  Fonts sandbox block as every prior round, nothing new). Pushed to
+  `claude/pull-latest-main-m1y2cg`; not merged to `main` this round.
