@@ -870,6 +870,47 @@
     items.forEach(function(el){ io.observe(el); });
   }
 
+  /* Delays arming revealOnScroll until a track's own sticky visual has
+     actually reached its pinned position under the header, rather than
+     starting to reveal the instant the section scrolls into view. The
+     sticky wrap sits right at the top of its track in both sections
+     (the game-reroll pitch is literally the track's first child; the
+     season table shares the same grid row as the results feed, starting
+     at the same top edge) -- so without this, the list's first few
+     items can already be scrolling past the bottom threshold *while the
+     sticky card is still visibly sliding up into place*, which read as
+     premature/messy. Reported directly: the sticky element needs to
+     reach the top of the screen before the scrolling elements start
+     entering from the bottom.
+     A plain, one-time geometry check -- not a fraction or a shortfall
+     computed from content height, just "has this element's own top
+     reached the header's real, live height yet" -- so it carries none
+     of the viewport-height-arithmetic fragility revealOnScroll itself
+     was built to get away from. Reads the header's height live off the
+     element itself (not the --header-h custom property) for the same
+     reason: one less indirection to ever be stale. */
+  function afterStickyPinned(trackEl, callback){
+    var headerEl = document.querySelector('.site-header');
+    function pinned(){
+      var headerH = headerEl ? headerEl.offsetHeight : 0;
+      return trackEl.getBoundingClientRect().top <= headerH;
+    }
+    if(pinned()){ callback(); return; }
+    var raf = null;
+    function check(){
+      raf = null;
+      if(pinned()){
+        window.removeEventListener('scroll', request);
+        window.removeEventListener('resize', request);
+        callback();
+      }
+    }
+    function request(){ if(raf === null) raf = requestAnimationFrame(check); }
+    window.addEventListener('scroll', request, { passive: true });
+    window.addEventListener('resize', request);
+    request();
+  }
+
   /* =========================================================
      RE-ROLL ONE GAME
      ========================================================= */
@@ -960,7 +1001,7 @@
         scoreEl.sim.textContent = shot.sim_score[0] + '–' + shot.sim_score[1];
       }
 
-      revealOnScroll(logRows, revealShot);
+      afterStickyPinned(track, function(){ revealOnScroll(logRows, revealShot); });
     });
   })();
 
@@ -1057,7 +1098,7 @@
         renderTable(gw.table, i === season.gameweeks.length - 1 ? season.champion : null);
       }
 
-      revealOnScroll(gwBlocks, revealGameweek);
+      afterStickyPinned(track, function(){ revealOnScroll(gwBlocks, revealGameweek); });
     });
   })();
 })();

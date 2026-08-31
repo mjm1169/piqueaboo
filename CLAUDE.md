@@ -1551,3 +1551,42 @@ for the actual text and visual direction before drafting either.
   broadly-supported API doing the "did this scroll into view" check
   itself, not a hand-rolled approximation of it. Pushed to
   `claude/pull-latest-main-m1y2cg`.
+  Merged to `main` on explicit request the same round.
+
+  **2026-08-30, later still — sequenced the reveal so the sticky visual
+  reaches the top of the screen before any row/gameweek starts entering
+  from the bottom.** User feedback on the IntersectionObserver rewrite:
+  the sticky pitch/table needs to reach the top of the screen before the
+  scrolling content starts entering from the bottom, rather than both
+  happening at once as the section first scrolls into view. Root cause:
+  the sticky wrap sits at the very top of its track in both sections
+  (the game-reroll pitch is literally the track's first child; the
+  season table shares the same grid row as the results feed, starting
+  at the same top edge), so `revealOnScroll`'s per-item observers,
+  armed the instant each section's script ran, could already find early
+  items intersecting near the bottom of a tall viewport before the
+  sticky card had actually finished sliding up into its pinned
+  position. **Fix**: a new `afterStickyPinned(trackEl, callback)` gate
+  -- a one-time check (`trackEl.getBoundingClientRect().top <=` the
+  site header's own live `offsetHeight`), armed via the same
+  scroll/resize/rAF pattern as before but checking a plain boolean, not
+  a fraction or shortfall -- delays calling `revealOnScroll` until the
+  track has scrolled far enough that its sticky child would already be
+  pinned. Deliberately reads the header's real DOM height directly
+  rather than going through `--header-h`, one less indirection to ever
+  be stale. **Verification hit a real false alarm worth recording**: an
+  early test scanned the game section in fine detail up to a y just
+  past the season section's own pin point, then jumped *back* to start
+  the season scan from its nominal boundary -- a backward jump no real
+  scroll gesture makes, which let season's (already correctly, forward-
+  armed) observer show revealed items when re-queried at that earlier
+  y, reading as a gate failure that wasn't one. Confirmed genuinely
+  fixed two ways: instrumented the real `IntersectionObserver.observe`
+  to log the exact `scrollY` each section's reveal actually arms at
+  (season: 2320, matching its measured pin point of 2320 exactly), and
+  a corrected single-pass monotonic scan (each phase's start clamped to
+  where the previous one actually left off, never re-visiting an
+  earlier scrollY) showing `firstRevealAt === pinnedAt` exactly for
+  both sections on both viewports, zero early reveals. Full existing
+  regression suite re-run clean on top of it. Pushed to
+  `claude/pull-latest-main-m1y2cg`.
