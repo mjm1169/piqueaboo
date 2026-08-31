@@ -1497,3 +1497,57 @@ for the actual text and visual direction before drafting either.
   doesn't need it. Flagging it here rather than touching it speculatively
   on top of an already-identified fix. Pushed to
   `claude/pull-latest-main-m1y2cg`.
+  Merged to `main` on explicit request the same round.
+
+  **2026-08-30, later still — replaced the hand-rolled scroll-fraction
+  reveal with IntersectionObserver, after the --header-h fix genuinely
+  didn't fix it either.** The user tested the merge above on their own
+  iPhone and sent real screenshots -- the header-clip bug was gone (the
+  fix from the previous entry did work, confirmed directly), but the
+  reveal itself was still broken: rows appearing "only a tiny bit below
+  the chart/top of screen" instead of spread across a real scroll,
+  matching what the screenshots showed -- a card followed almost
+  immediately by a large blank gap, not a naturally long, readable list.
+  **Diagnosis**: `makeScrollReveal` computed a reveal fraction from
+  `trackEl.offsetHeight - viewportHeight`, and `ensureMinScrollable`
+  manufactured a guaranteed minimum for that by padding `.reveal-list`.
+  Both depend on getting real-device viewport-height arithmetic exactly
+  right -- and across three straight rounds, each specific mechanism
+  that turned out to be wrong (a mobile-chrome-resize scroll-clamp bug,
+  a --header-h race) got found and fixed, and the *next* round still
+  found a *different* symptom in the same family. That pattern -- not
+  any single remaining bug -- was the actual signal: hand-rolled
+  viewport-height math driving a scroll reveal is fragile on real
+  mobile Safari in ways that keep surfacing new failure modes, and
+  chasing the Nth one wasn't going to be more reliable than the first
+  two weren't. **Fix**: replaced both `makeScrollReveal` and
+  `ensureMinScrollable` outright with `revealOnScroll`, built on
+  `IntersectionObserver` -- the browser's own native primitive for
+  "has this element scrolled into view", which needs no viewport-height
+  arithmetic in JS at all and is exactly the semantic the user asked
+  for ("rows coming from the bottom of the screen"): each row/gameweek
+  block is observed individually and reveals as it enters the viewport,
+  not via a fraction computed against the whole track. Deliberately
+  one-directional (revealed items stay revealed even scrolling back up)
+  -- a small, deliberate simplification of the old symmetric
+  reveal/un-reveal, and a common convention for this kind of effect,
+  traded for removing an entire class of bug rather than chasing it
+  further. Both call sites simplified to match: `revealShot(i)` /
+  `revealGameweek(i)` update score/table/label directly from that one
+  item's own data, no `count`/`revealed` bookkeeping needed. Also
+  deleted the two CSS comments that referenced `ensureMinScrollable`,
+  now stale. **Verified**: scroll-sampled progression on both sections,
+  both viewports, confirming monotonic reveal counts and correct
+  final states (15/15 shots, 2-3/2-1 final score; 38/38 gameweeks,
+  champion row correct) that hold even scrolling past the section's
+  end; screenshots at several points on both viewports showing rows
+  revealing at sensible positions with no large blank gaps; the
+  existing season-sidebar and full-page regression suites re-run
+  clean, zero real page errors. Cannot verify the *specific* real-iPhone
+  behaviour this was chasing without a real device or WebKit (still
+  unavailable in this sandbox), but the whole point of moving to
+  IntersectionObserver is that this class of bug shouldn't depend on
+  getting that verification right any more -- it's a mature, w3c-spec'd,
+  broadly-supported API doing the "did this scroll into view" check
+  itself, not a hand-rolled approximation of it. Pushed to
+  `claude/pull-latest-main-m1y2cg`.

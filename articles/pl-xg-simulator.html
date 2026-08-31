@@ -157,12 +157,10 @@
     text-transform:uppercase; letter-spacing:.04em; padding:5px 6px;
     border-bottom:1px solid #E5E5E5; position:sticky; top:0; background:var(--canvas);
   }
-  /* Row padding here is purely a legibility/density choice -- it no
-     longer has to double as the reveal's scroll-pacing lever (that used
-     to be true: a cramped table meant all the shots dumping out within
-     less than one screen of scrolling), since ensureMinScrollable now
-     guarantees a real minimum scroll-linked distance directly, however
-     tall this table happens to render. */
+  /* Row padding here is purely a legibility/density choice -- it doesn't
+     affect scroll pacing at all any more (see revealOnScroll: each row
+     reveals via IntersectionObserver as it scrolls into view on its own,
+     nothing here computes a scrollable distance from row height). */
   .game-log td{ padding:13px 6px; border-bottom:1px solid #EFEFEF; }
   .game-log td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .game-log tr{ opacity:0; transition:opacity .25s ease; }
@@ -173,9 +171,7 @@
 
   @media (max-width:640px){
     /* Denser than desktop's rows -- pure legibility/space trade for a
-       narrow screen (more of the log visible at once), safe to do on its
-       own now that row height and scroll pacing are decoupled (see
-       ensureMinScrollable). */
+       narrow screen (more of the log visible at once). */
     .game-log{ font-size:12.5px; }
     .game-log td{ padding:9px 5px; }
   }
@@ -824,107 +820,54 @@
   var teamsMeta = await fetch('../assets/logos/clubs/teams_2025_26.json').then(function(r){ return r.json(); });
   function crestPath(team){ return '../assets/logos/clubs/' + teamsMeta[team].crest_file; }
 
-  /* A viewport-height reading that ignores the browser chrome (address
-     bar) hiding/showing mid-scroll on mobile. window.innerHeight isn't
-     stable *during* an ordinary scroll gesture there -- it swings by
-     several tens of px purely from that, with no real layout change
-     behind it -- and this was a confirmed, reproducible bug, not a
-     theoretical one: both scroll-reveal helpers below used to read
-     window.innerHeight live, and ensureMinScrollable in particular fed
-     it into .reveal-list's own padding, which changes the *whole
-     document's* height. A shrinking document makes the browser
-     force-clamp the current scroll position -- proven directly (via
-     Playwright's setViewportSize, which fires the same real resize path
-     a mobile chrome toggle does): scrolled to the very bottom of the
-     page, shrinking the viewport by 64px snapped scrollY down by exactly
-     64px, involuntarily, with no scroll input from the user -- a page
-     silently yanking itself around under a reader's thumb mid-scroll,
-     which is exactly what "missing off the top... should be much lower"
-     describes. Chrome toggling only ever changes height, never width,
-     and by far less than a real resize or orientation change -- so only
-     trust a new reading when the width changed too, or the height moved
-     by more than a chrome bar plausibly could. */
-  var _stableVH = window.innerHeight, _stableVHWidth = window.innerWidth;
-  window.addEventListener('resize', function(){
-    var widthChanged = window.innerWidth !== _stableVHWidth;
-    var bigHeightChange = Math.abs(window.innerHeight - _stableVH) > 150;
-    if(widthChanged || bigHeightChange){
-      _stableVH = window.innerHeight;
-      _stableVHWidth = window.innerWidth;
-    }
-  });
-  function stableViewportHeight(){ return _stableVH; }
-
   /* =========================================================
-     SHARED: scroll-driven reveal
-     Maps a track's own scroll fraction to a discrete step count
-     (0..totalSteps), calling onChange(count) whenever it changes.
-     Simpler than due-date.html's scrub: nothing here is *pinned* --
-     only the visual half of each section is sticky (plain CSS
-     position:sticky, no JS-calibrated height), so the list column's own
-     natural content height already *is* the scrollable distance. No
-     pin/release timing to get right, just "how far through this track
-     has the reader scrolled" -- though see ensureMinScrollable just
-     below for what happens when that natural distance is too short to
-     make a real reveal out of.
+     SHARED: reveal-on-scroll
+     Reveals items one at a time as each one's own element scrolls into
+     view from the bottom of the screen, via IntersectionObserver -- the
+     browser's own purpose-built primitive for exactly this. Replaces an
+     earlier design (three rounds of it, in fact) that mapped a track's
+     *overall* scroll fraction onto a step count by hand -- viewport
+     height math done in JS (trackEl.offsetHeight, window.innerHeight,
+     manufactured "minimum scrollable distance" padding...) that kept
+     finding new ways to go wrong on a real phone even after each
+     specific mechanism was fixed: a mobile-chrome-toggle scroll-clamp
+     bug, then a --header-h race, and even after both of those were
+     fixed, real device testing showed rows appearing "from only a tiny
+     bit below the chart" instead of properly spread across the scroll --
+     i.e. the hand-rolled scrollable-distance arithmetic was *still*
+     landing on the wrong number on a real phone, for reasons that were
+     never fully pinned down and, with a native browser API that doesn't
+     need any of that arithmetic at all, no longer need to be.
+     IntersectionObserver reports an element as soon as it's on screen,
+     which for something scrolling up from below the fold is inherently
+     "revealed once it's visible near the bottom" -- exactly the effect
+     these sections want, with no distance/height calculation anywhere.
+     Deliberately one-directional (once revealed, an item stays revealed
+     even if the reader scrolls back up past it) -- simpler than the old
+     design's symmetric reveal/un-reveal, and a common, unremarkable
+     convention for this kind of effect.
+     onReveal(index) fires once per item, strictly in order (0, 1, 2,
+     ...) even if several items cross the threshold in the same
+     observer callback (a fast flick scroll) -- any gap gets filled
+     immediately rather than only firing for the furthest one.
      ========================================================= */
-  function makeScrollReveal(trackEl, totalSteps, onChange){
-    var last = -1;
-    function update(){
-      var rect = trackEl.getBoundingClientRect();
-      var vh = stableViewportHeight();
-      if(rect.top > vh || rect.bottom < 0) return; // track nowhere near the viewport -- nothing to do
-      var scrollable = Math.max(1, trackEl.offsetHeight - vh);
-      var scrolled = Math.max(0, Math.min(scrollable, -rect.top));
-      var count = Math.min(totalSteps, Math.max(0, Math.round((scrolled / scrollable) * totalSteps)));
-      if(count !== last){ last = count; onChange(count); }
-    }
-    var raf = null;
-    function request(){ if(raf === null) raf = requestAnimationFrame(function(){ raf = null; update(); }); }
-    window.addEventListener('scroll', request, { passive: true });
-    window.addEventListener('resize', request);
-    request();
-  }
-
-  /* Guarantees a track has at least minScrollablePx of real scroll-linked
-     reveal distance, regardless of how tall its own content happens to
-     render. Needed once the game-reroll match was swapped for a shorter
-     one (15 shots, not 39, per mobile feedback): makeScrollReveal spreads
-     a reveal across trackEl.offsetHeight minus the viewport height, and a
-     short-enough log can leave that at (or clamped to) almost nothing --
-     confirmed happening on the shorter match, both viewports, before this
-     existed (desktop: the whole 15-shot reveal completed within about a
-     pixel of scroll) -- the whole point of a *scroll-driven* reveal lost
-     to a table that just wasn't tall enough to need scrolling through.
-     Tops up .reveal-list's own bottom padding by exactly the shortfall
-     (measured against real post-layout geometry, not a guessed constant)
-     rather than inflating row padding by hand -- keeps row density a
-     legibility choice, independent of scroll pacing, and adapts
-     automatically to viewport height/orientation. Not a "dead" scroll
-     tail: makeScrollReveal spreads the reveal across the *entire*
-     scrollable range regardless of what makes it up, so the last item
-     still lands exactly as the sticky visual releases, whether that
-     range is real content or this top-up.
-     baseHeight is measured once, on the very first call, and never
-     re-zeroed before a later remeasurement -- an earlier version reset
-     padding-bottom to 0px before every recompute, which briefly shrinks
-     the document on every resize (the same mobile chrome-toggle resize
-     stableViewportHeight above exists to filter out), risking the exact
-     scroll-clamp jump described there for a document-height dip that
-     was only ever meant to be momentary. Using stableViewportHeight()
-     here as well means a chrome-toggle resize recomputes to the *same*
-     padding value it already had -- a genuine no-op, not just a
-     debounced one. */
-  function ensureMinScrollable(trackEl, minScrollablePx){
-    var list = trackEl.querySelector('.reveal-list');
-    var baseHeight = null;
-    function apply(){
-      if(baseHeight === null) baseHeight = trackEl.offsetHeight;
-      var shortfall = (stableViewportHeight() + minScrollablePx) - baseHeight;
-      list.style.paddingBottom = Math.max(0, shortfall) + 'px';
-    }
-    requestAnimationFrame(apply);
-    window.addEventListener('resize', function(){ requestAnimationFrame(apply); });
+  function revealOnScroll(items, onReveal){
+    var indexOf = new Map();
+    items.forEach(function(el, i){ indexOf.set(el, i); });
+    var maxSeen = -1;
+    var io = new IntersectionObserver(function(entries){
+      var newMax = maxSeen;
+      entries.forEach(function(entry){
+        if(entry.isIntersecting){
+          var idx = indexOf.get(entry.target);
+          if(idx > newMax) newMax = idx;
+          io.unobserve(entry.target);
+        }
+      });
+      for(var i = maxSeen + 1; i <= newMax; i++) onReveal(i);
+      maxSeen = newMax;
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0 });
+    items.forEach(function(el){ io.observe(el); });
   }
 
   /* =========================================================
@@ -1007,27 +950,17 @@
       });
 
       var scoreEl = { real: document.getElementById('gr-real-score'), sim: document.getElementById('gr-sim-score') };
-      var revealed = 0;
-      function revealTo(count){
-        for(var i = revealed; i < count; i++){
-          shotEls[i].classList.add('revealed');
-          flashShot(shotEls[i], game.shots[i].sim_goal);
-          logRows[i].classList.add('revealed');
-          if(game.shots[i].sim_goal) logRows[i].classList.add('is-goal');
-        }
-        for(var j = count; j < revealed; j++){
-          shotEls[j].classList.remove('revealed');
-          logRows[j].classList.remove('revealed', 'is-goal');
-        }
-        revealed = count;
-        var real = count > 0 ? game.shots[count-1].real_score : [0,0];
-        var sim = count > 0 ? game.shots[count-1].sim_score : [0,0];
-        scoreEl.real.textContent = real[0] + '–' + real[1];
-        scoreEl.sim.textContent = sim[0] + '–' + sim[1];
+      function revealShot(i){
+        var shot = game.shots[i];
+        shotEls[i].classList.add('revealed');
+        flashShot(shotEls[i], shot.sim_goal);
+        logRows[i].classList.add('revealed');
+        if(shot.sim_goal) logRows[i].classList.add('is-goal');
+        scoreEl.real.textContent = shot.real_score[0] + '–' + shot.real_score[1];
+        scoreEl.sim.textContent = shot.sim_score[0] + '–' + shot.sim_score[1];
       }
 
-      ensureMinScrollable(track, 420);
-      makeScrollReveal(track, game.shots.length, revealTo);
+      revealOnScroll(logRows, revealShot);
     });
   })();
 
@@ -1113,26 +1046,18 @@
       renderTable(zeroTable, null);
       compactQuery.addEventListener('change', function(){ renderTable(lastRows, lastChampion); });
 
-      var revealed = 0;
-      function revealTo(count){
-        for(var i = revealed; i < count; i++) gwBlocks[i].classList.add('revealed');
-        for(var j = count; j < revealed; j++) gwBlocks[j].classList.remove('revealed');
-        revealed = count;
-        if(count === 0){
-          gwLabel.textContent = 'Kick-off';
-          renderTable(zeroTable, null);
-        } else {
-          var gw = season.gameweeks[count - 1];
-          gwLabel.textContent = 'Gameweek ' + gw.gameweek;
-          // Only the truly final table gets the champion highlighted --
-          // whoever's top mid-season isn't necessarily who ends up there,
-          // and this particular season's real story is a title race that
-          // stays live deep into it.
-          renderTable(gw.table, count === season.gameweeks.length ? season.champion : null);
-        }
+      function revealGameweek(i){
+        gwBlocks[i].classList.add('revealed');
+        var gw = season.gameweeks[i];
+        gwLabel.textContent = 'Gameweek ' + gw.gameweek;
+        // Only the truly final table gets the champion highlighted --
+        // whoever's top mid-season isn't necessarily who ends up there,
+        // and this particular season's real story is a title race that
+        // stays live deep into it.
+        renderTable(gw.table, i === season.gameweeks.length - 1 ? season.champion : null);
       }
 
-      makeScrollReveal(track, season.gameweeks.length, revealTo);
+      revealOnScroll(gwBlocks, revealGameweek);
     });
   })();
 })();
