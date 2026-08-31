@@ -231,20 +231,29 @@
     #season-reroll-track .season-table td{ padding:2px 3px; }
   }
 
-  .season-gw-block{ margin-bottom:18px; opacity:0; transition:opacity .3s ease; }
+  .season-gw-block{ margin-bottom:14px; opacity:0; transition:opacity .3s ease; }
   .season-gw-block.revealed{ opacity:1; }
   .season-gw-block h4{
     font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-    color:var(--muted); font-weight:500; margin:0 0 6px 0;
+    color:var(--muted); font-weight:500; margin:0 0 5px 0;
   }
-  .season-result-row{
-    display:flex; align-items:center; justify-content:space-between;
-    font-size:13px; padding:4px 0; border-bottom:1px solid #F0F0F0;
-    gap:10px;
+  /* Several results per line (auto-fill settles the count responsively
+     -- more on a wide desktop column, fewer on mobile's narrower one --
+     rather than a fixed number that would waste space on one and
+     overflow on the other) instead of the one-full-width-row-per-match
+     layout this replaced, which made 380 matches across 38 gameweeks a
+     very long scroll. Abbreviated 3-letter codes (see teamCode(),
+     shared with the compact league table) are what make packing several
+     onto one line legible at all. */
+  .season-gw-results{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));
+    gap:2px 12px;
   }
-  .season-result-row .score{ font-variant-numeric:tabular-nums; font-weight:500; flex:none; }
-  .season-result-row .home-team{ text-align:right; flex:1; }
-  .season-result-row .away-team{ text-align:left; flex:1; }
+  .season-result-chip{
+    font-size:12px; white-space:nowrap; padding:2px 0;
+    border-bottom:1px solid #F0F0F0; font-variant-numeric:tabular-nums;
+  }
+  .season-result-chip .score{ font-weight:500; margin:0 4px; }
 
   /* ---------- treemap ---------- */
 
@@ -1051,16 +1060,38 @@
       var tableBody = document.getElementById('season-table-body');
       var gwLabel = document.getElementById('season-gw-label');
 
+      // Shared with the compact league table below -- one abbreviation
+      // map, both places. Defined up front (not down by the table code
+      // that originally introduced it) since the results feed now needs
+      // it too.
+      var TEAM_CODE = {
+        'Arsenal':'ARS', 'Aston Villa':'AVL', 'Bournemouth':'BOU', 'Brentford':'BRE',
+        'Brighton':'BHA', 'Burnley':'BUR', 'Chelsea':'CHE', 'Crystal Palace':'CRY',
+        'Everton':'EVE', 'Fulham':'FUL', 'Leeds':'LEE', 'Liverpool':'LIV',
+        'Manchester City':'MCI', 'Manchester United':'MUN', 'Newcastle United':'NEW',
+        'Nottingham Forest':'NFO', 'Sunderland':'SUN', 'Tottenham':'TOT',
+        'West Ham':'WHU', 'Wolverhampton Wanderers':'WOL'
+      };
+      function teamCode(name){ return TEAM_CODE[name] || name.slice(0, 3).toUpperCase(); }
+
+      // 380 matches across 38 one-match-per-line blocks made for a very
+      // long scroll (reported directly: "shorten the gameweek scroll").
+      // Abbreviated codes (matching the compact league table's own
+      // format) plus a wrapping grid -- several results per line instead
+      // of one -- cuts each gameweek's own height to a fraction of what
+      // ten full-width rows needed, with the exact count-per-line
+      // settling responsively (CSS grid auto-fill) rather than a fixed
+      // number that would either waste space on desktop or overflow on
+      // mobile.
       var gwBlocks = season.gameweeks.map(function(gw){
         var div = document.createElement('div');
         div.className = 'season-gw-block';
-        var rows = gw.matches.map(function(m){
-          return '<div class="season-result-row">'
-            + '<span class="home-team">' + m.home_team + '</span>'
+        var chips = gw.matches.map(function(m){
+          return '<span class="season-result-chip">' + teamCode(m.home_team)
             + '<span class="score">' + m.home_goals + '–' + m.away_goals + '</span>'
-            + '<span class="away-team">' + m.away_team + '</span></div>';
+            + teamCode(m.away_team) + '</span>';
         }).join('');
-        div.innerHTML = '<h4>Gameweek ' + gw.gameweek + '</h4>' + rows;
+        div.innerHTML = '<h4>Gameweek ' + gw.gameweek + '</h4><div class="season-gw-results">' + chips + '</div>';
         resultsBody.appendChild(div);
         return div;
       });
@@ -1083,21 +1114,12 @@
       // same underlying per-gameweek data, just formatted tighter.
       // matchMedia (not a one-off width check) so a resize/rotation
       // across the breakpoint re-renders both the header and the rows.
-      var TEAM_CODE = {
-        'Arsenal':'ARS', 'Aston Villa':'AVL', 'Bournemouth':'BOU', 'Brentford':'BRE',
-        'Brighton':'BHA', 'Burnley':'BUR', 'Chelsea':'CHE', 'Crystal Palace':'CRY',
-        'Everton':'EVE', 'Fulham':'FUL', 'Leeds':'LEE', 'Liverpool':'LIV',
-        'Manchester City':'MCI', 'Manchester United':'MUN', 'Newcastle United':'NEW',
-        'Nottingham Forest':'NFO', 'Sunderland':'SUN', 'Tottenham':'TOT',
-        'West Ham':'WHU', 'Wolverhampton Wanderers':'WOL'
-      };
       var compactQuery = window.matchMedia('(max-width:860px)');
       var tableHead = document.getElementById('season-table-head');
       function rowHtml(r, championTeam, compact){
         var cls = (championTeam && r.team === championTeam) ? ' class="champion-row"' : '';
         if(compact){
-          var code = TEAM_CODE[r.team] || r.team.slice(0, 3).toUpperCase();
-          return '<tr' + cls + '><td>' + code + '</td>'
+          return '<tr' + cls + '><td>' + teamCode(r.team) + '</td>'
             + '<td class="num">' + r.points + '</td>'
             + '<td class="num">' + r.w + '-' + r.d + '-' + r.l + '</td></tr>';
         }

@@ -1631,3 +1631,37 @@ for the actual text and visual direction before drafting either.
   couple of items having entered with plenty of blank space still below
   -- the effect asked for; full regression suite re-run clean. Pushed
   to `claude/pull-latest-main-m1y2cg`.
+  Merged to `main` on explicit request the same round.
+
+  **2026-08-30, later still — the season results feed shortened by
+  ~2.4x (mobile) to ~3.2x (desktop), abbreviated codes + several
+  results per line.** User feedback: "the game week scroll" (380
+  matches across 38 one-full-width-row-per-match gameweek blocks) was
+  too long -- suggested abbreviating team names and packing multiple
+  scores onto one line, exactly the fix applied. `TEAM_CODE` (the
+  3-letter map already built for the compact league table) is now
+  defined up front in the section's own script and shared via a new
+  `teamCode()` helper, rather than living only inside the table code
+  further down; each match renders as a compact "NEW 2–3 LIV" chip
+  instead of a full-width `home-team / score / away-team` flex row.
+  Chips lay out via `grid-template-columns:repeat(auto-fill,
+  minmax(92px, 1fr))` -- the count-per-line settles responsively
+  (2 on mobile's narrow results column, 5 on desktop's wide one, from
+  the same markup/CSS) rather than a fixed number that would either
+  waste space on one or overflow on the other. **Measured, not just
+  eyeballed**: the season section's own height dropped from ~16,900px
+  to ~6,930px on mobile (roughly 2.4x shorter) and ~12,780px to
+  ~3,970px on desktop (roughly 3.2x shorter, since desktop's wider
+  results column fits more chips per line); total page height mobile
+  24,438px -> 13,707px, desktop 18,571px -> 8,972px. **Verified the
+  reveal/gate mechanics untouched by the layout change**: full 38/38
+  monotonic reveal progression with the champion row correct at the
+  end, and the "genuinely blank at the pin moment" check from the
+  previous round re-run against the new compact layout -- still 0
+  gameweeks revealed at the instant the table pins, on both viewports
+  -- since `padUntilPinnedIsBlank`/`afterStickyPinned` only measure the
+  list container's own position, not its internal row layout, so
+  neither needed to change. Screenshots on both viewports confirm the
+  chips read clearly at their compact size (12px) with no overlap or
+  wrapping mid-code. Full regression suite clean. Pushed to
+  `claude/pull-latest-main-m1y2cg`.
