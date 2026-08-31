@@ -1590,3 +1590,44 @@ for the actual text and visual direction before drafting either.
   both sections on both viewports, zero early reveals. Full existing
   regression suite re-run clean on top of it. Pushed to
   `claude/pull-latest-main-m1y2cg`.
+  Merged to `main` on explicit request the same round.
+
+  **2026-08-30, later still — the actual remaining gap: a batch of items
+  revealing all at once the instant the card pins, not one at a time
+  from a blank start.** User report after testing the sequencing fix
+  above: the table should stay blank until the pitch (or, for the
+  second section, the league table) reaches the top, *then* entries
+  should enter from the bottom on scroll -- implying the previous round
+  hadn't actually delivered that. It hadn't, fully: `afterStickyPinned`
+  correctly stopped anything revealing *before* pin, verified rigorously
+  last round, but nobody had checked how much reveals in the same instant
+  pin happens. Measured directly: right at the pin moment, 6 of 15 shots
+  and 2 of 38 gameweeks were already revealed -- a batch, not a blank
+  start. **Root cause**: the list sits either right after the sticky
+  card in document flow (mobile's stacked game-reroll layout) or beside
+  it in the very same grid row (every other layout/section combination)
+  -- either way, a chunk of the list's own natural content is already
+  sitting in whatever screen space the card doesn't cover the instant
+  the card reaches its pinned position, since IntersectionObserver
+  (armed the moment `afterStickyPinned`'s callback fires) evaluates
+  against *current* geometry, and several rows already qualify at that
+  first check. **Fix**: a new `padUntilPinnedIsBlank(trackEl)`, called
+  alongside `afterStickyPinned`, pads `.reveal-list`'s own top by
+  exactly the shortfall needed to push its first item below the fold at
+  the pin moment -- computed from the list's fixed offset from the
+  track's own top (measured once; doesn't depend on scroll position),
+  subtracted from the viewport height. Computed once on load and never
+  touched again on resize, deliberately -- an earlier version of this
+  reveal mechanism reacted to every resize (mobile address-bar toggles
+  included) and that caused a real, confirmed scroll-position bug two
+  rounds back; this doesn't repeat it. **Verified**: re-measured the
+  exact same "how much reveals right at the pin instant" check that
+  caught the bug -- 0 shots and 0 gameweeks now, on both viewports;
+  confirmed the reveal still progresses correctly and monotonically to
+  a full, correct final state afterward (15/15 shots, 2-3/2-1 score;
+  38/38 gameweeks, champion row correct); screenshots at the pin moment
+  on both sections/both viewports showing a genuinely blank list beside
+  a fully-rendered card, and at a bit further scroll showing exactly a
+  couple of items having entered with plenty of blank space still below
+  -- the effect asked for; full regression suite re-run clean. Pushed
+  to `claude/pull-latest-main-m1y2cg`.

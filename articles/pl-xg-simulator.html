@@ -911,6 +911,39 @@
     request();
   }
 
+  /* afterStickyPinned alone wasn't enough: it only stops revealOnScroll
+     from being *armed* early, but the moment it does arm, the list's
+     first items may already be sitting in whatever screen space the
+     sticky card doesn't cover, since the list starts either right after
+     the card (mobile's stacked layout) or beside it in the very same
+     row (every other layout) -- either way, some of it is already
+     visible the instant the card pins, not scrolled to yet. Confirmed
+     directly, not assumed: measured 6 of 15 shots (game) and 2 of 38
+     gameweeks (season) already revealed the instant the pin condition
+     first became true. Pads .reveal-list's own top by exactly enough to
+     push its first item below the fold at that moment, so reaching pin
+     genuinely shows nothing from the list yet -- entering only starts
+     as the reader scrolls further, one item at a time.
+     The push amount is the list's fixed offset from the track's own top
+     (measured once, doesn't depend on scroll position at all) --
+     whatever's already "spent" by the card before the list begins,
+     subtracted from the viewport height. Computed once on load and left
+     alone rather than kept live on resize: an earlier version of this
+     page's reveal mechanism reacted to every resize (including the
+     ones mobile browsers fire continuously as their address bar
+     hides/shows mid-scroll) and that caused a real, confirmed
+     scroll-position bug -- not repeating that here. */
+  function padUntilPinnedIsBlank(trackEl){
+    var list = trackEl.querySelector('.reveal-list');
+    requestAnimationFrame(function(){
+      var headerEl = document.querySelector('.site-header');
+      var headerH = headerEl ? headerEl.offsetHeight : 0;
+      var listOffset = list.getBoundingClientRect().top - trackEl.getBoundingClientRect().top;
+      var needed = window.innerHeight - headerH - listOffset;
+      list.style.paddingTop = Math.max(0, needed) + 'px';
+    });
+  }
+
   /* =========================================================
      RE-ROLL ONE GAME
      ========================================================= */
@@ -1001,6 +1034,7 @@
         scoreEl.sim.textContent = shot.sim_score[0] + '–' + shot.sim_score[1];
       }
 
+      padUntilPinnedIsBlank(track);
       afterStickyPinned(track, function(){ revealOnScroll(logRows, revealShot); });
     });
   })();
@@ -1098,6 +1132,7 @@
         renderTable(gw.table, i === season.gameweeks.length - 1 ? season.champion : null);
       }
 
+      padUntilPinnedIsBlank(track);
       afterStickyPinned(track, function(){ revealOnScroll(gwBlocks, revealGameweek); });
     });
   })();
