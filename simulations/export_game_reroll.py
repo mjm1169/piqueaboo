@@ -16,14 +16,15 @@ module docstring) -- moot here anyway, since the chosen match has none.
 
 Usage:
     python export_game_reroll.py --shots data/shots_2025_26.csv \
-        --home "Newcastle United" --away "Liverpool" \
+        --home "Liverpool" --away "Bournemouth" \
         --out ../articles/pl-treemap-data/game-reroll-data.json
 
-Match choice: originally Man Utd 4-4 Bournemouth (39 shots), swapped after
-mobile feedback that a 39-shot pitch + log was too dense on a small screen
--- Newcastle 2-3 Liverpool has 15 shots (the CSV-wide median is 25, so this
-is genuinely light, not just "a bit fewer") while still a real, well-known
-fixture with goals both ends.
+Match choice: originally Man Utd 4-4 Bournemouth (39 shots), then swapped to
+Newcastle 2-3 Liverpool (15 shots) after mobile feedback that the first pick
+was too dense for a small screen. Swapped again, per an explicit request
+that this section show the season's own opening fixture: Liverpool 4-2
+Bournemouth (2025-08-15, 29 shots -- close to the CSV-wide median of 25, not
+the deliberately-light pick the previous match was).
 """
 
 import argparse
@@ -38,11 +39,11 @@ from simulate_season import load_shots
 # the big pass's own seed (this match isn't sim number N of the 1,000,000;
 # it's a standalone single draw), but fixed so the page shows the same
 # "alternate universe" on every visit rather than reshuffling per load.
-# Chosen (like the previous match's seed) by searching a seed range for a
-# genuinely divergent outcome: real result is a 2-3 Liverpool away win,
-# this seed flips it to a 2-1 Newcastle home win -- a real turnaround, not
-# just a different scoreline on the same side winning.
-GAME_REROLL_SEED = 20260011
+# Chosen (like the previous matches' seeds) by searching a seed range for a
+# genuinely divergent outcome: real result is a 4-2 Liverpool home win,
+# this seed flips it to a 1-4 Bournemouth away win -- a real turnaround,
+# not just a different scoreline on the same side winning.
+GAME_REROLL_SEED = 20260046
 
 
 def main():

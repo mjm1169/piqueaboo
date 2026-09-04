@@ -106,50 +106,63 @@
     .scoreboard-row{ flex-direction:column; align-items:center; gap:2px; }
     .scoreboard-row .scoreboard-label{ width:auto; text-align:center; }
 
-    /* The pitch is the single biggest item in the sticky visual -- at
-       full width on a phone it (plus the scoreboard) can eat almost the
-       whole viewport, leaving barely any of the shot log visible beneath
-       it (reported directly: "the shot log needs more space on mobile").
-       Capping its own width (rather than the whole .reveal-visual, which
-       would also cramp the scoreboard/legend) shrinks it in both
-       dimensions at its fixed 600:400 aspect ratio, freeing real vertical
-       room for the log without touching desktop at all. */
+    /* Two pitches side by side is too tight at phone width -- stack them
+       instead, each capped to the same width the old single pitch used,
+       so neither one (plus the scoreboard above) eats the whole viewport
+       and crowds out the shot log beneath (reported directly on the old
+       single-pitch layout: "the shot log needs more space on mobile"). */
+    .pitch-pair{ flex-direction:column; gap:10px; }
     .pitch-chart{ max-width:230px; margin:0 auto; }
     .pitch-legend{ margin-top:6px; font-size:11px; gap:14px; }
   }
 
+  /* Two small pitches (real outcome, simulated outcome) side by side
+     rather than one big one carrying both via flashes alone -- each shot
+     plots at the same spot on both, since the shot itself is the same
+     real-world attempt either way, but only diverges in which one(s) it
+     actually finds the net on. flex (not a fixed width) sizes each pitch
+     from the sticky column's own width, which is already narrow (42% of
+     the article's own max-width) -- "small" falls out of the existing
+     layout rather than needing its own cap on desktop. */
+  .pitch-pair{ display:flex; gap:14px; }
+  .pitch-single{ flex:1 1 0; min-width:0; }
+  .pitch-single-label{
+    text-align:center; font-size:10px; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--muted); margin-bottom:4px;
+  }
   .pitch-chart{ width:100%; height:auto; display:block; }
   .pitch-line{ fill:none; stroke:#C9CDD3; stroke-width:1.5; }
-  /* The permanent mark a shot settles into once revealed -- team-coloured,
-     part-opacity ("fading but remaining faded"). The bright flash itself
-     is a separate, temporary circle overlaid at the same point (see
-     flashShot() below) rather than an animation on this element: a CSS
-     keyframe can't animate "back to whatever this element's own class
-     rule says" (fill:inherit resolves against the *parent*, not a sibling
-     class rule), so a transient sibling element is the simpler, correct
-     way to get flash-then-settle without fighting that. */
-  .pitch-shot{ opacity:0; transition:opacity .4s ease; }
+  /* The permanent mark a shot settles into once revealed -- grey for an
+     ordinary attempt, recoloured to the scoring team's own colour only
+     when it's a goal *on this particular pitch* (a shot can be a goal on
+     one pitch and not the other, real vs. simulated). Team colours are
+     arbitrary hexes pulled from teamsMeta at reveal time, not a fixed set
+     of CSS classes, so that recolouring happens via an inline fill rather
+     than a class modifier -- see revealShot() below. The bright flash
+     itself is a separate, temporary circle overlaid at the same point
+     (see flashShot() below) rather than an animation on this element: a
+     CSS keyframe can't animate "back to whatever this element's own
+     class rule says" (fill:inherit resolves against the *parent*, not a
+     sibling class rule), so a transient sibling element is the simpler,
+     correct way to get flash-then-settle without fighting that. */
+  .pitch-shot{ opacity:0; fill:var(--muted); transition:opacity .4s ease; }
   .pitch-shot.revealed{ opacity:.55; }
-  .pitch-shot.home{ fill:var(--accent-step); }
-  .pitch-shot.away{ fill:var(--negative-step); }
+  .pitch-shot.goal{ opacity:.9; }
   .pitch-flash{ pointer-events:none; animation:pitch-flash-anim .7s ease-out forwards; }
-  .pitch-flash.goal{ fill:var(--positive-step); }
-  .pitch-flash.miss{ fill:var(--muted); }
   @keyframes pitch-flash-anim{
     0%{ r:16; opacity:.9; }
     100%{ r:4; opacity:0; }
   }
 
   .pitch-legend{
-    display:flex; justify-content:center; gap:20px; margin-top:10px;
+    display:flex; justify-content:center; flex-wrap:wrap; gap:20px; margin-top:10px;
     font-size:12px; color:var(--muted);
   }
   .pitch-legend .dot{
     display:inline-block; width:9px; height:9px; border-radius:50%;
     margin-right:5px; vertical-align:middle;
   }
-  .pitch-legend .dot.home{ background:var(--accent-step); }
-  .pitch-legend .dot.away{ background:var(--negative-step); }
+  .pitch-legend .dot.shot{ background:var(--muted); }
 
   .game-log{ width:100%; border-collapse:collapse; font-size:13px; }
   .game-log th{
@@ -207,7 +220,10 @@
        (an ID beats the shared .reveal-track class on specificity) so
        none of this touches the game-reroll section's own mobile
        stacking, which stays as-is. */
-    #season-reroll-track{ grid-template-columns:1fr 112px; column-gap:14px; }
+    /* 128px, not the original 112px -- a touch wider so the combined
+       W-D-L column's widest realistic value ("10-10-10") always fits on
+       one line rather than wrapping (see the nth-child rule below). */
+    #season-reroll-track{ grid-template-columns:1fr 128px; column-gap:14px; }
     /* order:2 puts the table visually on the right despite being first
        in the DOM (source order still gives it focus-order priority,
        which is fine -- the table is genuinely the primary content). */
@@ -229,6 +245,14 @@
     #season-reroll-track .season-table{ font-size:10.5px; }
     #season-reroll-track .season-table th{ font-size:8.5px; padding:2px 3px; }
     #season-reroll-track .season-table td{ padding:2px 3px; }
+    /* The rightmost (W-D-L) column of the compact table -- its widest
+       realistic value, "10-10-10", was wrapping onto two lines at this
+       column's old, tighter width. nth-child(3) is safe here: this rule
+       only ever applies to the compact 3-column head/rows renderHeader()
+       and rowHtml() build past this same breakpoint, never the desktop
+       7-column table. */
+    #season-reroll-track .season-table th:nth-child(3),
+    #season-reroll-track .season-table td:nth-child(3){ width:52%; white-space:nowrap; }
   }
 
   .season-gw-block{ margin-bottom:14px; opacity:0; transition:opacity .3s ease; }
@@ -254,6 +278,35 @@
     border-bottom:1px solid #F0F0F0; font-variant-numeric:tabular-nums;
   }
   .season-result-chip .score{ font-weight:500; margin:0 4px; }
+
+  /* 38 individual gameweek blocks was reported as too long a scroll even
+     after the compact-chip layout above -- only the first 5 and last 5
+     gameweeks get their own block; the 28 in between collapse into one
+     reveal item (still fading in the same way, still advancing the table
+     to where it stood at the end of that stretch), read as a single
+     scroll-skip rather than a long march through mid-table results
+     nobody's tracking gameweek to gameweek. */
+  .season-gw-skip{
+    display:flex; align-items:center; justify-content:center;
+    min-height:80px; text-align:center; font-style:italic; color:var(--muted);
+  }
+
+  /* Placeholder text scrolling in ahead of the table (sized, via
+     padUntilPinnedIsBlank, to finish exactly as the table itself reaches
+     its pinned position -- see that function) and after the final
+     gameweek (holding the table pinned on the right until this finishes,
+     a plain side effect of it adding to the list column's own height --
+     see revealOnScroll's setup below). Both are genuine placeholder copy
+     for the user to replace, per this file's own authorship convention
+     (see CLAUDE.md) -- not narrative Claude should be writing. */
+  .season-intro-placeholder{
+    display:flex; align-items:center; color:var(--muted); font-size:15px;
+  }
+  .season-exit-placeholder{
+    display:flex; align-items:center; min-height:50vh; color:var(--muted);
+    font-size:15px; opacity:0; transition:opacity .3s ease;
+  }
+  .season-exit-placeholder.revealed{ opacity:1; }
 
   /* ---------- treemap ---------- */
 
@@ -619,14 +672,27 @@
             </div>
           </div>
 
-          <svg id="pitch-svg" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
-            <g id="pitch-markings"></g>
-            <g id="pitch-shots"></g>
-          </svg>
+          <div class="pitch-pair">
+            <div class="pitch-single">
+              <div class="pitch-single-label">Real</div>
+              <svg id="pitch-svg-real" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                <g class="pitch-markings"></g>
+                <g class="pitch-shots"></g>
+              </svg>
+            </div>
+            <div class="pitch-single">
+              <div class="pitch-single-label">Simulated</div>
+              <svg id="pitch-svg-sim" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                <g class="pitch-markings"></g>
+                <g class="pitch-shots"></g>
+              </svg>
+            </div>
+          </div>
 
           <div class="pitch-legend">
-            <span><i class="dot home"></i><span id="gr-home-legend"></span></span>
-            <span><i class="dot away"></i><span id="gr-away-legend"></span></span>
+            <span><i class="dot shot"></i>Shot</span>
+            <span><i class="dot" id="gr-home-dot"></i><span id="gr-home-legend"></span> goal</span>
+            <span><i class="dot" id="gr-away-dot"></i><span id="gr-away-legend"></span> goal</span>
           </div>
         </div>
       </div>
@@ -661,7 +727,24 @@
         </div>
       </div>
 
-      <div class="reveal-list" id="season-results-body"></div>
+      <div class="reveal-list" id="season-results-body">
+        <div class="season-intro-placeholder" id="season-intro-placeholder">
+          <!-- COPY: TBD -- user to fill in (see CLAUDE.md authorship
+               convention). Sized by padUntilPinnedIsBlank() to finish
+               scrolling past exactly as the table beside/above it
+               reaches its own pinned position. -->
+          <p>Placeholder text — TBD.</p>
+        </div>
+        <div class="season-exit-placeholder" id="season-exit-placeholder">
+          <!-- COPY: TBD -- user to fill in (see CLAUDE.md authorship
+               convention). Gameweek 38's own closing text: the table
+               stays pinned on the right until this finishes scrolling,
+               then releases -- a plain side effect of this block adding
+               to the list column's own height, see the reveal setup
+               below. -->
+          <p>Placeholder text — TBD.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -942,14 +1025,22 @@
      ones mobile browsers fire continuously as their address bar
      hides/shows mid-scroll) and that caused a real, confirmed
      scroll-position bug -- not repeating that here. */
-  function padUntilPinnedIsBlank(trackEl){
+  /* Optional second argument: a placeholder element sitting as the
+     first child of the list, given the computed height instead of a
+     bare padding-top -- so the same "genuinely blank until pin" gap
+     doubles as visible placeholder copy that scrolls in alongside the
+     sticky visual, rather than empty space (the season section's own
+     intro placeholder; the game section still gets plain padding, no
+     placeholder element to hand in). */
+  function padUntilPinnedIsBlank(trackEl, placeholderEl){
     var list = trackEl.querySelector('.reveal-list');
     requestAnimationFrame(function(){
       var headerEl = document.querySelector('.site-header');
       var headerH = headerEl ? headerEl.offsetHeight : 0;
       var listOffset = list.getBoundingClientRect().top - trackEl.getBoundingClientRect().top;
-      var needed = window.innerHeight - headerH - listOffset;
-      list.style.paddingTop = Math.max(0, needed) + 'px';
+      var needed = Math.max(0, window.innerHeight - headerH - listOffset);
+      if(placeholderEl) placeholderEl.style.minHeight = needed + 'px';
+      else list.style.paddingTop = needed + 'px';
     });
   }
 
@@ -969,12 +1060,16 @@
       document.getElementById('gr-away-name').textContent = game.away_team;
       document.getElementById('gr-home-legend').textContent = game.home_team;
       document.getElementById('gr-away-legend').textContent = game.away_team;
+      function teamColor(team){ return teamsMeta[team].color; }
+      document.getElementById('gr-home-dot').style.background = teamColor(game.home_team);
+      document.getElementById('gr-away-dot').style.background = teamColor(game.away_team);
 
-      /* ---- pitch markings, drawn once ---- */
+      /* ---- pitch markings, drawn once per pitch (real + simulated share
+         identical markings, just two separate <g>s to keep each pitch's
+         own shot layer independent) ---- */
       var PW = 600, PH = 400, PAD = 10;
       var BOX_W = 96, BOX_H = 220, SIX_W = 34, SIX_H = 96;
-      var markings = document.getElementById('pitch-markings');
-      markings.innerHTML =
+      var markingsHTML =
           '<rect class="pitch-line" x="' + PAD + '" y="' + PAD + '" width="' + (PW - 2*PAD) + '" height="' + (PH - 2*PAD) + '"></rect>'
         + '<line class="pitch-line" x1="' + (PW/2) + '" y1="' + PAD + '" x2="' + (PW/2) + '" y2="' + (PH-PAD) + '"></line>'
         + '<circle class="pitch-line" cx="' + (PW/2) + '" cy="' + (PH/2) + '" r="45"></circle>'
@@ -987,9 +1082,10 @@
         + '<rect class="pitch-line" x="' + (PW-PAD-BOX_W) + '" y="' + ((PH-BOX_H)/2) + '" width="' + BOX_W + '" height="' + BOX_H + '"></rect>'
         + '<rect class="pitch-line" x="' + (PW-PAD-SIX_W) + '" y="' + ((PH-SIX_H)/2) + '" width="' + SIX_W + '" height="' + SIX_H + '"></rect>'
         + '<circle fill="#C9CDD3" cx="' + (PW-PAD-70) + '" cy="' + (PH/2) + '" r="2.5"></circle>';
+      document.querySelector('#pitch-svg-real .pitch-markings').innerHTML = markingsHTML;
+      document.querySelector('#pitch-svg-sim .pitch-markings').innerHTML = markingsHTML;
 
       /* ---- shot markers + log rows, pre-rendered, revealed progressively ---- */
-      var shotsG = document.getElementById('pitch-shots');
       var svgNS = 'http://www.w3.org/2000/svg';
       function shotXY(shot){
         // Understat's X/Y are normalised 0..1 from the SHOOTING side's own
@@ -1002,21 +1098,33 @@
       }
       function shotRadius(xg){ return Math.max(3, Math.min(14, 3 + Math.sqrt(xg)*13)); } // area-proportional to xG
 
-      var shotEls = game.shots.map(function(shot){
-        var pos = shotXY(shot);
-        var el = document.createElementNS(svgNS, 'circle');
-        el.setAttribute('cx', pos[0]); el.setAttribute('cy', pos[1]);
-        el.setAttribute('r', shotRadius(shot.xg));
-        el.setAttribute('class', 'pitch-shot ' + (shot.is_home ? 'home' : 'away'));
-        shotsG.appendChild(el);
-        return el;
-      });
+      // Same shot, same position, on both pitches -- only whether it's a
+      // *goal* (and so gets recoloured from grey to the scoring team's
+      // own colour) can differ between the real pitch and the simulated
+      // one, so each gets its own set of circle elements built the same
+      // way rather than one shared set.
+      function buildPitchShots(svgId){
+        var shotsG = document.querySelector('#' + svgId + ' .pitch-shots');
+        var els = game.shots.map(function(shot){
+          var pos = shotXY(shot);
+          var el = document.createElementNS(svgNS, 'circle');
+          el.setAttribute('cx', pos[0]); el.setAttribute('cy', pos[1]);
+          el.setAttribute('r', shotRadius(shot.xg));
+          el.setAttribute('class', 'pitch-shot');
+          shotsG.appendChild(el);
+          return el;
+        });
+        return { shotsG: shotsG, els: els };
+      }
+      var pitchReal = buildPitchShots('pitch-svg-real');
+      var pitchSim = buildPitchShots('pitch-svg-sim');
 
-      function flashShot(el, isGoal){
+      function flashShot(shotsG, el, color){
         var flash = document.createElementNS(svgNS, 'circle');
         flash.setAttribute('cx', el.getAttribute('cx'));
         flash.setAttribute('cy', el.getAttribute('cy'));
-        flash.setAttribute('class', 'pitch-flash ' + (isGoal ? 'goal' : 'miss'));
+        flash.setAttribute('class', 'pitch-flash');
+        flash.style.fill = color;
         flash.addEventListener('animationend', function(){ flash.remove(); });
         shotsG.appendChild(flash);
       }
@@ -1033,10 +1141,22 @@
       });
 
       var scoreEl = { real: document.getElementById('gr-real-score'), sim: document.getElementById('gr-sim-score') };
+      // Marks shot i on one pitch: grey (var(--muted), same resting colour
+      // the flash settles from) if it's not a goal *on this pitch*, or
+      // the scoring team's own colour if it is -- real and simulated can
+      // disagree on this for the same shot, which is the whole point of
+      // showing two pitches rather than one.
+      function markShot(pitch, i, shot, isGoal){
+        var el = pitch.els[i];
+        el.classList.add('revealed');
+        var color = isGoal ? teamColor(shot.team) : 'var(--muted)';
+        if(isGoal){ el.classList.add('goal'); el.style.fill = color; }
+        flashShot(pitch.shotsG, el, color);
+      }
       function revealShot(i){
         var shot = game.shots[i];
-        shotEls[i].classList.add('revealed');
-        flashShot(shotEls[i], shot.sim_goal);
+        markShot(pitchReal, i, shot, shot.real_goal);
+        markShot(pitchSim, i, shot, shot.sim_goal);
         logRows[i].classList.add('revealed');
         if(shot.sim_goal) logRows[i].classList.add('is-goal');
         scoreEl.real.textContent = shot.real_score[0] + '–' + shot.real_score[1];
@@ -1074,8 +1194,12 @@
       };
       function teamCode(name){ return TEAM_CODE[name] || name.slice(0, 3).toUpperCase(); }
 
-      // 380 matches across 38 one-match-per-line blocks made for a very
-      // long scroll (reported directly: "shorten the gameweek scroll").
+      // The static exit placeholder (see the HTML) has to stay the last
+      // child of #season-results-body -- every gameweek block below gets
+      // inserted just before it (never appended) so it can't end up
+      // ahead of them.
+      var exitPlaceholderEl = document.getElementById('season-exit-placeholder');
+
       // Abbreviated codes (matching the compact league table's own
       // format) plus a wrapping grid -- several results per line instead
       // of one -- cuts each gameweek's own height to a fraction of what
@@ -1083,7 +1207,7 @@
       // settling responsively (CSS grid auto-fill) rather than a fixed
       // number that would either waste space on desktop or overflow on
       // mobile.
-      var gwBlocks = season.gameweeks.map(function(gw){
+      function buildGwBlock(gw){
         var div = document.createElement('div');
         div.className = 'season-gw-block';
         var chips = gw.matches.map(function(m){
@@ -1092,9 +1216,63 @@
             + teamCode(m.away_team) + '</span>';
         }).join('');
         div.innerHTML = '<h4>Gameweek ' + gw.gameweek + '</h4><div class="season-gw-results">' + chips + '</div>';
-        resultsBody.appendChild(div);
+        resultsBody.insertBefore(div, exitPlaceholderEl);
         return div;
+      }
+
+      // 38 individual gameweeks was still too long a scroll even with the
+      // compact chips above -- only the first and last 5 get their own
+      // block; the 28 in between collapse into a single reveal item
+      // (still fading in, still carrying the table forward to where it
+      // stood at the end of that stretch) rather than a long march
+      // through mid-table results nobody's tracking week to week.
+      var EARLY_COUNT = 5, LATE_COUNT = 5;
+      var totalGw = season.gameweeks.length;
+      var earlyGws = season.gameweeks.slice(0, EARLY_COUNT);
+      var lateGws = season.gameweeks.slice(Math.max(EARLY_COUNT, totalGw - LATE_COUNT));
+      var midGws = season.gameweeks.slice(EARLY_COUNT, totalGw - LATE_COUNT);
+
+      function applyGameweek(gw, isFinal){
+        gwLabel.textContent = 'Gameweek ' + gw.gameweek;
+        // Only the truly final table gets the champion highlighted --
+        // whoever's top mid-season isn't necessarily who ends up there,
+        // and this particular season's real story is a title race that
+        // stays live deep into it.
+        renderTable(gw.table, isFinal ? season.champion : null);
+      }
+
+      // {el, onReveal} pairs, in scroll order -- revealOnScroll only
+      // needs the elements to watch and an index-keyed callback, so this
+      // is the one place that decides what "gameweek N" actually means
+      // for a given reveal step (an individual gameweek, the mid-season
+      // skip, or the closing placeholder).
+      var revealItems = [];
+      earlyGws.forEach(function(gw){
+        var div = buildGwBlock(gw);
+        revealItems.push({ el: div, onReveal: function(){ applyGameweek(gw, false); } });
       });
+      if(midGws.length){
+        var midDiv = document.createElement('div');
+        midDiv.className = 'season-gw-block season-gw-skip';
+        var midLabel = '…' + midGws.length + ' mid-season games…';
+        midDiv.textContent = midLabel;
+        resultsBody.insertBefore(midDiv, exitPlaceholderEl);
+        var lastMidGw = midGws[midGws.length - 1];
+        revealItems.push({ el: midDiv, onReveal: function(){
+          gwLabel.textContent = midLabel;
+          renderTable(lastMidGw.table, null);
+        } });
+      }
+      lateGws.forEach(function(gw, i){
+        var div = buildGwBlock(gw);
+        var isFinal = (i === lateGws.length - 1);
+        revealItems.push({ el: div, onReveal: function(){ applyGameweek(gw, isFinal); } });
+      });
+      // The exit placeholder's own reveal needs nothing beyond the fade
+      // handled below -- it exists to hold the table pinned on the right
+      // (a plain side effect of it adding to the list column's own
+      // height) until its own copy finishes scrolling past.
+      revealItems.push({ el: exitPlaceholderEl, onReveal: function(){} });
 
       // All-zero table, alphabetical -- shown before any gameweek has revealed.
       var zeroTable = season.gameweeks[0].table
@@ -1143,19 +1321,16 @@
       renderTable(zeroTable, null);
       compactQuery.addEventListener('change', function(){ renderTable(lastRows, lastChampion); });
 
-      function revealGameweek(i){
-        gwBlocks[i].classList.add('revealed');
-        var gw = season.gameweeks[i];
-        gwLabel.textContent = 'Gameweek ' + gw.gameweek;
-        // Only the truly final table gets the champion highlighted --
-        // whoever's top mid-season isn't necessarily who ends up there,
-        // and this particular season's real story is a title race that
-        // stays live deep into it.
-        renderTable(gw.table, i === season.gameweeks.length - 1 ? season.champion : null);
+      function revealItem(i){
+        var item = revealItems[i];
+        item.el.classList.add('revealed');
+        item.onReveal();
       }
 
-      padUntilPinnedIsBlank(track);
-      afterStickyPinned(track, function(){ revealOnScroll(gwBlocks, revealGameweek); });
+      padUntilPinnedIsBlank(track, document.getElementById('season-intro-placeholder'));
+      afterStickyPinned(track, function(){
+        revealOnScroll(revealItems.map(function(it){ return it.el; }), revealItem);
+      });
     });
   })();
 })();

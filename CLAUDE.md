@@ -1665,3 +1665,104 @@ for the actual text and visual direction before drafting either.
   chips read clearly at their compact size (12px) with no overlap or
   wrapping mid-code. Full regression suite clean. Pushed to
   `claude/pull-latest-main-m1y2cg`.
+
+  **2026-09-04, done — seven amendments across both new scroll sections:
+  opening fixture, grey/team-coloured pitch, two small pitches, a synced
+  placeholder entrance and a held-table exit for the season table, a
+  5+skip+5 gameweek trim, and a compact-table column-width fix.** User
+  feedback, seven items. **Game re-roll match**: swapped from Newcastle
+  2-3 Liverpool to the season's own opener, Liverpool 4-2 Bournemouth
+  (2025-08-15, match_id 28778, 29 shots) -- `export_game_reroll.py`
+  re-run with a freshly seed-searched `GAME_REROLL_SEED` (20260046,
+  found the same way as every previous pick in this file's history:
+  searching a seed range for a genuinely divergent outcome, not the
+  first one tried) that flips the real 4-2 home win into a 1-4
+  Bournemouth away win -- a real turnaround, not just a closer scoreline
+  on the same side. **Grey shots, team-coloured goals**: `.pitch-shot`'s
+  fixed home/away fill classes are gone; every shot now rests at
+  `var(--muted)` grey, recoloured via an inline `style.fill` to the
+  scoring team's own colour (already available from the same `teamsMeta`
+  this section already fetches for crests -- no new data needed) only
+  when it's a goal, and only on whichever pitch it's a goal on. The
+  flash overlay follows the same rule (team colour for a goal, grey for
+  a miss) rather than the old fixed green/grey. **Two small pitches**:
+  one `<svg>` per outcome (`#pitch-svg-real`/`#pitch-svg-sim`), same
+  markings, same shot positions (the shot itself doesn't move -- only
+  whether it's a goal can differ between the two), each built via a new
+  `buildPitchShots()`/`markShot()` pair so the reveal logic doesn't
+  duplicate itself per pitch. Side by side on desktop (a plain flex
+  row -- already "small" since the sticky column itself is only 42% of
+  the article's own width, no extra cap needed), stacked on mobile
+  (reusing the existing 230px single-pitch cap from the last mobile
+  density fix). Legend rebuilt around this: a grey "Shot" swatch plus
+  two team-coloured "‹team› goal" swatches (dot colour set inline from
+  the same `teamsMeta` lookup) rather than the old fixed home/away dots.
+  **Season table entrance**: `padUntilPinnedIsBlank()` gained an optional
+  second argument -- a placeholder element to size via `min-height`
+  instead of the bare `padding-top` it already used, so the same
+  "genuinely blank until pin" gap (unchanged maths, still computed to
+  finish exactly as the sticky table reaches its pinned position) is now
+  occupied by real, visible placeholder text that scrolls in alongside
+  the table rather than empty space. Game-reroll's own call is
+  unaffected (still plain padding, no placeholder to hand in) -- this
+  was reported specifically about "the table for the next section".
+  **Season table exit**: a second placeholder, `#season-exit-placeholder`,
+  sits as the permanent last child of the results feed; every gameweek
+  block (early, mid-skip, late) is now inserted via `insertBefore` against
+  it rather than `appendChild`, so it can never end up ahead of them. No
+  bespoke JS holds the table in place for this -- it falls out of the
+  existing CSS Grid + sticky mechanics for free, since the placeholder
+  simply adds to the list column's own height, and a sticky child stays
+  pinned for exactly as long as the taller column still has content left
+  to scroll through. **First 5 + last 5 gameweeks**: `season.gameweeks`
+  is now sliced into `earlyGws`/`midGws`/`lateGws` (5/28/5 on the current
+  38-gameweek data); the 28 middle gameweeks collapse into one reveal
+  item, `…28 mid-season games…` (exact wording as given), which on reveal
+  jumps the table straight to its state at the end of that stretch
+  (`midGws`'s own last table) rather than losing track of where the
+  season stood. `gwBlocks`'s old flat map is gone, replaced by a
+  `{el, onReveal}`-per-item `revealItems` array built by a shared
+  `buildGwBlock()`/`applyGameweek()` pair, covering all three kinds of
+  reveal step (individual gameweek, mid-season skip, closing placeholder)
+  through the one `revealOnScroll` call. **Compact table column width**:
+  the mobile sidebar widened from 112px to 128px and the compact table's
+  third (W-D-L) column got an explicit `width:52%; white-space:nowrap`
+  past that breakpoint -- "10-10-10", the widest realistic value, no
+  longer wraps onto two lines. Both new placeholders are genuine
+  placeholder copy (`<!-- COPY: TBD -->`, same convention as this file's
+  existing heading/intro-copy scaffolding) for the user to write --
+  not narrative Claude should be inventing.
+  **Verified end-to-end via headless-Chromium Playwright** (a fresh
+  install in this sandbox, `chromium_headless_shell` build -- the
+  regular `chromium` binary needs new-headless-mode flags this
+  Playwright version doesn't pass by default): regenerated
+  `game-reroll-data.json` hand-checked (running scores match the final
+  4-2/1-4 scorelines exactly, both teams present, 29 shots); a full
+  scroll-through of the game-reroll section confirmed all 29 shots
+  revealed on both pitches, goal counts matching each final score
+  (6 real goals, 5 sim goals) with fill colours matching each scoring
+  team's actual hex (Liverpool's maroon, Bournemouth's red) and grey
+  elsewhere; `#season-results-body`'s children confirmed in exact order
+  (intro placeholder, GW1-5, the mid-season skip, GW34-38, exit
+  placeholder); a binary-searched pin point showed the intro placeholder's
+  own bottom edge sitting almost exactly on the viewport's bottom edge
+  (899.9px of 900) right as the table pins, with the table still showing
+  all-zero kick-off and gameweek 1 not yet revealed; fine-grained
+  incremental scroll sampling confirmed every one of the 11 reveal steps
+  fires in order (kick-off -> GW1...5 -> mid-season -> GW34...38); a
+  full sweep through the whole season track confirmed the table's sticky
+  wrapper stays at a constant screen position throughout, including
+  through the exit placeholder's own reveal, and only starts moving once
+  that placeholder has actually appeared; the compact W-D-L column
+  checked with real data up to two-digit values (no overflow found
+  across a full scroll) and directly forced to the literal "10-10-10"
+  case (still no overflow); screenshots on both desktop and a 390px
+  mobile viewport of the two-pitch layout, the season table's entrance,
+  a mid-scroll gameweek, the mid-season skip block, and the held-table
+  exit all confirm the intended visual result; full-page scroll-through
+  regressions on both viewports came back with zero real page errors
+  (the one console error present, `ERR_CONNECTION_RESET` fetching Google
+  Fonts, is the same pre-existing, unrelated sandbox network block this
+  file's history has already flagged repeatedly). Not pushed to `main`
+  this round -- left on `claude/game-simul-ui-amendments-qrs1s6` per this
+  session's own branch, pending the user's review.
