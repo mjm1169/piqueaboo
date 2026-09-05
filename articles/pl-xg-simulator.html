@@ -90,29 +90,43 @@
   }
   .scoreboard-row .scoreboard-score{ font-size:20px; font-weight:500; min-width:52px; text-align:center; }
   .scoreboard-row.sim .scoreboard-score{ color:var(--accent-step); }
+  /* Desktop keeps the single shared scoreboard above both pitches -- this
+     per-pitch score only shows up under the mobile breakpoint below,
+     where that shared scoreboard's own score row is hidden instead.
+     Declared here (ahead of that media query in source order) so the
+     query's own display:flex actually wins on mobile -- the reverse
+     order would let this unconditional rule win at every width. */
+  .pitch-single-score{ display:none; }
 
   @media (max-width:640px){
-    /* The 3-column row (crest+name | scores | crest+name) has no room for
-       a full team name at this width -- "Manchester United" wrapping to
-       two lines within its own narrow column pushed against the scores
-       column, cramped and hard to read. Stack instead: each team as a
-       compact horizontal crest+name row, the two scores side by side
-       (label above number) in between. */
-    .game-scoreboard{ flex-direction:column; align-items:stretch; gap:6px; margin-bottom:8px; }
-    .scoreboard-side{ flex-direction:row; justify-content:center; gap:8px; }
+    /* The shared scoreboard's own score row is dropped on mobile -- each
+       pitch below carries its own score beside it instead (see
+       .pitch-single-score) -- so this becomes just the two team
+       crest+name sides, side by side on one compact row rather than the
+       old crest/scores/crest three-row stack. That's most of the
+       vertical space this reclaims for the shot log beneath. */
+    .game-scoreboard{ justify-content:center; gap:16px; margin-bottom:10px; }
+    .scoreboard-side{ flex-direction:row; flex:none; gap:6px; }
     .scoreboard-crest{ width:22px; height:22px; }
     .scoreboard-team{ font-size:13px; }
-    .scoreboard-scores{ flex-direction:row; justify-content:center; gap:28px; }
-    .scoreboard-row{ flex-direction:column; align-items:center; gap:2px; }
-    .scoreboard-row .scoreboard-label{ width:auto; text-align:center; }
+    .scoreboard-scores{ display:none; }
 
     /* Two pitches side by side is too tight at phone width -- stack them
-       instead, each capped to the same width the old single pitch used,
-       so neither one (plus the scoreboard above) eats the whole viewport
-       and crowds out the shot log beneath (reported directly on the old
-       single-pitch layout: "the shot log needs more space on mobile"). */
+       instead. Each pitch now sits beside its own score (a row, not a
+       column) rather than under a small label, so the pitch itself can
+       stay reasonably sized while still leaving the score legible and
+       freeing more room overall for the shot log beneath (reported
+       directly: "more space for the shot scroll"). */
     .pitch-pair{ flex-direction:column; gap:10px; }
-    .pitch-chart{ max-width:230px; margin:0 auto; }
+    .pitch-single{ display:flex; align-items:center; gap:10px; }
+    .pitch-single-main{ flex:1 1 auto; min-width:0; }
+    .pitch-chart{ max-width:170px; margin:0 auto; }
+    .pitch-single-score{
+      display:flex; flex-direction:column; align-items:center; gap:2px;
+      flex:0 0 auto; width:64px;
+    }
+    .pitch-single-score .scoreboard-label{ width:auto; }
+    .pitch-single-score .scoreboard-score{ font-size:18px; min-width:0; }
     .pitch-legend{ margin-top:6px; font-size:11px; gap:14px; }
   }
 
@@ -183,10 +197,14 @@
   .game-log .sim-goal{ color:var(--accent-step); font-weight:500; }
 
   @media (max-width:640px){
-    /* Denser than desktop's rows -- pure legibility/space trade for a
-       narrow screen (more of the log visible at once). */
+    /* Was denser than desktop's own rows (9px), a legibility/space trade
+       from when the pitch+scoreboard above ate most of the viewport.
+       That's no longer true now the scoreboard's score row moved beside
+       each pitch instead (see .pitch-single-score above), freeing real
+       room here -- widened past desktop's own 13px per direct feedback
+       that the shot scroll itself should be "more spaced out". */
     .game-log{ font-size:12.5px; }
-    .game-log td{ padding:9px 5px; }
+    .game-log td{ padding:16px 5px; }
   }
 
   /* ---------- simulated season ---------- */
@@ -544,6 +562,26 @@
     .campaign-table th:nth-child(5), .campaign-table td:nth-child(5){ width:80px; }
   }
 
+  /* The golden-boot game-log table reuses .campaign-table's base look
+     (border-collapse, sticky header, td ellipsis) but has a different
+     4-column shape (opponent/H-A/goals/xG, no result badge) -- the
+     generic nth-child widths above are tuned for the 5-column campaign
+     table, so override them here, scoped by the containing block's own
+     id (higher specificity than a bare class selector, so it wins
+     regardless of source order) rather than fighting it. */
+  #modal-goldenboot-log-block .campaign-table th:nth-child(1),
+  #modal-goldenboot-log-block .campaign-table td:nth-child(1){ width:auto; padding-right:6px; }
+  #modal-goldenboot-log-block .campaign-table th:nth-child(2),
+  #modal-goldenboot-log-block .campaign-table td:nth-child(2){ width:36px; }
+  #modal-goldenboot-log-block .campaign-table th:nth-child(3),
+  #modal-goldenboot-log-block .campaign-table td:nth-child(3){ width:56px; }
+  #modal-goldenboot-log-block .campaign-table th:nth-child(4),
+  #modal-goldenboot-log-block .campaign-table td:nth-child(4){ width:64px; }
+  /* A row where the player actually scored -- reuses the same green
+     already used for a real/simulated goal elsewhere on this page
+     (e.g. .game-log .real-goal). */
+  #modal-goldenboot-log-block tr.scored td:nth-child(3){ color:var(--positive-step); font-weight:600; }
+
   /* ---------- tiebreak explainer (in the champion modal, title-tie stories only) ---------- */
 
   #modal-tiebreak-block{ display:none; }
@@ -659,11 +697,11 @@
             <div class="scoreboard-scores">
               <div class="scoreboard-row real">
                 <span class="scoreboard-label">Real</span>
-                <span class="scoreboard-score" id="gr-real-score">0–0</span>
+                <span class="scoreboard-score gr-score-real" id="gr-real-score">0–0</span>
               </div>
               <div class="scoreboard-row sim">
                 <span class="scoreboard-label">Simulated</span>
-                <span class="scoreboard-score" id="gr-sim-score">0–0</span>
+                <span class="scoreboard-score gr-score-sim" id="gr-sim-score">0–0</span>
               </div>
             </div>
             <div class="scoreboard-side">
@@ -672,20 +710,39 @@
             </div>
           </div>
 
+          <!-- Mobile puts each pitch's own score beside it (.pitch-single-score,
+               desktop hides these -- the shared scoreboard above already
+               covers it) rather than only above both pitches, so the shared
+               scoreboard's score row can be dropped on mobile and that
+               vertical space goes to the shot log instead. Both copies of a
+               score share a class (gr-score-real/gr-score-sim) and are kept
+               in sync from the one live value in revealShot() below. -->
           <div class="pitch-pair">
             <div class="pitch-single">
-              <div class="pitch-single-label">Real</div>
-              <svg id="pitch-svg-real" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
-                <g class="pitch-markings"></g>
-                <g class="pitch-shots"></g>
-              </svg>
+              <div class="pitch-single-main">
+                <div class="pitch-single-label">Real</div>
+                <svg id="pitch-svg-real" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                  <g class="pitch-markings"></g>
+                  <g class="pitch-shots"></g>
+                </svg>
+              </div>
+              <div class="pitch-single-score">
+                <span class="scoreboard-label">Real</span>
+                <span class="scoreboard-score gr-score-real">0–0</span>
+              </div>
             </div>
             <div class="pitch-single">
-              <div class="pitch-single-label">Simulated</div>
-              <svg id="pitch-svg-sim" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
-                <g class="pitch-markings"></g>
-                <g class="pitch-shots"></g>
-              </svg>
+              <div class="pitch-single-main">
+                <div class="pitch-single-label">Simulated</div>
+                <svg id="pitch-svg-sim" class="pitch-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                  <g class="pitch-markings"></g>
+                  <g class="pitch-shots"></g>
+                </svg>
+              </div>
+              <div class="pitch-single-score">
+                <span class="scoreboard-label">Simulated</span>
+                <span class="scoreboard-score gr-score-sim">0–0</span>
+              </div>
             </div>
           </div>
 
@@ -885,6 +942,20 @@
         <div class="scorecard-side">
           <div class="scorecard-team" id="modal-scorecard-away-team"></div>
           <div class="scorecard-list" id="modal-scorecard-away"></div>
+        </div>
+      </div>
+
+      <!-- Golden-boot story only: the scorer's own game-by-game goals
+           against their own shots' xG that game -- how many they scored
+           in each game from how much xG, across every game they took a
+           shot in, not just the single showcase match above. -->
+      <div id="modal-goldenboot-log-block" class="campaign-block">
+        <h4>Game by game</h4>
+        <div class="campaign-table-wrap">
+          <table class="campaign-table">
+            <thead><tr><th>Opponent</th><th>H/A</th><th class="num">Goals</th><th class="num">xG</th></tr></thead>
+            <tbody id="modal-goldenboot-log-body"></tbody>
+          </table>
         </div>
       </div>
 
@@ -1140,7 +1211,17 @@
         return tr;
       });
 
-      var scoreEl = { real: document.getElementById('gr-real-score'), sim: document.getElementById('gr-sim-score') };
+      // Two copies of each score in the DOM -- the shared scoreboard above
+      // (desktop) and each pitch's own mobile-only readout beside it
+      // (see .pitch-single-score) -- kept in sync by writing to every
+      // element sharing the class rather than a single id lookup.
+      var scoreEl = {
+        real: document.querySelectorAll('.gr-score-real'),
+        sim: document.querySelectorAll('.gr-score-sim'),
+      };
+      function setScoreText(nodeList, text){
+        nodeList.forEach(function(el){ el.textContent = text; });
+      }
       // Marks shot i on one pitch: grey (var(--muted), same resting colour
       // the flash settles from) if it's not a goal *on this pitch*, or
       // the scoring team's own colour if it is -- real and simulated can
@@ -1159,8 +1240,8 @@
         markShot(pitchSim, i, shot, shot.sim_goal);
         logRows[i].classList.add('revealed');
         if(shot.sim_goal) logRows[i].classList.add('is-goal');
-        scoreEl.real.textContent = shot.real_score[0] + '–' + shot.real_score[1];
-        scoreEl.sim.textContent = shot.sim_score[0] + '–' + shot.sim_score[1];
+        setScoreText(scoreEl.real, shot.real_score[0] + '–' + shot.real_score[1]);
+        setScoreText(scoreEl.sim, shot.sim_score[0] + '–' + shot.sim_score[1]);
       }
 
       padUntilPinnedIsBlank(track);
@@ -2812,6 +2893,25 @@
     }).join('');
   }
 
+  // Golden-boot only: the scorer's own per-game goals (this sim) against
+  // their own shots' xG that game, across every game they registered a
+  // shot in that season -- always explicitly hidden/cleared when absent
+  // (the 'game' kind has no player to log), same style.display pitfall
+  // this file has flagged before: a descendant's own display:block has
+  // no effect while an ancestor is display:none, but the reverse -- a
+  // stale child left visible under a *different* now-visible ancestor --
+  // is just as real, so every call sets display explicitly either way.
+  function renderGoldenBootLog(log){
+    var block = document.getElementById('modal-goldenboot-log-block');
+    if (!log || !log.length) { block.style.display = 'none'; return; }
+    block.style.display = 'block';
+    document.getElementById('modal-goldenboot-log-body').innerHTML = log.map(function(g){
+      var cls = g.goals > 0 ? ' class="scored"' : '';
+      return '<tr' + cls + '><td>' + g.opponent + '</td><td>' + (g.home ? 'H' : 'A') + '</td>'
+        + '<td class="num">' + g.goals + '</td><td class="num">' + g.xg.toFixed(2) + '</td></tr>';
+    }).join('');
+  }
+
   function renderTiebreak(story){
     var block = document.getElementById('modal-tiebreak-block');
     if (!story.resolution) { block.style.display = 'none'; return; }
@@ -2852,9 +2952,11 @@
         ? story.haul.player + ' scored ' + story.haul.goals + ' of ' + story.haul.team + '\'s goals in this simulated match.'
         : (story.home_goals + story.away_goals) + ' goals in this one simulated match — one of the highest-scoring games across 1,000,000 replays of the season.';
       renderScorecard(story.scorers || [], story.home_team, story.away_team);
-      // No campaign data on a plain flagged game -- explicitly clear/hide
-      // rather than leaving a previous golden-boot story's table stale.
+      // No campaign or per-player game-log data on a plain flagged game --
+      // explicitly clear/hide both rather than leaving a previous
+      // golden-boot story's tables stale.
       renderCampaign(null, 'modal-game-campaign-block', 'modal-game-campaign-body');
+      renderGoldenBootLog(null);
 
       backdrop.classList.add('open');
       return;
@@ -2884,9 +2986,11 @@
         story.player + ' scored ' + m.goals + ' in this match, on the way to ' + story.goals + ' for the season — '
         + diff + ' more than the ' + story.real_goals + ' they actually scored in 2025/26.';
       renderScorecard(m.scorers || [], m.home_team, m.away_team);
-      // Game-by-game view for the scorer's own team's whole simulated
-      // season, when we have it (every golden-boot stop does, via
-      // build_campaign_for_sim in export_treemap_data.py's curated tour).
+      // The player's own game-by-game goals/xG log, then the scorer's
+      // team's whole simulated-season campaign -- both come from
+      // export_treemap_data.py's curated tour (build_player_game_log /
+      // build_campaign_for_sim), present on every golden-boot stop.
+      renderGoldenBootLog(story.game_log);
       renderCampaign(story.campaign, 'modal-game-campaign-block', 'modal-game-campaign-body');
 
       backdrop.classList.add('open');

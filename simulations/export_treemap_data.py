@@ -824,6 +824,45 @@ def build_best_match_for_player(matches, seed, sim_idx, player, team, n_sims):
     return best
 
 
+def build_player_game_log(matches, seed, sim_idx, player, team, n_sims):
+    """Every game this player took a shot in, across the season, with how
+    many of their own shots went in *in this one sim* against how much xG
+    those shots carried that game -- "how many they scored in each game
+    from how much xG", the golden-boot story's own game-by-game breakdown
+    (build_best_match_for_player above still covers the single showcase
+    match's full scorecard; this is the season-long list alongside it).
+    Only lists games with at least one real shot on record for this
+    player, same convention as build_best_match_for_player -- there's no
+    appearance data to say whether they played an unlisted game at all,
+    only whether they registered a shot in it. Full (n_sims, ...) shape
+    required -- see build_campaign_for_sim's docstring for why a
+    truncated shape silently regenerates the wrong season."""
+    log = []
+    for i, m in enumerate(matches):
+        is_home = m["home_team"] == team
+        is_away = m["away_team"] == team
+        if not (is_home or is_away):
+            continue
+        players = m["players_h"] if is_home else m["players_a"]
+        if player not in players:
+            continue
+        xg_h, xg_a = m["xg_h"], m["xg_a"]
+        own_xg = xg_h if is_home else xg_a
+        rng_i = _match_rng(seed, i)
+        draws_h = rng_i.random((n_sims, len(xg_h))) < xg_h if len(xg_h) else np.zeros((n_sims, 0), dtype=bool)
+        draws_a = rng_i.random((n_sims, len(xg_a))) < xg_a if len(xg_a) else np.zeros((n_sims, 0), dtype=bool)
+        own_draws = draws_h if is_home else draws_a
+        mask = players == player
+        goals = int(own_draws[sim_idx, mask].sum())
+        player_xg = float(own_xg[mask].sum())
+        opponent = m["away_team"] if is_home else m["home_team"]
+        log.append({
+            "opponent": opponent, "home": is_home, "date": m["date"],
+            "goals": goals, "xg": round(player_xg, 2), "shots": int(mask.sum()),
+        })
+    return log
+
+
 def build_best_seasons(matches, teams, seed, static_xg, table_stories, zero_win_teams, tm, n_sims):
     """
     One full record per zero-title-win team -- Burnley/Sunderland/West
@@ -948,15 +987,20 @@ def build_curated_tour(matches, teams, title_counts, champion_idx, real_pos,
 
     # --- 3 & 4: golden boot -- game-by-game detail for the scorer's own
     # team, same targeted build_campaign_for_sim() every other
-    # campaign-carrying record already relies on ---
+    # campaign-carrying record already relies on, plus the player's own
+    # game-by-game goals/xG log (build_player_game_log) -- "how many they
+    # scored in each game from how much xG", not just their single
+    # showcase match ---
     for key, kind in (("highest", "golden_boot"), ("most_unexpected", "unexpected_golden_boot")):
         g = gb_stories[key]
         team = player_team.get(g["player"], teams[int(champion_idx[g["sim"]])])
         match = build_best_match_for_player(matches, seed, g["sim"], g["player"], team, n_sims)
         campaign = build_campaign_for_sim(matches, seed, g["sim"], team, static_xg, n_sims)
+        game_log = build_player_game_log(matches, seed, g["sim"], g["player"], team, n_sims)
         tour.append({
             "kind": kind, "sim": g["sim"], "player": g["player"], "team": team,
             "goals": g["goals"], "real_goals": g["real_goals"], "match": match, "campaign": campaign,
+            "game_log": game_log,
         })
 
     # --- 5: closest race into the final week ---
