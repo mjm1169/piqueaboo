@@ -1763,6 +1763,112 @@ for the actual text and visual direction before drafting either.
   regressions on both viewports came back with zero real page errors
   (the one console error present, `ERR_CONNECTION_RESET` fetching Google
   Fonts, is the same pre-existing, unrelated sandbox network block this
-  file's history has already flagged repeatedly). Not pushed to `main`
-  this round -- left on `claude/game-simul-ui-amendments-qrs1s6` per this
-  session's own branch, pending the user's review.
+  file's history has already flagged repeatedly). Pushed to
+  `claude/game-simul-ui-amendments-qrs1s6`, then merged to `main`
+  (fast-forward) on explicit request the same round, once the user
+  pointed out the changes weren't showing live (this article deploys
+  from `main` via GitHub Pages; the branch alone was never going to
+  reach the live site).
+
+  **2026-09-05, done — mobile game-simul score placement, a check for
+  relegated real top-6 teams, and a golden-boot per-game goals/xG log.**
+  Three more pieces of feedback. **Mobile score placement**: the shared
+  scoreboard above both pitches ate three stacked rows (crest row, a
+  side-by-side Real/Simulated scores row, crest row) on mobile, per an
+  earlier round's own fix -- reported directly as wanting each score
+  beside its own pitch instead, freeing space for the shot log. Fixed by
+  hiding the shared scoreboard's score row on mobile only (crests/names
+  collapse to one compact row instead of three) and adding a
+  `.pitch-single-score` panel beside each pitch, kept in sync with the
+  same live score via a shared class (`.gr-score-real`/`.gr-score-sim`)
+  rather than a duplicate id, updated by a small `setScoreText()` helper
+  in `revealShot()`. Desktop is completely unaffected -- confirmed via
+  `getComputedStyle`, not just by removing the mobile-only rules
+  mentally: the shared scoreboard's score row still shows `display:flex`
+  there, `.pitch-single-score` still `display:none`. Caught and fixed a
+  real bug during this: the unconditional `.pitch-single-score{
+  display:none }` rule was declared *after* the mobile media query in
+  source order, so it always won regardless of viewport width (same
+  specificity, later wins) -- moved it ahead of the media query instead
+  of leaving it to lose the cascade. Also widened the mobile shot log's
+  row padding (9px -> 16px, past even desktop's own 13px) per the direct
+  ask that the shot scroll itself read as more spaced out. Verified via
+  headless-Chromium Playwright: screenshots on both viewports (mobile
+  shows crests-then-two-pitch-rows-each-with-its-own-score, desktop
+  pixel-identical to before), a live score-sync check across both
+  duplicate DOM copies, and a full-page scroll-through on both viewports
+  with zero real errors.
+  **Relegated top-6 check**: asked whether any of this season's real top
+  teams ever get relegated in the 1,000,000 sims, explicitly wanting a
+  diverse set of options rather than one picked unilaterally. New
+  `simulations/check_relegated_top_teams.py` reuses
+  `run_table_metrics_sweep()` unchanged (the same per-match seeding
+  everything else in this pipeline relies on) to get every sim's full
+  position array, then checks the real top 6 (Arsenal, Manchester City,
+  Manchester United, Aston Villa, Liverpool, Bournemouth) against a
+  bottom-3 floor. Answer: 5 of the 6 do, at least once -- only Arsenal
+  never finishes there across the full million (consistent with its
+  71.7% title odds). Aston Villa is the standout: relegated in 2.891% of
+  sims (28,914 of them), including one where they finish dead last on
+  19 points and another where they go down 18th on 48 points with a
+  *positive* goal difference -- a genuinely dramatic range, not a single
+  freak result. Manchester City get relegated exactly once in the whole
+  million (18th, sim #445,758) -- a real "black swan" instance worth
+  knowing about even though it's vanishingly rare. Full findings (a
+  summary table plus two example sims per team -- a dramatic collapse
+  and a narrower brush with it -- each with the complete final table and
+  that team's own 38-game campaign summary) written to
+  `notes/pl-xg-relegated-top-team-candidates.md` for the user's own pick
+  of which (if any) to feature; nothing wired into the site itself this
+  round, since which story to tell here is exactly the kind of editorial
+  call this file's own authorship convention leaves to the user, not
+  Claude. Deliberately built as a read-only check reusing existing,
+  already-tested simulation code rather than a bespoke pass -- no site
+  data changed by this half of the round.
+  **Golden-boot per-game log**: asked for the golden-boot highlight to
+  show how many the player scored in each game against how much xG that
+  game carried, not just their single showcase match. New
+  `build_player_game_log()` in `export_treemap_data.py` (same full
+  `(n_sims, ...)`-shape convention as every other targeted single-sim
+  regeneration in this pipeline, for the same reason documented on
+  `build_campaign_for_sim` -- a truncated shape desyncs `draws_a`'s
+  position in the RNG stream and silently regenerates the wrong season)
+  walks every game the scorer registered at least one real shot in,
+  returning that game's opponent/home-or-away plus their own goals (this
+  one sim) and their own shots' total xG that game. Wired into both
+  golden-boot curated-tour stops (`build_curated_tour`) alongside the
+  existing showcase match and team campaign. Frontend: a new "Game by
+  game" table (`#modal-goldenboot-log-block`, a `renderGoldenBootLog()`
+  paralleling the existing `renderCampaign()`) in the story modal, a
+  scored game's goal count picked out in the same green already used for
+  a real/simulated goal elsewhere on the page. Reused `.campaign-table`'s
+  base look but the column widths needed their own override -- the
+  existing nth-child widths are tuned for the 5-column result-badge
+  campaign table, wrong for this 4-column shape -- scoped via the
+  containing block's own id so it wins on specificity regardless of
+  source order, rather than repeating the site's own
+  display-cascade-order pitfall a second time in the same round.
+  Explicitly cleared/hidden (never left to a stylesheet default) for the
+  plain `'game'` story kind, same pitfall this file has flagged
+  repeatedly before. **Regenerated `curated-tour.json`** via
+  `--skip-big-pass --skip-best-seasons --skip-champion-margin-stories`
+  (only the table-metrics + golden-boot sweeps needed rerunning) and
+  verified the regeneration was purely additive before shipping it: all
+  9 stops' own `sim` picks compared byte-for-byte against the previously
+  committed file and found identical (fully deterministic, as expected
+  since nothing upstream of the new field changed), and the only diff
+  across the whole file was the new `game_log` key appearing on the two
+  golden-boot records -- confirmed via a structural key-diff, not just
+  eyeballing the JSON. Also checked the new field's own internal
+  consistency: summing `game_log[].goals` across all of a player's games
+  reproduces that record's existing season `goals` total exactly, for
+  both Haaland (50) and Evanilson (24). Verified end-to-end via
+  headless-Chromium Playwright: clicked through both golden-boot roster-
+  card buttons for real (not calling the render function directly),
+  screenshotted the resulting modal on desktop and mobile showing the
+  showcase match, the new per-game table with goals correctly bolded
+  green on scoring games, and the existing full campaign table beneath
+  it all rendering together with no overlap or truncation (mobile's
+  table-wrap measured with zero horizontal overflow); a full-page
+  scroll-through regression on both viewports came back clean. Pushed to
+  `claude/game-simul-ui-amendments-qrs1s6`.
