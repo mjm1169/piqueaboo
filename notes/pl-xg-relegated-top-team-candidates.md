@@ -330,3 +330,22 @@ Bournemouth finish 18th on 46 points; Manchester City win the league this time.
 
 Bournemouth's campaign: 13W 7D 18L, 58 scored, 63 conceded.
 
+## Status (2026-09-06) — two picks wired in
+
+Per your picks: **Manchester United**'s own worst finish now replaces
+their roster-card lead story (was the tiebreak-vs-Arsenal pick) — 19th on
+39 points, sim #526,098, Manchester City won that replay. This is the
+*actual* worst-position instance (matching the "19th" in the summary table
+above), not either of the two 18th-place examples in this note's own
+Manchester United section — those were picked by lowest/highest points
+among relegated sims specifically, which happened not to land on the
+single worst-position sim itself. **Manchester City**'s single relegation
+instance (18th on 44 points, sim #445,758 — the same one detailed above)
+is now a footnote inside the Haaland golden-boot story on Manchester
+City's card, not a roster-card story of its own. Both sourced via new
+`simulations/export_relegation_stories.py` (reuses `run_table_metrics_sweep`
+unchanged), writing `articles/pl-treemap-data/relegation-stories.json` —
+see `notes/pl-xg-roster-card-candidates.md` for the frontend wiring.
+Aston Villa, Liverpool, and Bournemouth's relegation instances above are
+still just candidates, not wired into the site.
+

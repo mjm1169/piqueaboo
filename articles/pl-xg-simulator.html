@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A million Premier Leagues — Piqueaboo</title>
+<title>One in a million Premier Leagues — Piqueaboo</title>
 <meta name="description" content="We replayed the 2025/26 Premier League season 1,000,000 times over, letting every shot fall exactly as often as its quality suggested, and mapped who won it.">
 <link rel="icon" type="image/svg+xml" href="../assets/logos/piqueaboo-logo.svg">
 <link rel="stylesheet" href="../assets/css/style.css">
@@ -196,6 +196,19 @@
   .game-log .real-goal{ color:var(--positive-step); font-weight:500; }
   .game-log .sim-goal{ color:var(--accent-step); font-weight:500; }
 
+  /* ---------- commentary rows, interleaved with the shot-by-shot log ---------- */
+
+  .game-log tr.comment-row td{
+    padding:12px 6px; font-weight:300; font-style:italic; color:var(--ink);
+    background:rgba(0,0,0,.02); border-bottom:1px solid #EFEFEF;
+  }
+  .game-log tr.kickoff-row td{
+    padding:10px 6px; font-weight:500; font-style:normal; text-align:center;
+    text-transform:uppercase; letter-spacing:.05em; font-size:12px;
+    color:var(--accent-step); border-bottom:1px solid #EFEFEF;
+  }
+  #game-reroll-summary{ margin-top:32px; font-size:17px; }
+
   @media (max-width:640px){
     /* Was denser than desktop's own rows (9px), a legibility/space trade
        from when the pitch+scoreboard above ate most of the viewport.
@@ -205,6 +218,8 @@
        that the shot scroll itself should be "more spaced out". */
     .game-log{ font-size:12.5px; }
     .game-log td{ padding:16px 5px; }
+    .game-log tr.comment-row td{ padding:15px 5px; }
+    .game-log tr.kickoff-row td{ padding:13px 5px; }
   }
 
   /* ---------- simulated season ---------- */
@@ -514,6 +529,10 @@
     border-radius:8px; padding:12px 14px; margin-top:6px;
   }
   .modal-game-note{ font-size:14px; color:var(--muted); font-weight:300; margin-top:12px; }
+  .modal-game-footnote{
+    font-size:13px; color:var(--muted); font-weight:300; margin-top:10px;
+    padding-top:10px; border-top:1px solid rgba(0,0,0,.08);
+  }
 
   /* ---------- scorecard (grouped by player, in the game modal) ---------- */
 
@@ -661,8 +680,9 @@
 
 <div class="wrap">
 
-  <!-- TITLE/HEADING: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
   <div class="intro">
+    <h1>One in a million Premier Leagues</h1>
+    <h2>What is xG</h2>
     <p>If you’ve clicked on this there’s a pretty good chance you’ll be familiar with the concept of xG anyway, so I’ll keep this bit short.</p>
     <p>Every time a shot is taken in a football game, a probability is calculated that is associated with it. This represents the probability that that shot would result in a goal. A tap-in from a yard out would have a very high xG, close to 1, and a speculative hit from 35 yards out would have a low xG, close to 0.</p>
     <p>Naturally, there are times when the outcome doesn’t go the way the xG would suggest. A team may score from a rare, low quality effort on goal, while their opponents fail to convert any of their more numerous, better chances. You’d expect this sort of thing to even over the course of a season, but have you ever wondered, “What if…?”.</p>
@@ -683,7 +703,7 @@
   <!-- ===================== re-roll one game ===================== -->
 
   <section id="game-reroll-section">
-    <!-- HEADING: TBD -- user to fill in -->
+    <h2>What could have been in the first game?</h2>
     <!-- INTRO COPY: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
 
     <div class="reveal-track" id="game-reroll-track">
@@ -763,12 +783,14 @@
         </table>
       </div>
     </div>
+
+    <p id="game-reroll-summary"></p>
   </section>
 
   <!-- ===================== simulated season ===================== -->
 
   <section id="season-reroll-section">
-    <!-- HEADING: TBD -- user to fill in -->
+    <h2>Simulating the season</h2>
     <!-- INTRO COPY: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
 
     <div class="reveal-track" id="season-reroll-track">
@@ -808,7 +830,7 @@
   <!-- ===================== treemap ===================== -->
 
   <section id="treemap-section">
-    <!-- HEADING: TBD -- user to fill in -->
+    <h2>A million alternate Premier League realities</h2>
     <p>Imagine if we played the season again. Every shot recreated as if were played again, with the same likelihood it would be scored. Some that were drilled past the keeper would be smashed wide. Others that were skied into row Z would nestle into the top corner. And some would play out exactly the same. How could the league have looked? What if we repeated it again, and again? Maybe our team would fluke an unlikely title! In a million simulations what might happen?</p>
     <p>I took the 20xx/xx season and did just that. Here is how the league ended up all 1,000,000 times.</p>
 
@@ -934,6 +956,13 @@
     <div id="modal-game-body">
       <div class="game-line" id="modal-game-score"></div>
       <p class="modal-game-note" id="modal-game-note"></p>
+      <!-- Golden-boot (Manchester City/Haaland) only: a footnote on this
+           same club's own flip side -- the one sim in the whole million
+           where they're relegated instead. See
+           notes/pl-xg-relegated-top-team-candidates.md /
+           export_relegation_stories.py. Empty/hidden for every other
+           story. -->
+      <p class="modal-game-footnote" id="modal-game-footnote" style="display:none"></p>
       <div class="scorecard" id="modal-scorecard">
         <div class="scorecard-side">
           <div class="scorecard-team" id="modal-scorecard-home-team"></div>
@@ -1200,15 +1229,74 @@
         shotsG.appendChild(flash);
       }
 
+      // Commentary, keyed by (minute, player) rather than raw shot index --
+      // robust to the export pipeline's shot ordering shifting slightly,
+      // and self-documenting about which real shot each line is about.
+      // Content is the user's own (see CLAUDE.md authorship convention);
+      // several lines narrate two shots at once (e.g. the 36' comment
+      // covers Tavernier's 34' simulated goal too) and are anchored on
+      // whichever of the two shots comes second, so both have already
+      // appeared in the log by the time the line does.
+      var GAME_COMMENTS_AFTER = [
+        { minute: 2, player: 'Hugo Ekitike',
+          text: "In just the second minute, Ekitike has a speculative shot from outside the box saved. Just a 1% chance of that going in." },
+        { minute: 5, player: 'Antoine Semenyo',
+          text: "Semenyo has a good chance. He missed in real life, but tucks it away in our simulation." },
+        { minute: 36, player: 'Hugo Ekitike',
+          text: "Two good chances for both sides. In our simulation, Tavernier puts Bournemouth 0-2 up, while in real life his shot is saved, only for Ekitike to fire Liverpool into a 1-0 lead." },
+        { minute: 48, player: 'Cody Gakpo',
+          text: "Gakpo converts a 10% xG chance to double Liverpool's real-life advantage." },
+        { minute: 63, player: 'Antoine Semenyo',
+          text: "Semenyo scores a high (43% xG) probability chance in both real-life and the simulation." },
+        { minute: 75, player: 'Antoine Semenyo',
+          text: "And again! Not a great chance, but Semenyo equalises in real-life, and completes a hat-trick in our re-run." },
+        { minute: 87, player: 'Cody Gakpo',
+          text: "Gakpo grabs a simulated consolation goal." },
+        { minute: 93, player: 'Mohamed Salah',
+          text: "A grandstand finish in real-life. Liverpool score two late on through Chiesa and Salah to walk out 4-2 winners." },
+      ];
+      var commentAfterByKey = {};
+      GAME_COMMENTS_AFTER.forEach(function(c){ commentAfterByKey[c.minute + '|' + c.player] = c.text; });
+
+      // A comment/kickoff row spans all 5 columns as one line of prose,
+      // rather than trying to fit into the shot table's own per-column
+      // shape -- styled distinctly (.comment-row / .kickoff-row) so it
+      // reads as an aside, not another shot.
+      function noteRow(cls, text){
+        var tr = document.createElement('tr');
+        tr.className = cls;
+        var td = document.createElement('td');
+        td.colSpan = 5;
+        td.textContent = text;
+        tr.appendChild(td);
+        return tr;
+      }
+
       var logBody = document.getElementById('game-log-body');
-      var logRows = game.shots.map(function(shot){
+      // Every reveal-list item, shot rows and commentary/kickoff rows
+      // alike, as one ordered {el, onReveal} list -- same convention as
+      // the season section's own revealItems below, since this section
+      // now has more than one kind of revealed row too.
+      var revealItems = [];
+      var kickoffEl = noteRow('kickoff-row', 'Kick off!');
+      logBody.appendChild(kickoffEl);
+      revealItems.push({ el: kickoffEl, onReveal: function(){} });
+
+      game.shots.forEach(function(shot, i){
         var tr = document.createElement('tr');
         var realCell = shot.real_goal ? '<span class="real-goal">Goal</span>' : shot.real_result.replace(/([A-Z])/g, ' $1').trim();
         var simCell = shot.sim_goal ? '<span class="sim-goal">Goal</span>' : 'No goal';
         tr.innerHTML = '<td>' + shot.minute + '\'</td><td>' + shot.player + '</td>'
           + '<td class="num">' + shot.xg.toFixed(2) + '</td><td>' + realCell + '</td><td>' + simCell + '</td>';
         logBody.appendChild(tr);
-        return tr;
+        revealItems.push({ el: tr, onReveal: function(){ revealShot(i, tr); } });
+
+        var commentText = commentAfterByKey[shot.minute + '|' + shot.player];
+        if(commentText){
+          var commentEl = noteRow('comment-row', commentText);
+          logBody.appendChild(commentEl);
+          revealItems.push({ el: commentEl, onReveal: function(){} });
+        }
       });
 
       // Two copies of each score in the DOM -- the shared scoreboard above
@@ -1234,18 +1322,49 @@
         if(isGoal){ el.classList.add('goal'); el.style.fill = color; }
         flashShot(pitch.shotsG, el, color);
       }
-      function revealShot(i){
+      // tr's own 'revealed' (and, for a scoring shot, 'is-goal') class is
+      // added by revealItem() below, same as every other reveal-list item
+      // on the page -- this only does the shot-specific side effects
+      // (pitch markers, score text) a comment/kickoff row doesn't need.
+      function revealShot(i, tr){
         var shot = game.shots[i];
         markShot(pitchReal, i, shot, shot.real_goal);
         markShot(pitchSim, i, shot, shot.sim_goal);
-        logRows[i].classList.add('revealed');
-        if(shot.sim_goal) logRows[i].classList.add('is-goal');
+        if(shot.sim_goal) tr.classList.add('is-goal');
         setScoreText(scoreEl.real, shot.real_score[0] + '–' + shot.real_score[1]);
         setScoreText(scoreEl.sim, shot.sim_score[0] + '–' + shot.sim_score[1]);
       }
 
+      function revealItem(i){
+        var item = revealItems[i];
+        item.el.classList.add('revealed');
+        item.onReveal();
+      }
+
+      // Closing summary: real per-team shot counts/combined xG for *this*
+      // match, computed from the same shot list everything else on this
+      // section already renders from -- not hand-typed, so it can't go
+      // stale if game-reroll-data.json is ever regenerated against a
+      // different fixture. Text is the user's own (see CLAUDE.md
+      // authorship convention).
+      var shotTotals = {};
+      game.shots.forEach(function(shot){
+        if(!shotTotals[shot.team]) shotTotals[shot.team] = { shots: 0, xg: 0 };
+        shotTotals[shot.team].shots++;
+        shotTotals[shot.team].xg += shot.xg;
+      });
+      var homeTotals = shotTotals[game.home_team] || { shots: 0, xg: 0 };
+      var awayTotals = shotTotals[game.away_team] || { shots: 0, xg: 0 };
+      document.getElementById('game-reroll-summary').textContent =
+        'The game saw ' + game.home_team + ' take ' + homeTotals.shots + ' shots with a combined xG of '
+        + homeTotals.xg.toFixed(2) + ', and ' + game.away_team + ' take ' + awayTotals.shots + ', with an xG of '
+        + awayTotals.xg.toFixed(2) + '. But simulating all the shots again, a very different result could have '
+        + 'happened. So what if we did that for the 379 other games in that season?';
+
       padUntilPinnedIsBlank(track);
-      afterStickyPinned(track, function(){ revealOnScroll(logRows, revealShot); });
+      afterStickyPinned(track, function(){
+        revealOnScroll(revealItems.map(function(it){ return it.el; }), revealItem);
+      });
     });
   })();
 
@@ -1428,6 +1547,7 @@
     fetch('pl-treemap-data/curated-tour.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/best-seasons.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/champion-margin-stories.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/relegation-stories.json').then(function(r){ return r.json(); }),
   ]);
   var data = fetched[0];
   // One byte per simulation, that byte being the champion's team index (see
@@ -1443,6 +1563,9 @@
   var curatedTourRaw = fetched[4];
   var bestSeasonsRaw = fetched[5];
   var championMarginStoriesRaw = fetched[6];
+  var relegationStoriesRaw = fetched[7];
+  var relegationStoryByTeam = {};
+  relegationStoriesRaw.forEach(function(r){ relegationStoryByTeam[r.team] = r; });
 
   var teams = data.teams.slice();
   var nonZero = teams.filter(function(t){ return t.title_count > 0; });
@@ -1458,6 +1581,7 @@
   var CURATED_TAG = {
     fewest_wins: 'Fewest title wins',
     no_wins: 'Best-ever finish',
+    worst_finish: 'Worst-ever finish',
     golden_boot: 'Highest-scoring golden boot',
     unexpected_golden_boot: 'Most unexpected golden boot',
     closest_final_week: 'Closest race into the final day',
@@ -1485,7 +1609,6 @@
   var SECOND_STORY_PICKS = {
     'Crystal Palace':    { kind: 'game',       sim: 509023 }, // Mateta scores 10 vs Bournemouth
     'Aston Villa':       { kind: 'game',       sim: 269077 }, // 10-5 win over Arsenal
-    'Manchester United': { kind: 'title_tie',  sim: 143768 }, // pip Arsenal on a tiebreak
     'Liverpool':         { kind: 'title_tie',  sim: 952936 }, // pip Manchester City on a tiebreak
     'Chelsea':           { kind: 'title_tie',  sim: 457242 }, // pip Manchester City on away goals
   };
@@ -1524,6 +1647,15 @@
     var stop = curatedTourByKind[TOUR_STOP_SECOND_STORY[team]];
     if (stop) secondStoryByTeam[team] = { kind: stop.kind, record: stop };
   });
+  // Manchester United: replaces the tiebreak-vs-Arsenal pick above -- their
+  // own worst-ever simulated finish (19th, on a real 3rd-place season)
+  // instead, per the user's pick off
+  // notes/pl-xg-relegated-top-team-candidates.md. Same record shape/modal
+  // treatment as a zero-win team's "best-ever finish" card (no_wins),
+  // just framed the other way -- see export_relegation_stories.py.
+  if (relegationStoryByTeam['Manchester United']) {
+    secondStoryByTeam['Manchester United'] = { kind: 'worst_finish', record: relegationStoryByTeam['Manchester United'] };
+  }
 
   function secondStoryLabel(entry){
     if (CURATED_TAG[entry.kind]) return CURATED_TAG[entry.kind];
@@ -1586,6 +1718,13 @@
     var pick = SECOND_STORY_PICKS[team];
     var record = pick.kind === 'game' ? flaggedGameBySim[pick.sim] : flaggedTitleTieBySim[pick.sim];
     if (record) addFlag(teamForSim(pick.sim).team, rankOfSim[pick.sim], { kind: pick.kind, record: record });
+  });
+  // Only the worst_finish record (Manchester United) is its own clickable
+  // grid cell -- the relegation_footnote record (Manchester City) is never
+  // a standalone story, just a line inside the Haaland golden_boot story
+  // below, so it deliberately isn't flagged here.
+  relegationStoriesRaw.forEach(function(r){
+    if (r.kind === 'worst_finish') addFlag(teamForSim(r.sim).team, rankOfSim[r.sim], { kind: r.kind, record: r });
   });
 
   /* =========================================================
@@ -2804,11 +2943,13 @@
   /* =========================================================
      7. STORY MODAL
      Shared by every story source on the page: each roster card's one
-     story slot (no_wins for the 4 zero-win clubs; game/title_tie/
-     biggest_margin/one of the curated tour's other 8 kinds for the 16
-     that win -- see notes/pl-xg-roster-card-candidates.md), and a direct
-     click on an already-flagged grid cell (which only ever surfaces one
-     of those same curated kinds, see section 1's spatial index). The
+     story slot (no_wins for the 4 zero-win clubs; worst_finish for
+     Manchester United; game/title_tie/biggest_margin/one of the curated
+     tour's other 8 kinds for the other 15 that win -- see
+     notes/pl-xg-roster-card-candidates.md and
+     notes/pl-xg-relegated-top-team-candidates.md), and a direct click on
+     an already-flagged grid cell (which only ever surfaces one of those
+     same curated kinds, see section 1's spatial index). The
      champion-shaped "notable_games" rendering below is dead code today
      (no story on the page carries that field any more, since the
      top-line per-club cards drawn from the small decoupled story batch
@@ -2957,6 +3098,9 @@
       // golden-boot story's tables stale.
       renderCampaign(null, 'modal-game-campaign-block', 'modal-game-campaign-body');
       renderGoldenBootLog(null);
+      // Same for the relegation footnote below -- only a golden_boot story
+      // about Manchester City ever sets it.
+      document.getElementById('modal-game-footnote').style.display = 'none';
 
       backdrop.classList.add('open');
       return;
@@ -2993,6 +3137,23 @@
       renderGoldenBootLog(story.game_log);
       renderCampaign(story.campaign, 'modal-game-campaign-block', 'modal-game-campaign-body');
 
+      // Footnote: the same club's own flip side, in a different replay --
+      // see the comment on #modal-game-footnote above. Only ever set for
+      // Manchester City (the Haaland stop's scorer's club); every other
+      // golden-boot/unexpected-golden-boot story clears it.
+      var footnoteEl = document.getElementById('modal-game-footnote');
+      var relegation = relegationStoryByTeam[story.team];
+      if (relegation && relegation.kind === 'relegation_footnote') {
+        footnoteEl.textContent = 'Footnote: this same ' + story.team + ' side finishes bottom three in '
+          + relegation.n_relegated.toLocaleString() + ' of the ' + relegation.n_sims.toLocaleString() + ' sims -- '
+          + ordinal(relegation.position) + ' on ' + relegation.points + ' points (sim #'
+          + relegation.sim.toLocaleString() + '), with ' + relegation.champion + ' winning the league instead.';
+        footnoteEl.style.display = 'block';
+      } else {
+        footnoteEl.textContent = '';
+        footnoteEl.style.display = 'none';
+      }
+
       backdrop.classList.add('open');
       return;
     }
@@ -3000,15 +3161,17 @@
     // Everything else is champion/table-shaped: the legacy 'champion' and
     // 'title_tie' kinds (roster cards, grid clicks on flagged sims) plus
     // the curated tour's fewest_wins / no_wins / closest_final_week /
-    // biggest_margin / lowest_gd / most_tied_first / closest_tiebreak.
+    // biggest_margin / lowest_gd / most_tied_first / closest_tiebreak, plus
+    // worst_finish (Manchester United's own worst-ever simulated finish,
+    // see export_relegation_stories.py).
     champBody.style.display = '';
     gameBody.style.display = 'none';
     crestEl.style.display = '';
 
-    // no_wins is the one story whose *subject* isn't that sim's champion
-    // -- lead with the zero-win team's own crest/name, not the crest of
-    // whoever actually won that particular replay.
-    var subjectTeam = entry.kind === 'no_wins' ? story.team : story.champion;
+    // no_wins/worst_finish are the two story kinds whose *subject* isn't
+    // that sim's champion -- lead with the story's own team's crest/name,
+    // not the crest of whoever actually won that particular replay.
+    var subjectTeam = (entry.kind === 'no_wins' || entry.kind === 'worst_finish') ? story.team : story.champion;
     crestEl.src = crestPath(subjectTeam);
     crestEl.alt = subjectTeam + ' crest';
 
@@ -3017,6 +3180,10 @@
 
     if (entry.kind === 'no_wins') {
       document.getElementById('modal-title').textContent = story.team + '\'s best-ever finish';
+      document.getElementById('modal-sub').textContent =
+        'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
+    } else if (entry.kind === 'worst_finish') {
+      document.getElementById('modal-title').textContent = story.team + '\'s worst-ever finish';
       document.getElementById('modal-sub').textContent =
         'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
     } else if (entry.kind === 'most_tied_first') {
@@ -3046,7 +3213,7 @@
       finalweekBlock.style.display = 'none';
     }
 
-    var storyTeam = entry.kind === 'no_wins' ? story.team : null;
+    var storyTeam = (entry.kind === 'no_wins' || entry.kind === 'worst_finish') ? story.team : null;
     document.getElementById('modal-table-body').innerHTML = renderFinalTableRows(story.final_table, story.champion, storyTeam);
 
     var notableBlock = document.getElementById('modal-notable-block');

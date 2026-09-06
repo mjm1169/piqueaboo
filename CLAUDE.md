@@ -1872,3 +1872,95 @@ for the actual text and visual direction before drafting either.
   table-wrap measured with zero horizontal overflow); a full-page
   scroll-through regression on both viewports came back clean. Pushed to
   `claude/game-simul-ui-amendments-qrs1s6`.
+
+  **2026-09-06, done — article title/section headings, Man United's lead
+  story swapped to their worst finish, Man City relegation footnote.**
+  Three pieces of user feedback/copy. **Headings**: the user supplied the
+  actual copy directly (own authorship, per this file's own convention) --
+  page `<title>`/`<h1>` "One in a million Premier Leagues", and `<h2>`s
+  "What is xG" (intro), "What could have been in the first game?"
+  (game-reroll section), "Simulating the season" (season-reroll section),
+  "A million alternate Premier League realities" (treemap section). The
+  simulator and Leicester sections still have no heading -- not given one.
+  **Man United's lead story**: replaced their roster card's one story
+  button (was the tiebreak-vs-Arsenal pick, sim #143,768 -- still a valid
+  record in `flagged-title-ties.json`, just unwired) with their own
+  worst-ever simulated finish, per the user's pick off
+  `notes/pl-xg-relegated-top-team-candidates.md`. New
+  `simulations/export_relegation_stories.py` reuses
+  `run_table_metrics_sweep()` unchanged (same bit-identical regeneration
+  every other targeted sim in this pipeline relies on) to find it
+  properly: the actual worst-position sim (19th, matching the note's own
+  summary table), not either of the note's two 18th-place examples, which
+  were picked by lowest/highest points among relegated sims and happened
+  not to land on the single true-worst-position instance. Result: 19th on
+  39 points, sim #526,098, Manchester City won that replay. Wired as a new
+  `worst_finish` story kind in `pl-xg-simulator.html`, rendered through the
+  same modal path as a zero-win team's `no_wins` "best-ever finish" card
+  (own crest/name led with, a `.story-team`-highlighted row distinct from
+  the champion row) -- same shape, opposite direction. **Man City
+  footnote**: the same new script also emits Man City's own single
+  relegation instance across the full million (18th, 44 points, sim
+  #445,758 -- matches the already-verified note exactly), added as a
+  footnote line (`#modal-game-footnote`, explicitly cleared/hidden for
+  every other story per this file's own repeated style.display
+  convention) on the Haaland golden-boot modal, worded from the record's
+  own `n_relegated`/`n_sims` fields rather than a hardcoded count so it
+  stays accurate if the underlying data ever changes. Both new records
+  written to `articles/pl-treemap-data/relegation-stories.json`; verified
+  the regenerated file's numbers match the first (pre-field-addition) run
+  exactly, and that Man City's `n_relegated`/`n_sims` came back `1`/
+  `1,000,000` as expected. **Verification gap worth flagging**: this
+  sandbox had neither `node` nor Playwright available (unlike every prior
+  round in this file), so the usual real-headless-Chromium click-through
+  wasn't possible here -- checked instead via `esprima` (all inline
+  `<script>` blocks parse with zero syntax errors), direct JSON
+  inspection (both records' `final_table` row and `campaign` W/D/L/GF/GA
+  sums agree exactly, same cross-check convention as every other
+  targeted-regeneration record in this pipeline), and manual read-through
+  of every function the new `worst_finish` kind touches
+  (`renderTiebreak`/`renderCampaign` both already guard cleanly against
+  the fields this record doesn't carry). Worth an actual browser
+  click-through next time a sandbox with Playwright is available. Notes
+  files (`pl-xg-roster-card-candidates.md`, `pl-xg-relegated-top-team-
+  candidates.md`) updated with what's now wired up. Merged to `main` on
+  explicit request.
+
+  **2026-09-06, later -- commentary rows and a closing summary added to
+  the game-reroll section.** User feedback: "add some richness" plus the
+  actual copy to use -- a "Kick off!" opener and 8 minute-anchored
+  commentary lines, plus a closing paragraph with two `x`/`y` placeholders
+  for this match's own real shot counts/combined xG per team. **Rows**:
+  `pl-xg-simulator.html`'s shot log gained two new row kinds alongside the
+  existing per-shot rows -- `.kickoff-row` (the opener, styled like a
+  small uppercase label) and `.comment-row` (the 8 lines, styled as an
+  italic aside) -- both spanning all 5 columns as one line of prose. Each
+  comment is keyed by (minute, player) rather than raw shot-array position
+  (self-documenting about which real shot it's about, and robust to the
+  export pipeline's shot ordering ever shifting slightly), checked against
+  the actual shot data before wiring: all 8 keys matched a real shot
+  exactly, including the two that narrate *two* shots at once (36' covers
+  both Tavernier's 34' simulated goal and Ekitike's 36' real one; 93'
+  covers both Chiesa's 87' and Salah's 93' real goals) -- each anchored on
+  whichever of its pair comes second, so both have already appeared by the
+  time the line does. The shot-reveal mechanism was refactored into the
+  same `{el, onReveal}` ordered-list pattern the season section's own
+  `revealItems` already used (added a couple of rounds back for its own
+  multi-kind reveal steps), rather than growing a second parallel
+  bookkeeping scheme for the new row kinds. **Closing summary**: rendered
+  from live data, not hand-typed -- `x`/`y` come from summing the same
+  `game.shots` list everything else on this section already reads from
+  (Liverpool 19 shots / 2.33 combined xG, Bournemouth 10 shots / 1.57),
+  so the sentence can't go stale if `game-reroll-data.json` is ever
+  regenerated against a different fixture. The "379 other games" figure is
+  the user's own fixed fact about the season's structure (380 total league
+  matches), not something derived from sim data, so it's left as a literal
+  number in the template rather than computed. **Verification gap, same as
+  last round**: this sandbox still had no `node`/Playwright, so this was
+  checked via `esprima` syntax-checking of all four inline `<script>`
+  blocks (clean) and a direct Python cross-check that every comment's
+  (minute, player) key exists in the real shot data exactly once -- not
+  an actual scrolled-through browser render. Worth a real click-through
+  next time Playwright is available, though the reveal mechanics
+  themselves are unchanged from the already-proven pattern this only
+  extended. Merged to `main` on explicit request.

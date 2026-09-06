@@ -294,3 +294,21 @@ Two further changes, per your ask:
   tour used to deliver, just card-driven instead of an autoplaying
   slideshow. `curated-tour.json` itself is unaffected and still feeds
   both the grid highlighting above and the 6 reused-stop cards.
+
+## Status (2026-09-06) — Manchester United's lead story swapped
+
+Per the user's pick off `notes/pl-xg-relegated-top-team-candidates.md`:
+Manchester United's one roster-card story button (previously the
+tiebreak-vs-Arsenal pick) now shows their own worst-ever simulated finish
+instead — 19th place on 39 points (sim #526,098, Manchester City won that
+replay), a real 3rd-place finisher going down. New
+`simulations/export_relegation_stories.py` (reuses `run_table_metrics_sweep`
+unchanged, same bit-identical regeneration as every other targeted sim in
+this pipeline) writes `articles/pl-treemap-data/relegation-stories.json`;
+the frontend's `secondStoryByTeam['Manchester United']` now points at a
+new `worst_finish` story kind, rendered through the same modal path as a
+zero-win team's `no_wins` "best-ever finish" card, just the other way
+round (own crest/name led with, story-team row highlighted distinct from
+the champion row). The old tiebreak-vs-Arsenal pick (sim #143,768) is
+still a real, valid record in `flagged-title-ties.json` if you'd rather
+swap back — nothing about it was removed, just unwired.
