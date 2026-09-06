@@ -324,6 +324,17 @@
     min-height:80px; text-align:center; font-style:italic; color:var(--muted);
   }
 
+  /* Short narrative asides between gameweek blocks -- the "after 5
+     games"/mid-season-skip commentary below, not a mechanical label like
+     the gameweek blocks above it. Left-aligned prose rather than
+     .season-gw-skip's centered treatment, which suits a short label but
+     not a full sentence. */
+  .season-note{
+    margin:18px 0; font-style:italic; color:var(--muted); font-size:15px;
+    opacity:0; transition:opacity .3s ease;
+  }
+  .season-note.revealed{ opacity:1; }
+
   /* Placeholder text scrolling in ahead of the table (sized, via
      padUntilPinnedIsBlank, to finish exactly as the table itself reaches
      its pinned position -- see that function) and after the final
@@ -533,6 +544,12 @@
     font-size:13px; color:var(--muted); font-weight:300; margin-top:10px;
     padding-top:10px; border-top:1px solid rgba(0,0,0,.08);
   }
+  .footnote-link{
+    background:none; border:none; padding:0; margin-left:2px;
+    font:inherit; font-size:13px; font-weight:500; color:var(--accent-step);
+    cursor:pointer;
+  }
+  .footnote-link:hover{ text-decoration:underline; }
 
   /* ---------- scorecard (grouped by player, in the game modal) ---------- */
 
@@ -583,23 +600,30 @@
 
   /* The golden-boot game-log table reuses .campaign-table's base look
      (border-collapse, sticky header, td ellipsis) but has a different
-     4-column shape (opponent/H-A/goals/xG, no result badge) -- the
+     5-column shape (opponent/H-A/shots/goals/xG, no result badge) -- the
      generic nth-child widths above are tuned for the 5-column campaign
-     table, so override them here, scoped by the containing block's own
-     id (higher specificity than a bare class selector, so it wins
-     regardless of source order) rather than fighting it. */
+     table (a different 5 columns), so override them here, scoped by the
+     containing block's own id (higher specificity than a bare class
+     selector, so it wins regardless of source order) rather than
+     fighting it. */
   #modal-goldenboot-log-block .campaign-table th:nth-child(1),
   #modal-goldenboot-log-block .campaign-table td:nth-child(1){ width:auto; padding-right:6px; }
   #modal-goldenboot-log-block .campaign-table th:nth-child(2),
   #modal-goldenboot-log-block .campaign-table td:nth-child(2){ width:36px; }
   #modal-goldenboot-log-block .campaign-table th:nth-child(3),
-  #modal-goldenboot-log-block .campaign-table td:nth-child(3){ width:56px; }
+  #modal-goldenboot-log-block .campaign-table td:nth-child(3){ width:50px; }
   #modal-goldenboot-log-block .campaign-table th:nth-child(4),
-  #modal-goldenboot-log-block .campaign-table td:nth-child(4){ width:64px; }
+  #modal-goldenboot-log-block .campaign-table td:nth-child(4){ width:56px; }
+  #modal-goldenboot-log-block .campaign-table th:nth-child(5),
+  #modal-goldenboot-log-block .campaign-table td:nth-child(5){ width:64px; }
   /* A row where the player actually scored -- reuses the same green
      already used for a real/simulated goal elsewhere on this page
      (e.g. .game-log .real-goal). */
-  #modal-goldenboot-log-block tr.scored td:nth-child(3){ color:var(--positive-step); font-weight:600; }
+  #modal-goldenboot-log-block tr.scored td:nth-child(4){ color:var(--positive-step); font-weight:600; }
+
+  /* ---------- editorial narrative notes (specific champion-shaped stories only) ---------- */
+
+  .modal-champion-note{ font-size:15px; color:var(--ink); font-weight:300; margin:0 0 16px 0; }
 
   /* ---------- tiebreak explainer (in the champion modal, title-tie stories only) ---------- */
 
@@ -791,7 +815,7 @@
 
   <section id="season-reroll-section">
     <h2>Simulating the season</h2>
-    <!-- INTRO COPY: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
+    <p>Let's go a step further and replay every shot from every game for the entire season. We can see our Liverpool vs. Bournemouth result in gameweek 1, as well as nine other replayed games.</p>
 
     <div class="reveal-track" id="season-reroll-track">
       <div class="reveal-sticky-wrap">
@@ -815,13 +839,14 @@
           <p>Placeholder text — TBD.</p>
         </div>
         <div class="season-exit-placeholder" id="season-exit-placeholder">
-          <!-- COPY: TBD -- user to fill in (see CLAUDE.md authorship
-               convention). Gameweek 38's own closing text: the table
-               stays pinned on the right until this finishes scrolling,
-               then releases -- a plain side effect of this block adding
-               to the list column's own height, see the reveal setup
-               below. -->
-          <p>Placeholder text — TBD.</p>
+          <!-- Gameweek 38's own closing text: the table stays pinned on
+               the right until this finishes scrolling, then releases --
+               a plain side effect of this block adding to the list
+               column's own height, see the reveal setup below. Text is
+               the user's own, still partial (see CLAUDE.md authorship
+               convention) -- the "(copy TBD)" marker is theirs to
+               replace, not narrative Claude should be inventing. -->
+          <p>The season ends with (copy TBD)</p>
         </div>
       </div>
     </div>
@@ -912,6 +937,13 @@
     <div class="modal-sub" id="modal-sub"></div>
 
     <div id="modal-champion-body">
+      <!-- Editorial narrative notes for a specific champion-shaped story
+           (currently just Arsenal's closest_final_week) -- see
+           CHAMPION_STORY_NOTES below. Explicitly cleared/hidden for every
+           other story, same convention as every other optional modal
+           block on this page. -->
+      <p class="modal-champion-note" id="modal-champion-note-before" style="display:none"></p>
+
       <div id="modal-tiebreak-block">
         <h4>How the title was decided</h4>
         <p class="modal-tiebreak-note" id="modal-tiebreak-note"></p>
@@ -927,6 +959,8 @@
         <h4>Final matchday results</h4>
         <div id="modal-finalweek-games"></div>
       </div>
+
+      <p class="modal-champion-note" id="modal-champion-note-after" style="display:none"></p>
 
       <h4>Final table</h4>
       <table class="final-table">
@@ -982,7 +1016,7 @@
         <h4>Game by game</h4>
         <div class="campaign-table-wrap">
           <table class="campaign-table">
-            <thead><tr><th>Opponent</th><th>H/A</th><th class="num">Goals</th><th class="num">xG</th></tr></thead>
+            <thead><tr><th>Opponent</th><th>H/A</th><th class="num">Shots</th><th class="num">Goals</th><th class="num">xG</th></tr></thead>
             <tbody id="modal-goldenboot-log-body"></tbody>
           </table>
         </div>
@@ -1451,15 +1485,30 @@
         var div = buildGwBlock(gw);
         revealItems.push({ el: div, onReveal: function(){ applyGameweek(gw, false); } });
       });
+
+      // "After 5 games" narrative aside -- text is the user's own, still
+      // partial (see CLAUDE.md authorship convention; "(copy TBD)" is
+      // theirs to replace). A plain fade-in with no table-state change,
+      // since we're still exactly at gameweek 5's own table from the
+      // reveal step above.
+      var afterFiveDiv = document.createElement('div');
+      afterFiveDiv.className = 'season-note';
+      afterFiveDiv.textContent = 'After 5 games, (copy TBD)';
+      resultsBody.insertBefore(afterFiveDiv, exitPlaceholderEl);
+      revealItems.push({ el: afterFiveDiv, onReveal: function(){} });
+
       if(midGws.length){
         var midDiv = document.createElement('div');
-        midDiv.className = 'season-gw-block season-gw-skip';
-        var midLabel = '…' + midGws.length + ' mid-season games…';
-        midDiv.textContent = midLabel;
+        midDiv.className = 'season-note';
+        // The sticky visual's own small label stays a short mechanical
+        // tag (matching every other gameweek step); the fuller narrative
+        // sentence lives in this aside instead, not the label itself.
+        var midMechanicalLabel = '…' + midGws.length + ' mid-season games…';
+        midDiv.textContent = 'A further ' + midGws.length + ' gameweeks pass, taking us to the business end of the season. (copy TBD)';
         resultsBody.insertBefore(midDiv, exitPlaceholderEl);
         var lastMidGw = midGws[midGws.length - 1];
         revealItems.push({ el: midDiv, onReveal: function(){
-          gwLabel.textContent = midLabel;
+          gwLabel.textContent = midMechanicalLabel;
           renderTable(lastMidGw.table, null);
         } });
       }
@@ -1582,6 +1631,7 @@
     fewest_wins: 'Fewest title wins',
     no_wins: 'Best-ever finish',
     worst_finish: 'Worst-ever finish',
+    relegation_footnote: 'Shock relegation',
     golden_boot: 'Highest-scoring golden boot',
     unexpected_golden_boot: 'Most unexpected golden boot',
     closest_final_week: 'Closest race into the final day',
@@ -1657,6 +1707,26 @@
     secondStoryByTeam['Manchester United'] = { kind: 'worst_finish', record: relegationStoryByTeam['Manchester United'] };
   }
 
+  // Editorial narrative for specific champion-shaped stories, keyed by
+  // curated-tour kind (only one sim globally carries each of these
+  // kinds, so kind alone -- not team -- is enough to identify which
+  // story this is). Numbers are computed live from `teams`/the story's
+  // own record, not hand-typed, so they can't go stale if the data is
+  // ever regenerated. Text is the user's own (see CLAUDE.md authorship
+  // convention) -- see openStory() for where these render.
+  var CHAMPION_STORY_NOTES = {};
+  (function(){
+    var arsenal = teams.filter(function(t){ return t.team === 'Arsenal'; })[0];
+    if (!arsenal) return;
+    var pct = (arsenal.title_odds * 100).toFixed(1);
+    CHAMPION_STORY_NOTES.closest_final_week = {
+      before: 'Arsenal won ' + pct + '% of our million simulations including this simulation which went down '
+        + 'to the final day. Fighting with Manchester City and Manchester United going into the final gameweek...',
+      after: '...Arsenal thump Crystal Palace 0-7 away from home to clinch one of their '
+        + arsenal.title_count.toLocaleString() + ' titles.',
+    };
+  })();
+
   function secondStoryLabel(entry){
     if (CURATED_TAG[entry.kind]) return CURATED_TAG[entry.kind];
     if (entry.kind === 'title_tie') return 'Title decided by tiebreak';
@@ -1719,12 +1789,14 @@
     var record = pick.kind === 'game' ? flaggedGameBySim[pick.sim] : flaggedTitleTieBySim[pick.sim];
     if (record) addFlag(teamForSim(pick.sim).team, rankOfSim[pick.sim], { kind: pick.kind, record: record });
   });
-  // Only the worst_finish record (Manchester United) is its own clickable
-  // grid cell -- the relegation_footnote record (Manchester City) is never
-  // a standalone story, just a line inside the Haaland golden_boot story
-  // below, so it deliberately isn't flagged here.
+  // Both worst_finish (Manchester United) and relegation_footnote
+  // (Manchester City) get their own clickable grid cell -- the latter is
+  // also linked directly from the Haaland golden_boot story's footnote
+  // ("See it in the treemap"), so a reader who lands on that exact cell
+  // some other way (zoomed into Manchester City's own grid) should find
+  // the same story there too.
   relegationStoriesRaw.forEach(function(r){
-    if (r.kind === 'worst_finish') addFlag(teamForSim(r.sim).team, rankOfSim[r.sim], { kind: r.kind, record: r });
+    addFlag(teamForSim(r.sim).team, rankOfSim[r.sim], { kind: r.kind, record: r });
   });
 
   /* =========================================================
@@ -3049,7 +3121,7 @@
     document.getElementById('modal-goldenboot-log-body').innerHTML = log.map(function(g){
       var cls = g.goals > 0 ? ' class="scored"' : '';
       return '<tr' + cls + '><td>' + g.opponent + '</td><td>' + (g.home ? 'H' : 'A') + '</td>'
-        + '<td class="num">' + g.goals + '</td><td class="num">' + g.xg.toFixed(2) + '</td></tr>';
+        + '<td class="num">' + g.shots + '</td><td class="num">' + g.goals + '</td><td class="num">' + g.xg.toFixed(2) + '</td></tr>';
     }).join('');
   }
 
@@ -3122,35 +3194,68 @@
       document.getElementById('modal-title').textContent = story.player + ' — golden boot winner';
       document.getElementById('modal-sub').textContent =
         'Sim #' + story.sim.toLocaleString() + ' · ' + story.goals + ' goals this season (real 2025/26 tally: ' + story.real_goals + ')';
-      var diff = story.goals - story.real_goals;
       document.getElementById('modal-game-score').innerHTML =
         '<span>' + m.home_team + ' vs ' + m.away_team + '</span>'
         + '<span class="score">' + m.home_goals + '–' + m.away_goals + '</span>';
-      document.getElementById('modal-game-note').textContent =
-        story.player + ' scored ' + m.goals + ' in this match, on the way to ' + story.goals + ' for the season — '
-        + diff + ' more than the ' + story.real_goals + ' they actually scored in 2025/26.';
+
+      // Manchester City/Haaland (the only golden_boot stop today) gets a
+      // richer, editorial paragraph computed from their own game_log --
+      // numbers are real, not hand-typed (see CLAUDE.md authorship
+      // convention for the text itself). unexpected_golden_boot
+      // (Bournemouth/Evanilson) keeps the plain diff-based sentence.
+      if (entry.kind === 'golden_boot') {
+        var gbStats = { goals: 0, shots: 0, xg: 0, hatTrickPlus: 0, fourGoal: 0, fiveOrMoreGoal: 0 };
+        story.game_log.forEach(function(g){
+          gbStats.goals += g.goals; gbStats.shots += g.shots; gbStats.xg += g.xg;
+          if (g.goals >= 3) gbStats.hatTrickPlus++;
+          if (g.goals === 4) gbStats.fourGoal++;
+          if (g.goals >= 5) gbStats.fiveOrMoreGoal++;
+        });
+        var conversionPct = gbStats.shots ? (100 * gbStats.goals / gbStats.shots) : 0;
+        var xgExcess = gbStats.goals - gbStats.xg;
+        document.getElementById('modal-game-note').textContent =
+          story.player + ' won the Golden Boot (most league goals in the season) award in real-life with '
+          + story.real_goals + ' for the season. In this simulation, City ran out winners thanks to ' + story.goals
+          + ' goals from the Norwegian. He had his shooting boots amassing ' + gbStats.hatTrickPlus + ' hat-trick'
+          + (gbStats.hatTrickPlus === 1 ? '' : 's') + ' (including ' + gbStats.fourGoal + ' four-goal haul'
+          + (gbStats.fourGoal === 1 ? '' : 's') + ' and ' + gbStats.fiveOrMoreGoal + ' five-goal match'
+          + (gbStats.fiveOrMoreGoal === 1 ? '' : 'es') + '). With a shot conversion rate of '
+          + conversionPct.toFixed(1) + '% he exceeded his xG by ' + xgExcess.toFixed(2) + '.';
+      } else {
+        var diff = story.goals - story.real_goals;
+        document.getElementById('modal-game-note').textContent =
+          story.player + ' scored ' + m.goals + ' in this match, on the way to ' + story.goals + ' for the season — '
+          + diff + ' more than the ' + story.real_goals + ' they actually scored in 2025/26.';
+      }
+
       renderScorecard(m.scorers || [], m.home_team, m.away_team);
       // The player's own game-by-game goals/xG log, then the scorer's
       // team's whole simulated-season campaign -- both come from
       // export_treemap_data.py's curated tour (build_player_game_log /
-      // build_campaign_for_sim), present on every golden-boot stop.
+      // build_campaign_for_sim), present on every golden-boot stop. The
+      // full campaign is skipped for Manchester City/Haaland specifically
+      // (only the per-game log is wanted there); unexpected_golden_boot
+      // still gets both.
       renderGoldenBootLog(story.game_log);
-      renderCampaign(story.campaign, 'modal-game-campaign-block', 'modal-game-campaign-body');
+      renderCampaign(entry.kind === 'golden_boot' ? null : story.campaign, 'modal-game-campaign-block', 'modal-game-campaign-body');
 
       // Footnote: the same club's own flip side, in a different replay --
       // see the comment on #modal-game-footnote above. Only ever set for
       // Manchester City (the Haaland stop's scorer's club); every other
-      // golden-boot/unexpected-golden-boot story clears it.
+      // golden-boot/unexpected-golden-boot story clears it. Text is the
+      // user's own (see CLAUDE.md authorship convention); the link
+      // itself is Claude's implementation of their "link to this in the
+      // treemap" ask -- see the delegated click handler on
+      // #modal-game-footnote below, set up once outside openStory().
       var footnoteEl = document.getElementById('modal-game-footnote');
       var relegation = relegationStoryByTeam[story.team];
       if (relegation && relegation.kind === 'relegation_footnote') {
-        footnoteEl.textContent = 'Footnote: this same ' + story.team + ' side finishes bottom three in '
-          + relegation.n_relegated.toLocaleString() + ' of the ' + relegation.n_sims.toLocaleString() + ' sims -- '
-          + ordinal(relegation.position) + ' on ' + relegation.points + ' points (sim #'
-          + relegation.sim.toLocaleString() + '), with ' + relegation.champion + ' winning the league instead.';
+        footnoteEl.innerHTML = 'Footnote: interestingly, ' + story.team + ' suffered a shock relegation in one '
+          + 'of our 1 million simulations, despite having better shot quality in most of their games. '
+          + '<button type="button" class="footnote-link" data-team="' + story.team + '">See it in the treemap →</button>';
         footnoteEl.style.display = 'block';
       } else {
-        footnoteEl.textContent = '';
+        footnoteEl.innerHTML = '';
         footnoteEl.style.display = 'none';
       }
 
@@ -3162,16 +3267,19 @@
     // 'title_tie' kinds (roster cards, grid clicks on flagged sims) plus
     // the curated tour's fewest_wins / no_wins / closest_final_week /
     // biggest_margin / lowest_gd / most_tied_first / closest_tiebreak, plus
-    // worst_finish (Manchester United's own worst-ever simulated finish,
-    // see export_relegation_stories.py).
+    // worst_finish (Manchester United's own worst-ever simulated finish)
+    // and relegation_footnote (Manchester City's, linked from their
+    // golden-boot story's own footnote) -- see export_relegation_stories.py.
     champBody.style.display = '';
     gameBody.style.display = 'none';
     crestEl.style.display = '';
 
-    // no_wins/worst_finish are the two story kinds whose *subject* isn't
-    // that sim's champion -- lead with the story's own team's crest/name,
-    // not the crest of whoever actually won that particular replay.
-    var subjectTeam = (entry.kind === 'no_wins' || entry.kind === 'worst_finish') ? story.team : story.champion;
+    // no_wins/worst_finish/relegation_footnote are story kinds whose
+    // *subject* isn't that sim's champion -- lead with the story's own
+    // team's crest/name, not the crest of whoever actually won that
+    // particular replay.
+    var SUBJECT_IS_STORY_TEAM = { no_wins: true, worst_finish: true, relegation_footnote: true };
+    var subjectTeam = SUBJECT_IS_STORY_TEAM[entry.kind] ? story.team : story.champion;
     crestEl.src = crestPath(subjectTeam);
     crestEl.alt = subjectTeam + ' crest';
 
@@ -3184,6 +3292,10 @@
         'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
     } else if (entry.kind === 'worst_finish') {
       document.getElementById('modal-title').textContent = story.team + '\'s worst-ever finish';
+      document.getElementById('modal-sub').textContent =
+        'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
+    } else if (entry.kind === 'relegation_footnote') {
+      document.getElementById('modal-title').textContent = story.team + '\'s shock relegation';
       document.getElementById('modal-sub').textContent =
         'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
     } else if (entry.kind === 'most_tied_first') {
@@ -3201,6 +3313,17 @@
         'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
     }
 
+    // Editorial narrative notes (see CHAMPION_STORY_NOTES) -- explicitly
+    // cleared/hidden whenever this story's kind doesn't have one, rather
+    // than leaving a previous story's text stale.
+    var notes = CHAMPION_STORY_NOTES[entry.kind];
+    var noteBeforeEl = document.getElementById('modal-champion-note-before');
+    var noteAfterEl = document.getElementById('modal-champion-note-after');
+    noteBeforeEl.textContent = notes ? notes.before : '';
+    noteBeforeEl.style.display = notes ? 'block' : 'none';
+    noteAfterEl.textContent = notes ? notes.after : '';
+    noteAfterEl.style.display = notes ? 'block' : 'none';
+
     renderTiebreak(story);
     renderCampaign(story.campaign);
 
@@ -3213,7 +3336,7 @@
       finalweekBlock.style.display = 'none';
     }
 
-    var storyTeam = (entry.kind === 'no_wins' || entry.kind === 'worst_finish') ? story.team : null;
+    var storyTeam = SUBJECT_IS_STORY_TEAM[entry.kind] ? story.team : null;
     document.getElementById('modal-table-body').innerHTML = renderFinalTableRows(story.final_table, story.champion, storyTeam);
 
     var notableBlock = document.getElementById('modal-notable-block');
@@ -3232,6 +3355,21 @@
     var s = ['th','st','nd','rd'], v = n % 100;
     return n + (s[(v-20)%10] || s[v] || s[0]);
   }
+
+  // The relegation footnote's "See it in the treemap" link (see openStory's
+  // golden_boot branch) -- delegated on the footnote element itself since
+  // its innerHTML (and any inline listener) is rebuilt fresh every time
+  // openStory() runs. Closes the current modal first so the zoom/pan
+  // animation underneath is actually visible, same as every roster-card
+  // story button already does via zoomToStory().
+  document.getElementById('modal-game-footnote').addEventListener('click', function(e){
+    var link = e.target.closest('.footnote-link');
+    if (!link) return;
+    var relegation = relegationStoryByTeam[link.dataset.team];
+    if (!relegation) return;
+    backdrop.classList.remove('open');
+    zoomToStory({ kind: relegation.kind, record: relegation });
+  });
 
   document.getElementById('modal-close').addEventListener('click', function(){
     backdrop.classList.remove('open');

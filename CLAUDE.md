@@ -1964,3 +1964,123 @@ for the actual text and visual direction before drafting either.
   next time Playwright is available, though the reveal mechanics
   themselves are unchanged from the already-proven pattern this only
   extended. Merged to `main` on explicit request.
+
+  **2026-09-06, later still -- season-section copy wired in, and a real
+  fix so gameweek 1 matches the single-game re-roll.** User gave the
+  actual copy for "Simulating the season", plus flagged (as a question,
+  not an instruction) that the section needed to "match the Liverpool
+  Bournemouth result from the first section" -- it didn't. **Root cause,
+  confirmed before fixing anything**: the two sections were two entirely
+  separate simulated universes. `export_game_reroll.py`'s Liverpool
+  1-4 Bournemouth score comes from its own dedicated `GAME_REROLL_SEED`
+  (20260046), drawn as one flat array over that match's shots sorted by
+  minute; the season section's own sim (`SEASON_REROLL_SIM` = 41,197,
+  picked to match the curated tour's `closest_tiebreak` title-race story)
+  came from the big pass's completely different seed/mechanism (20252026,
+  home/away goal arrays drawn separately per match) -- gameweek 1 showed
+  Liverpool 3-0 Bournemouth, a different match entirely. Patching just
+  that one gameweek-1 scoreline to agree was considered and rejected: the
+  running table for every later gameweek accumulates from each match's
+  real result, so silently swapping one score would desync the table from
+  the (already-published, tie-broken) final table it needs to end on --
+  a reader who checked the arithmetic would find it didn't add up.
+  **Real fix**: `export_season_reroll.py` rewritten to stop depending on
+  the big pass/curated-tour lookup entirely -- same standalone-illustrative
+  convention `export_game_reroll.py` already established, just at season
+  scope. New `SEASON_REROLL_SEED` (596) found by searching seeds (same
+  "search a range for a specific target" method used for
+  `GAME_REROLL_SEED`, just matched against a concrete scoreline --
+  Liverpool 1-4 Bournemouth -- rather than "any divergent outcome") using
+  the site's standard per-match `_match_rng` scheme; picked from the
+  matching candidates because it also produces a genuinely different,
+  clean (no tie) champion -- Chelsea, real 2025/26 finish 10th -- fitting
+  the article's own "very different result" theme rather than reproducing
+  the real champion. Champion is now decided via the real tie-break chain
+  (`build_h2h_fixture_index`/`resolve_tied_group`, reused from
+  `simulate_season.py`) rather than a plain points/GD/GF sort, since this
+  standalone season has no already-published table to fall back on if a
+  genuine tie ever did occur (it doesn't on the current seed -- checked
+  directly, not assumed). **Verified**: regenerated output's gameweek 1
+  shows Liverpool 1-4 Bournemouth, byte-identical to
+  `game-reroll-data.json`'s own `sim_final_score`; every gameweek confirmed
+  to contain all 20 teams exactly once; final table's W+D+L sums to 38 and
+  points/GD arithmetic checked for every team; two independent runs of the
+  script produced byte-identical output (fully deterministic). Needed
+  `networkx` (used by the existing gameweek-matching algorithm, unchanged
+  from before) which this sandbox's Python didn't have installed --
+  installed via pip rather than worked around.
+  **Copy wiring**: the given intro paragraph ("Let's go a step
+  further...") went into the section's own static intro slot (matching
+  every other section's own framing-paragraph convention, e.g. the
+  treemap section's intro prose above its widget) rather than the
+  separate `season-intro-placeholder` (which exists purely to fill blank
+  space until the sticky table pins, and is left as still-TBD, unaddressed
+  this round). A new `.season-note` narrative-aside style/reveal item was
+  added after the first 5 gameweeks ("After 5 games, (copy TBD)") --
+  previously no such insertion point existed there. The mid-season skip
+  block's mechanical "…N mid-season games…" label is now a real sentence
+  ("A further 28 gameweeks pass..."), with the sticky visual's own short
+  label kept separately so it doesn't have to carry a full sentence. The
+  exit placeholder got its closing copy ("The season ends with (copy
+  TBD)"). Every "(copy TBD)" marker is the user's own unfinished text,
+  left visible per this file's own established placeholder convention
+  (matching the existing "Placeholder text — TBD." precedent) rather than
+  Claude inventing the rest. Not yet committed/merged.
+
+  **2026-09-06, later still -- Arsenal and Manchester City roster-card
+  highlights rewritten with the user's own copy.** **Arsenal
+  (`closest_final_week`)**: two new editorial narrative paragraphs
+  (`CHAMPION_STORY_NOTES`, keyed by curated-tour kind since only one sim
+  globally carries each kind) bracket the existing "table before the
+  final gameweek"/"final matchday results" block -- one before (sets up
+  the title race), one after (the Crystal Palace 0-7 finish). Two new
+  numbers-only pieces are computed live from `teams`/Arsenal's own record
+  rather than hand-typed: the win percentage (71.7%, matching the user's
+  rounded "72%") and the title count (716,922) -- both cross-checked
+  against `curated-tour.json`'s `closest_final_week` record and
+  `treemap-data.json` directly before wiring (pre_margin 0, Man City and
+  Man Utd both within 2 points of Arsenal heading into the final day,
+  final match literally Crystal Palace 0-7 Arsenal). New
+  `.modal-champion-note` paragraphs added to the champion-modal markup,
+  explicitly cleared/hidden for every story kind without an entry in
+  `CHAMPION_STORY_NOTES` (same convention as every other optional modal
+  block on this page). **Manchester City (`golden_boot`/Haaland)**: (1)
+  the "Game by game" table gained a Shots column (data already existed on
+  `game_log` records, `build_player_game_log`'s own `shots` field -- pure
+  frontend change, `#modal-goldenboot-log-block`'s nth-child CSS
+  renumbered for the new 5-column shape). (2) `modal-game-note`'s text is
+  now a richer paragraph for this story kind specifically (Haaland's
+  hat-trick/4-goal/5-goal-haul counts, shot conversion rate, xG
+  overperformance) computed live from `story.game_log` -- verified by
+  hand against the actual data first (7 games with 3+ goals, 1 four-goal,
+  2 five-goal, 125 shots/50 goals = 40.0% conversion, 28.82 total xG so
+  +21.18 over xG) and confirmed the sim's own champion really is
+  Manchester City (byte-checked against `champions.bin` for that sim, not
+  assumed) before writing "City ran out winners". `unexpected_golden_boot`
+  (Bournemouth/Evanilson) keeps its original plain diff sentence --
+  scoped to `entry.kind === 'golden_boot'` only. (3) The full campaign
+  table is now hidden for this story kind specifically (`renderCampaign`
+  called with `null`), per the "only show Haaland's game by game table"
+  ask -- `unexpected_golden_boot` is unaffected. (4) The relegation
+  footnote's text is now the user's own wording (replacing the previous
+  auto-generated "X of Y sims" sentence), plus a real "See it in the
+  treemap" link -- clicking it closes the current modal and calls the
+  existing `zoomToStory()` (same mechanism every roster-card button
+  already uses) to pan/zoom to that exact sim's cell and reopen a proper
+  story modal for it. This needed `relegation_footnote` added as a third
+  kind alongside `no_wins`/`worst_finish` in the champion-shaped
+  branch's subject-team/story-row logic (refactored into one shared
+  `SUBJECT_IS_STORY_TEAM` map covering all three) and its own
+  title/subtitle text ("Manchester City's shock relegation"). The sim is
+  now also flagged in the treemap grid itself (previously deliberately
+  excluded as "not a standalone story") so a reader who zooms into
+  Manchester City's grid some other way finds the same cell clickable
+  too. Delegated click handling (`#modal-game-footnote`'s own listener,
+  registered once, not per-openStory-call, since the footnote's
+  `innerHTML` -- and any inline listener on it -- gets rebuilt fresh every
+  time the modal opens) reads the team off a `data-team` attribute rather
+  than closing over a per-call variable. Verified via `esprima` syntax
+  checking (no `node`/Playwright in this sandbox, same gap as the last
+  two rounds) plus direct data cross-checks for every number quoted
+  above; not yet an actual browser click-through. Not yet
+  committed/merged.
