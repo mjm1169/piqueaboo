@@ -90,6 +90,14 @@ def main():
     fixture_index = build_h2h_fixture_index(matches, team_idx)
     print(f"{len(matches)} matches, {len(teams)} teams, seed {args.seed}", file=sys.stderr)
 
+    # Real final score per match_id, for the section's own closing summary
+    # (how many of the 380 re-rolled games land on the same scoreline/
+    # result as reality) -- build_match_index doesn't carry this (it only
+    # keeps what the simulation itself needs), so pull it straight from
+    # the shots file the same way build_real_table does (one row per
+    # match_id, h_goals/a_goals constant across all of a match's shots).
+    real_score_by_match_id = shots.drop_duplicates("match_id").set_index("match_id")[["h_goals", "a_goals"]].to_dict("index")
+
     results = []
     t0 = time.time()
     for i, m in enumerate(matches):
@@ -262,10 +270,33 @@ def main():
         champion_team = final_table[0]["team"]
     gw_out[-1]["table"] = final_table
 
+    # Closing-summary stats for the section's own summary paragraph (see
+    # CLAUDE.md's authorship convention -- the copy itself is the user's
+    # own; these are just the live numbers it quotes). Same shots CSV, same
+    # 380 real matches every other number on this page is drawn from --
+    # `results` still carries each match's own match_id, so this is a
+    # simple exact join against real_score_by_match_id, not a fresh pass.
+    same_scoreline = 0
+    same_result = 0
+    for r in results:
+        real = real_score_by_match_id[r["match_id"]]
+        rh, ra = int(real["h_goals"]), int(real["a_goals"])
+        sh, sa = r["home_goals"], r["away_goals"]
+        if (rh, ra) == (sh, sa):
+            same_scoreline += 1
+        real_wdl = "H" if rh > ra else ("A" if ra > rh else "D")
+        sim_wdl = "H" if sh > sa else ("A" if sa > sh else "D")
+        if real_wdl == sim_wdl:
+            same_result += 1
+
     payload = {
         "seed": args.seed,
         "champion": champion_team,
         "tiebreak_resolution": resolution,
+        "total_shots": len(shots),
+        "n_matches": len(results),
+        "same_scoreline_count": same_scoreline,
+        "same_result_count": same_result,
         "gameweeks": gw_out,
     }
     with open(args.out, "w") as f:

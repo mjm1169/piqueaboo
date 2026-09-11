@@ -188,7 +188,11 @@
      affect scroll pacing at all any more (see revealOnScroll: each row
      reveals via IntersectionObserver as it scrolls into view on its own,
      nothing here computes a scrollable distance from row height). */
-  .game-log td{ padding:13px 6px; border-bottom:1px solid #EFEFEF; }
+  /* 16px, not the original 13px -- per direct feedback that the shot
+     log should be "spaced out a little more" on desktop too, matching
+     (rather than falling short of) the density already used below the
+     640px breakpoint. */
+  .game-log td{ padding:16px 6px; border-bottom:1px solid #EFEFEF; }
   .game-log td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .game-log tr{ opacity:0; transition:opacity .25s ease; }
   .game-log tr.revealed{ opacity:1; }
@@ -208,6 +212,7 @@
     color:var(--accent-step); border-bottom:1px solid #EFEFEF;
   }
   #game-reroll-summary{ margin-top:32px; font-size:17px; }
+  #season-reroll-summary{ margin-top:32px; font-size:17px; }
 
   @media (max-width:640px){
     /* Was denser than desktop's own rows (9px), a legibility/space trade
@@ -220,6 +225,31 @@
     .game-log td{ padding:16px 5px; }
     .game-log tr.comment-row td{ padding:15px 5px; }
     .game-log tr.kickoff-row td{ padding:13px 5px; }
+  }
+
+  /* On a big, tall window there's room to let the two pitch maps grow
+     well past the ~200px each they're capped to inside the reveal-track's
+     normal 42%-wide sticky column. Rather than inventing a new layout,
+     this reuses the same single-column stack the mobile breakpoint
+     already relies on (sticky visual on top spanning the full content
+     width, shot log below in normal flow) -- proven already to pin/
+     release correctly -- just gated the opposite way, on "plenty of
+     space" instead of "too little". Both min-width AND min-height are
+     required so a merely-wide-but-short laptop window (where stacking
+     would just mean more scrolling for no visual gain) stays on the
+     regular side-by-side layout; 1400x900 comfortably excludes ordinary
+     laptop screens while catching a real external monitor. Scoped to
+     #game-reroll-track specifically -- the season section's own sticky
+     table/results-feed pairing wasn't part of this ask. */
+  @media (min-width:1400px) and (min-height:900px){
+    #game-reroll-track{ grid-template-columns:1fr; gap:28px; }
+    /* Mirrors the mobile stacked layout's own z-index/opaque-background
+       treatment on the wrap itself (beyond .reveal-visual's own already-
+       unconditional background) -- needed once the sticky card and the
+       scrolling list share one column instead of sitting in two. */
+    #game-reroll-track .reveal-sticky-wrap{
+      z-index:2; background:var(--canvas); padding:8px 0 14px 0;
+    }
   }
 
   /* ---------- simulated season ---------- */
@@ -306,10 +336,21 @@
     display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));
     gap:2px 12px;
   }
+  /* Grey by default -- a gameweek block fades in (see .revealed above)
+     well before its own results are applied to the table beside/above
+     it (see revealOnScroll's two-stage reveal/apply below); the chips
+     stay this muted grey for that whole stretch, then switch to full
+     colour (.applied, added at the same moment the table itself
+     updates) once the block has scrolled up to the middle of the
+     screen -- per the user's own spec: "the table should update until
+     the gameweek scores are halfway up the page, they can be greyed
+     out until they get applied to the table." */
   .season-result-chip{
     font-size:12px; white-space:nowrap; padding:2px 0;
     border-bottom:1px solid #F0F0F0; font-variant-numeric:tabular-nums;
+    color:var(--muted); transition:color .3s ease;
   }
+  .season-gw-block.applied .season-result-chip{ color:var(--ink); }
   .season-result-chip .score{ font-weight:500; margin:0 4px; }
 
   /* 38 individual gameweek blocks was reported as too long a scroll even
@@ -519,6 +560,12 @@
 
   .modal h4{ font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:500; margin:18px 0 8px 0; }
 
+  /* Same overflow-x:auto convention as .campaign-table-wrap -- added
+     alongside the new GF/GA columns below, since a 9-column table (up
+     from 7) at the modal's ~590px content width plus a long team name
+     ("Wolverhampton Wanderers") risks crowding on a narrow viewport;
+     safer to let it scroll than squeeze. */
+  .final-table-wrap{ overflow-x:auto; }
   .final-table{ width:100%; border-collapse:collapse; font-size:13px; }
   .final-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; border-bottom:1px solid #E5E5E5; }
   .final-table td{ padding:5px 6px; border-bottom:1px solid #EFEFEF; }
@@ -728,7 +775,7 @@
 
   <section id="game-reroll-section">
     <h2>What could have been in the first game?</h2>
-    <!-- INTRO COPY: TBD -- user to fill in (see CLAUDE.md authorship convention) -->
+    <p>The first game of the season saw Bournemouth take on Liverpool at Anfield. There were shots aplenty, but how could it have played out differently? Here are all the shots, what happened in the actual game, and what happened in simulation xxx.</p>
 
     <div class="reveal-track" id="game-reroll-track">
       <div class="reveal-sticky-wrap">
@@ -831,25 +878,39 @@
       </div>
 
       <div class="reveal-list" id="season-results-body">
-        <div class="season-intro-placeholder" id="season-intro-placeholder">
-          <!-- COPY: TBD -- user to fill in (see CLAUDE.md authorship
-               convention). Sized by padUntilPinnedIsBlank() to finish
-               scrolling past exactly as the table beside/above it
-               reaches its own pinned position. -->
-          <p>Placeholder text — TBD.</p>
-        </div>
+        <!-- No copy here by design (per the user's own request to take
+             out this placeholder text) -- the div still exists purely as
+             a spacer, sized by padUntilPinnedIsBlank() to finish
+             scrolling past exactly as the table beside/above it reaches
+             its own pinned position. See revealOnScroll's two-stage
+             reveal/apply below for why the table itself only updates
+             once a gameweek's own chips have scrolled up to the middle
+             of the screen. -->
+        <div class="season-intro-placeholder" id="season-intro-placeholder"></div>
         <div class="season-exit-placeholder" id="season-exit-placeholder">
           <!-- Gameweek 38's own closing text: the table stays pinned on
                the right until this finishes scrolling, then releases --
                a plain side effect of this block adding to the list
                column's own height, see the reveal setup below. Text is
-               the user's own, still partial (see CLAUDE.md authorship
-               convention) -- the "(copy TBD)" marker is theirs to
-               replace, not narrative Claude should be inventing. -->
-          <p>The season ends with (copy TBD)</p>
+               the user's own (see CLAUDE.md authorship convention) --
+               continues the mid-season note's own trailing "...." below,
+               which is why it opens on an ellipsis rather than restating
+               "The season ends with". -->
+          <p>...and after a battle with Manchester City, win the league on the last day of the season, despite losing 4-1 away to Sunderland.</p>
         </div>
       </div>
     </div>
+
+    <!-- Closing summary, mirroring #game-reroll-summary above -- filled
+         in once season-reroll-data.json has loaded (see below). Numbers
+         are computed live from the data (shot count from the season's own
+         shots CSV via total_shots; scoreline/result-match rates from a
+         plain join against the real 2025/26 results, both baked into
+         season-reroll-data.json by export_season_reroll.py at build time
+         rather than combined client-side) -- not hand-typed, so they
+         can't go stale if the underlying data changes. Text is the
+         user's own (see CLAUDE.md authorship convention). -->
+    <p id="season-reroll-summary"></p>
   </section>
 
   <!-- ===================== treemap ===================== -->
@@ -952,10 +1013,12 @@
 
       <div id="modal-finalweek-block">
         <h4>Table before the final gameweek</h4>
-        <table class="final-table">
-          <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr></thead>
-          <tbody id="modal-finalweek-before-body"></tbody>
-        </table>
+        <div class="final-table-wrap">
+          <table class="final-table">
+            <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr></thead>
+            <tbody id="modal-finalweek-before-body"></tbody>
+          </table>
+        </div>
         <h4>Final matchday results</h4>
         <div id="modal-finalweek-games"></div>
       </div>
@@ -963,10 +1026,12 @@
       <p class="modal-champion-note" id="modal-champion-note-after" style="display:none"></p>
 
       <h4>Final table</h4>
-      <table class="final-table">
-        <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr></thead>
-        <tbody id="modal-table-body"></tbody>
-      </table>
+      <div class="final-table-wrap">
+        <table class="final-table">
+          <thead><tr><th>#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th class="num">GA</th><th class="num">W</th><th class="num">D</th><th class="num">L</th></tr></thead>
+          <tbody id="modal-table-body"></tbody>
+        </table>
+      </div>
 
       <div id="modal-campaign-block" class="campaign-block">
         <h4>Full campaign</h4>
@@ -990,13 +1055,6 @@
     <div id="modal-game-body">
       <div class="game-line" id="modal-game-score"></div>
       <p class="modal-game-note" id="modal-game-note"></p>
-      <!-- Golden-boot (Manchester City/Haaland) only: a footnote on this
-           same club's own flip side -- the one sim in the whole million
-           where they're relegated instead. See
-           notes/pl-xg-relegated-top-team-candidates.md /
-           export_relegation_stories.py. Empty/hidden for every other
-           story. -->
-      <p class="modal-game-footnote" id="modal-game-footnote" style="display:none"></p>
       <div class="scorecard" id="modal-scorecard">
         <div class="scorecard-side">
           <div class="scorecard-team" id="modal-scorecard-home-team"></div>
@@ -1036,6 +1094,16 @@
           </table>
         </div>
       </div>
+
+      <!-- Golden-boot (Manchester City/Haaland) only: a footnote on this
+           same club's own flip side -- the one sim in the whole million
+           where they're relegated instead. See
+           notes/pl-xg-relegated-top-team-candidates.md /
+           export_relegation_stories.py. Empty/hidden for every other
+           story. Moved to be the last thing in this body (per the user's
+           own ask) -- after whichever of the blocks above end up visible
+           for a given story kind, rather than sitting up near the top. -->
+      <p class="modal-game-footnote" id="modal-game-footnote" style="display:none"></p>
     </div>
   </div>
 </div>
@@ -1076,8 +1144,15 @@
      ...) even if several items cross the threshold in the same
      observer callback (a fast flick scroll) -- any gap gets filled
      immediately rather than only firing for the furthest one.
-     ========================================================= */
-  function revealOnScroll(items, onReveal){
+     Optional third argument overrides the IntersectionObserver options
+     (default: fire once an item is visible near the bottom of the
+     screen). The simulated-season section calls this twice on the same
+     elements with two different option sets -- once with the default,
+     to fade a block in, and again with a rootMargin that only counts an
+     element as "intersecting" once it's reached the middle of the
+     screen, to gate when it actually applies to the table (see that
+     section's own comment for why). ========================================================= */
+  function revealOnScroll(items, onReveal, options){
     var indexOf = new Map();
     items.forEach(function(el, i){ indexOf.set(el, i); });
     var maxSeen = -1;
@@ -1092,7 +1167,7 @@
       });
       for(var i = maxSeen + 1; i <= newMax; i++) onReveal(i);
       maxSeen = newMax;
-    }, { rootMargin: '0px 0px -12% 0px', threshold: 0 });
+    }, options || { rootMargin: '0px 0px -12% 0px', threshold: 0 });
     items.forEach(function(el){ io.observe(el); });
   }
 
@@ -1486,14 +1561,16 @@
         revealItems.push({ el: div, onReveal: function(){ applyGameweek(gw, false); } });
       });
 
-      // "After 5 games" narrative aside -- text is the user's own, still
-      // partial (see CLAUDE.md authorship convention; "(copy TBD)" is
-      // theirs to replace). A plain fade-in with no table-state change,
-      // since we're still exactly at gameweek 5's own table from the
-      // reveal step above.
+      // "After 5 games" narrative aside -- text is the user's own (see
+      // CLAUDE.md authorship convention), verified against gameweek 5's
+      // own real table before wiring in: Bournemouth are 5-0-0 (a genuine
+      // 100% record) in 1st, Leeds sit 3rd, tied on points with Arsenal --
+      // both inside the top 4 Champions League places. A plain fade-in
+      // with no table-state change, since we're still exactly at
+      // gameweek 5's own table from the reveal step above.
       var afterFiveDiv = document.createElement('div');
       afterFiveDiv.className = 'season-note';
-      afterFiveDiv.textContent = 'After 5 games, (copy TBD)';
+      afterFiveDiv.textContent = 'After 5 games, there are a few surprises at the top of the table with Bournemouth having a 100% record and Leeds in the Champions League spots.';
       resultsBody.insertBefore(afterFiveDiv, exitPlaceholderEl);
       revealItems.push({ el: afterFiveDiv, onReveal: function(){} });
 
@@ -1504,7 +1581,16 @@
         // tag (matching every other gameweek step); the fuller narrative
         // sentence lives in this aside instead, not the label itself.
         var midMechanicalLabel = '…' + midGws.length + ' mid-season games…';
-        midDiv.textContent = 'A further ' + midGws.length + ' gameweeks pass, taking us to the business end of the season. (copy TBD)';
+        // Text (from here through the exit placeholder's own paragraph
+        // above) is the user's own, one sentence split across the two
+        // reveal points -- verified against the data before wiring in:
+        // Chelsea take over 1st from gameweek 24 on and hold it to the
+        // end (one brief exception at gameweek 36, where Manchester City
+        // edge a point ahead before Chelsea retake the lead at 37) --
+        // "a battle with Manchester City" heading into a final day where
+        // Chelsea do lose 4-1 away to Sunderland but still finish 2
+        // points clear.
+        midDiv.textContent = 'A further ' + midGws.length + ' gameweeks pass, taking us to the business end of the season. As the season nears a close, Chelsea move into top spot....';
         resultsBody.insertBefore(midDiv, exitPlaceholderEl);
         var lastMidGw = midGws[midGws.length - 1];
         revealItems.push({ el: midDiv, onReveal: function(){
@@ -1522,6 +1608,22 @@
       // (a plain side effect of it adding to the list column's own
       // height) until its own copy finishes scrolling past.
       revealItems.push({ el: exitPlaceholderEl, onReveal: function(){} });
+
+      // Closing summary -- text is the user's own (see CLAUDE.md
+      // authorship convention); the shot count and the two match rates
+      // are read straight off season.total_shots/n_matches/
+      // same_scoreline_count/same_result_count, computed once at export
+      // time (see export_season_reroll.py) from an exact join against the
+      // real 2025/26 results over the same 380 matches/9,524 shots
+      // everything else in this section is built from.
+      var sameScorelinePct = (season.same_scoreline_count / season.n_matches * 100).toFixed(1);
+      var sameResultPct = (season.same_result_count / season.n_matches * 100).toFixed(1);
+      document.getElementById('season-reroll-summary').textContent =
+        'The same ' + season.total_shots.toLocaleString() + ' shots in the season, each with the same chance of '
+        + 'going in (depending how much faith you have in xG) but a very different result. This is the nature of a '
+        + 'low-scoring sport like football, games can pivot on just a few things playing out differently. Of the '
+        + season.n_matches + ' games played in the season ' + sameScorelinePct + '% had the same exact scoreline '
+        + 'and ' + sameResultPct + '% had the same W/D/L outcome.';
 
       // All-zero table, alphabetical -- shown before any gameweek has revealed.
       var zeroTable = season.gameweeks[0].table
@@ -1570,15 +1672,30 @@
       renderTable(zeroTable, null);
       compactQuery.addEventListener('change', function(){ renderTable(lastRows, lastChampion); });
 
-      function revealItem(i){
-        var item = revealItems[i];
-        item.el.classList.add('revealed');
-        item.onReveal();
-      }
-
       padUntilPinnedIsBlank(track, document.getElementById('season-intro-placeholder'));
       afterStickyPinned(track, function(){
-        revealOnScroll(revealItems.map(function(it){ return it.el; }), revealItem);
+        var elements = revealItems.map(function(it){ return it.el; });
+        // Two separate passes over the same elements, per the user's own
+        // spec: "the table should update until the gameweek scores are
+        // halfway up the page, they can be greyed out until they get
+        // applied to the table." Stage 1 (default options, same as every
+        // other reveal-track section) just fades a block in as it enters
+        // from the bottom -- a gameweek's own result chips render grey at
+        // this point (see .season-result-chip's default colour). Stage 2
+        // doesn't fire until the block has scrolled up to the vertical
+        // middle of the screen (rootMargin shrinks the observed viewport
+        // to a single line at 50% from the top -- the standard
+        // IntersectionObserver technique for "has this reached the
+        // middle") -- only then does the table actually update and the
+        // chips switch to full colour (.applied).
+        revealOnScroll(elements, function(i){
+          revealItems[i].el.classList.add('revealed');
+        });
+        revealOnScroll(elements, function(i){
+          var item = revealItems[i];
+          item.onReveal();
+          item.el.classList.add('applied');
+        }, { rootMargin: '-50% 0px -50% 0px', threshold: 0 });
       });
     });
   })();
@@ -1708,23 +1825,51 @@
   }
 
   // Editorial narrative for specific champion-shaped stories, keyed by
-  // curated-tour kind (only one sim globally carries each of these
-  // kinds, so kind alone -- not team -- is enough to identify which
-  // story this is). Numbers are computed live from `teams`/the story's
-  // own record, not hand-typed, so they can't go stale if the data is
-  // ever regenerated. Text is the user's own (see CLAUDE.md authorship
-  // convention) -- see openStory() for where these render.
+  // *team* -- not by curated-tour kind, since 'title_tie' alone belongs
+  // to three different clubs (Liverpool, Chelsea, Newcastle United's own
+  // second-story picks all use it) and kind alone can't tell them apart.
+  // Each of these teams only ever has one story slot on the whole page
+  // today (see secondStoryByTeam above), so the team itself is enough to
+  // identify which story this is. Numbers are computed live from
+  // `teams`/`relegationStoryByTeam`/the story's own record, not
+  // hand-typed, so they can't go stale if the data is ever regenerated.
+  // Text is the user's own (see CLAUDE.md authorship convention) -- see
+  // openStory() for where these render (looked up by `subjectTeam`,
+  // already computed there the same way for every champion-shaped story).
   var CHAMPION_STORY_NOTES = {};
   (function(){
     var arsenal = teams.filter(function(t){ return t.team === 'Arsenal'; })[0];
-    if (!arsenal) return;
-    var pct = (arsenal.title_odds * 100).toFixed(1);
-    CHAMPION_STORY_NOTES.closest_final_week = {
-      before: 'Arsenal won ' + pct + '% of our million simulations including this simulation which went down '
-        + 'to the final day. Fighting with Manchester City and Manchester United going into the final gameweek...',
-      after: '...Arsenal thump Crystal Palace 0-7 away from home to clinch one of their '
-        + arsenal.title_count.toLocaleString() + ' titles.',
-    };
+    if (arsenal) {
+      var arsenalPct = (arsenal.title_odds * 100).toFixed(1);
+      CHAMPION_STORY_NOTES['Arsenal'] = {
+        before: 'Arsenal won ' + arsenalPct + '% of our million simulations including this simulation which went down '
+          + 'to the final day. Fighting with Manchester City and Manchester United going into the final gameweek...',
+        after: '...Arsenal thump Crystal Palace 0-7 away from home to clinch one of their '
+          + arsenal.title_count.toLocaleString() + ' titles.',
+      };
+    }
+
+    var manUtdRelegation = relegationStoryByTeam['Manchester United'];
+    var manUtd = teams.filter(function(t){ return t.team === 'Manchester United'; })[0];
+    if (manUtd && manUtdRelegation && manUtdRelegation.n_relegated != null) {
+      var manUtdPct = (manUtd.title_odds * 100).toFixed(1);
+      CHAMPION_STORY_NOTES['Manchester United'] = {
+        before: 'Though Man United won ' + manUtdPct + '% of the simulations, they did get relegated in '
+          + manUtdRelegation.n_relegated.toLocaleString() + ' replays, including this 19th placed finish. Despite '
+          + 'winning 4 of their last five games, 39pts wasn\'t enough to save them',
+      };
+    }
+
+    var liverpoolStory = secondStoryByTeam['Liverpool'];
+    var liverpool = teams.filter(function(t){ return t.team === 'Liverpool'; })[0];
+    if (liverpool && liverpoolStory && liverpoolStory.kind === 'title_tie') {
+      var liverpoolPct = (liverpool.title_odds * 100).toFixed(1);
+      CHAMPION_STORY_NOTES['Liverpool'] = {
+        before: 'Liverpool won the title in ' + liverpoolPct + '% of simulations, including this particularly '
+          + 'tight one. It was a three-way tie at the top. Unable to be separated from Man City on goal '
+          + 'difference, head-to-head record was used to split them, giving Liverpool the title.',
+      };
+    }
   })();
 
   function secondStoryLabel(entry){
@@ -3047,12 +3192,18 @@
   // `storyTeam` highlights a second, non-champion row the story is
   // actually about (e.g. a zero-win team's own best-ever finish) with a
   // distinct class from the champion row, so the two never collide.
-  function renderFinalTableRows(table, champion, storyTeam){
-    return table.map(function(r){
+  // Optional `limit` trims to the table's own top N rows (currently only
+  // Arsenal's closest_final_week story asks for this) -- every
+  // final_table/table_before array is already position-sorted, so this
+  // is a plain slice, not a re-sort.
+  function renderFinalTableRows(table, champion, storyTeam, limit){
+    var rows = limit ? table.slice(0, limit) : table;
+    return rows.map(function(r){
       var cls = r.team === champion ? ' class="champion"'
         : (storyTeam && r.team === storyTeam ? ' class="story-team"' : '');
       return '<tr' + cls + '><td>' + r.position + '</td><td>' + r.team + '</td>'
         + '<td class="num">' + r.points + '</td><td class="num">' + (r.gd > 0 ? '+' : '') + r.gd + '</td>'
+        + '<td class="num">' + r.gf + '</td><td class="num">' + r.ga + '</td>'
         + '<td class="num">' + r.w + '</td><td class="num">' + r.d + '</td><td class="num">' + r.l + '</td></tr>';
     }).join('');
   }
@@ -3158,6 +3309,11 @@
         ? new Date(story.date.replace(' ', 'T')).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
         : '';
       document.getElementById('modal-sub').textContent = 'Sim #' + story.sim.toLocaleString() + (gameDateStr ? ' · ' + gameDateStr : '');
+      // Explicit display resets -- a previous golden_boot story hides
+      // both of these (see below), and an inline style persists across
+      // openStory() calls until something else overwrites it.
+      document.getElementById('modal-game-score').style.display = '';
+      document.getElementById('modal-scorecard').style.display = '';
       document.getElementById('modal-game-score').innerHTML =
         '<span>' + story.home_team + ' vs ' + story.away_team + '</span>'
         + '<span class="score">' + story.home_goals + '–' + story.away_goals + '</span>';
@@ -3194,15 +3350,31 @@
       document.getElementById('modal-title').textContent = story.player + ' — golden boot winner';
       document.getElementById('modal-sub').textContent =
         'Sim #' + story.sim.toLocaleString() + ' · ' + story.goals + ' goals this season (real 2025/26 tally: ' + story.real_goals + ')';
-      document.getElementById('modal-game-score').innerHTML =
-        '<span>' + m.home_team + ' vs ' + m.away_team + '</span>'
-        + '<span class="score">' + m.home_goals + '–' + m.away_goals + '</span>';
+
+      // Manchester City/Haaland specifically: the score line and
+      // scorecard are both about story.match alone (the Everton game,
+      // Haaland's showcase 5-goal haul) -- per the user's own ask, this
+      // story no longer singles that one match out up top (the "Game by
+      // game" table below already covers every match he played,
+      // including both meetings with Everton). unexpected_golden_boot
+      // (Bournemouth/Evanilson) is unaffected -- keeps both, as before.
+      var scoreEl = document.getElementById('modal-game-score');
+      var scorecardEl = document.getElementById('modal-scorecard');
+      if (entry.kind === 'golden_boot') {
+        scoreEl.style.display = 'none';
+        scorecardEl.style.display = 'none';
+      } else {
+        scoreEl.style.display = '';
+        scorecardEl.style.display = '';
+        scoreEl.innerHTML = '<span>' + m.home_team + ' vs ' + m.away_team + '</span>'
+          + '<span class="score">' + m.home_goals + '–' + m.away_goals + '</span>';
+        renderScorecard(m.scorers || [], m.home_team, m.away_team);
+      }
 
       // Manchester City/Haaland (the only golden_boot stop today) gets a
       // richer, editorial paragraph computed from their own game_log --
       // numbers are real, not hand-typed (see CLAUDE.md authorship
-      // convention for the text itself). unexpected_golden_boot
-      // (Bournemouth/Evanilson) keeps the plain diff-based sentence.
+      // convention for the text itself).
       if (entry.kind === 'golden_boot') {
         var gbStats = { goals: 0, shots: 0, xg: 0, hatTrickPlus: 0, fourGoal: 0, fiveOrMoreGoal: 0 };
         story.game_log.forEach(function(g){
@@ -3222,22 +3394,29 @@
           + (gbStats.fiveOrMoreGoal === 1 ? '' : 'es') + '). With a shot conversion rate of '
           + conversionPct.toFixed(1) + '% he exceeded his xG by ' + xgExcess.toFixed(2) + '.';
       } else {
+        // Bournemouth/Evanilson -- text is the user's own (see CLAUDE.md
+        // authorship convention); the title-odds and xG-excess numbers
+        // are computed live from teams/story.game_log, not hand-typed.
+        var teamRec = teams.filter(function(t){ return t.team === story.team; })[0];
+        var titleOddsPct = teamRec ? (teamRec.title_odds * 100).toFixed(1) : '?';
         var diff = story.goals - story.real_goals;
+        var ugStats = { goals: 0, xg: 0 };
+        story.game_log.forEach(function(g){ ugStats.goals += g.goals; ugStats.xg += g.xg; });
+        var ugXgExcess = ugStats.goals - ugStats.xg;
         document.getElementById('modal-game-note').textContent =
-          story.player + ' scored ' + m.goals + ' in this match, on the way to ' + story.goals + ' for the season — '
-          + diff + ' more than the ' + story.real_goals + ' they actually scored in 2025/26.';
+          story.team + ' won ' + titleOddsPct + '% of our simulations (more than perhaps you\'d think). One '
+          + 'surprise was this simulation, where they didn\'t win the title but ' + story.player + ' took a '
+          + 'surprise Golden Boot, with a ' + story.goals + '-goal haul for the season, ' + diff + ' more than '
+          + 'he managed to amass in real-life and outperforming his xG by ' + ugXgExcess.toFixed(2) + '.';
       }
 
-      renderScorecard(m.scorers || [], m.home_team, m.away_team);
-      // The player's own game-by-game goals/xG log, then the scorer's
-      // team's whole simulated-season campaign -- both come from
-      // export_treemap_data.py's curated tour (build_player_game_log /
-      // build_campaign_for_sim), present on every golden-boot stop. The
-      // full campaign is skipped for Manchester City/Haaland specifically
-      // (only the per-game log is wanted there); unexpected_golden_boot
-      // still gets both.
+      // The player's own game-by-game goals/xG log -- present on every
+      // golden-boot stop. The full campaign table is dropped for both
+      // golden-boot story kinds (per the user's own ask, "keep game by
+      // game, drop full season" -- Manchester City/Haaland already did
+      // this, Bournemouth/Evanilson now does too).
       renderGoldenBootLog(story.game_log);
-      renderCampaign(entry.kind === 'golden_boot' ? null : story.campaign, 'modal-game-campaign-block', 'modal-game-campaign-body');
+      renderCampaign(null, 'modal-game-campaign-block', 'modal-game-campaign-body');
 
       // Footnote: the same club's own flip side, in a different replay --
       // see the comment on #modal-game-footnote above. Only ever set for
@@ -3313,31 +3492,50 @@
         'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
     }
 
-    // Editorial narrative notes (see CHAMPION_STORY_NOTES) -- explicitly
-    // cleared/hidden whenever this story's kind doesn't have one, rather
+    // Editorial narrative notes (see CHAMPION_STORY_NOTES) -- keyed by
+    // subjectTeam (already computed above), not entry.kind, since a kind
+    // like 'title_tie' belongs to more than one team. Explicitly
+    // cleared/hidden whenever this story's team doesn't have one, rather
     // than leaving a previous story's text stale.
-    var notes = CHAMPION_STORY_NOTES[entry.kind];
+    var notes = CHAMPION_STORY_NOTES[subjectTeam];
     var noteBeforeEl = document.getElementById('modal-champion-note-before');
     var noteAfterEl = document.getElementById('modal-champion-note-after');
     noteBeforeEl.textContent = notes ? notes.before : '';
     noteBeforeEl.style.display = notes ? 'block' : 'none';
-    noteAfterEl.textContent = notes ? notes.after : '';
-    noteAfterEl.style.display = notes ? 'block' : 'none';
+    noteAfterEl.textContent = notes && notes.after ? notes.after : '';
+    noteAfterEl.style.display = notes && notes.after ? 'block' : 'none';
 
     renderTiebreak(story);
-    renderCampaign(story.campaign);
+    // Liverpool's own title-tie story specifically drops the full
+    // campaign, per the user's own ask ("keep two game scores and
+    // table") -- the two head-to-head game scores already render inside
+    // renderTiebreak() above, and the final table below. Every other
+    // champion-shaped story (including Chelsea's own title-tie pick) is
+    // unaffected.
+    renderCampaign(subjectTeam === 'Liverpool' && entry.kind === 'title_tie' ? null : story.campaign);
 
+    // Arsenal's closest_final_week specifically: both tables trimmed to
+    // their own top 5, and the final matchday results filtered down to
+    // just the three games that actually involve Arsenal, Manchester
+    // City or Manchester United -- the three clubs the title race was
+    // actually between -- rather than all 10 games that gameweek. Per
+    // the user's own ask.
     if (entry.kind === 'closest_final_week') {
       finalweekBlock.style.display = 'block';
       document.getElementById('modal-finalweek-before-body').innerHTML =
-        renderFinalTableRows(story.table_before, story.champion);
-      document.getElementById('modal-finalweek-games').innerHTML = story.games.map(gameLine).join('');
+        renderFinalTableRows(story.table_before, story.champion, null, 5);
+      var raceTeams = ['Arsenal', 'Manchester City', 'Manchester United'];
+      document.getElementById('modal-finalweek-games').innerHTML = story.games.filter(function(g){
+        return raceTeams.indexOf(g.home_team) !== -1 || raceTeams.indexOf(g.away_team) !== -1;
+      }).map(gameLine).join('');
     } else {
       finalweekBlock.style.display = 'none';
     }
 
     var storyTeam = SUBJECT_IS_STORY_TEAM[entry.kind] ? story.team : null;
-    document.getElementById('modal-table-body').innerHTML = renderFinalTableRows(story.final_table, story.champion, storyTeam);
+    var tableLimit = entry.kind === 'closest_final_week' ? 5 : null;
+    document.getElementById('modal-table-body').innerHTML =
+      renderFinalTableRows(story.final_table, story.champion, storyTeam, tableLimit);
 
     var notableBlock = document.getElementById('modal-notable-block');
     if (story.notable_games) {

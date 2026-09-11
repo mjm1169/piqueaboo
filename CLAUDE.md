@@ -2084,3 +2084,152 @@ for the actual text and visual direction before drafting either.
   two rounds) plus direct data cross-checks for every number quoted
   above; not yet an actual browser click-through. Not yet
   committed/merged.
+
+  **2026-09-11, done -- game-reroll intro copy, a wide-desktop full-width
+  pitch layout, more spaced-out shot rows; season section's placeholder
+  copy dropped, and a real grey-until-applied gameweek reveal.** Six
+  pieces of feedback across the two new scroll sections.
+  **Game re-roll intro copy**: the user's own paragraph ("The first game
+  of the season saw Bournemouth take on Liverpool at Anfield...")
+  replaces the section's `INTRO COPY: TBD` placeholder verbatim,
+  including its own "simulation xxx" -- left exactly as given, not
+  resolved to an actual number, since this section's own re-roll
+  (`GAME_REROLL_SEED`) isn't drawn from `champions.bin`'s indexed
+  million-sim universe the way a treemap/tour story is, so there's no
+  equivalent "sim #" to fill in even if it were Claude's place to
+  (per this file's own authorship convention, it isn't).
+  **Wide-desktop layout**: on a genuinely big, tall window the two pitch
+  maps were still capped to the ~200px each the reveal-track's normal
+  42%-wide sticky column allows -- a new `@media (min-width:1400px) and
+  (min-height:900px)` rule, scoped to `#game-reroll-track` specifically,
+  reuses the same single-column stack the mobile breakpoint already
+  relies on (sticky visual on top, full content width; shot log below in
+  normal flow) rather than inventing a new layout, just gated the
+  opposite way -- on "plenty of room" instead of "too little". Both
+  dimensions are required so a wide-but-short laptop window doesn't
+  trigger it for no visual gain. Mirrors the mobile block's own z-index/
+  opaque-background treatment on `.reveal-sticky-wrap`, needed once the
+  sticky card and the scrolling list share one column instead of two.
+  **Spaced-out shots**: `.game-log td`'s desktop row padding went from
+  13px to 16px, matching (rather than falling short of) the density
+  already used below the 640px breakpoint.
+  **Season section**: (1) the `season-intro-placeholder`'s visible
+  "Placeholder text — TBD." copy is gone, per the direct ask to take it
+  out -- the div itself stays, still sized by `padUntilPinnedIsBlank()`
+  to finish scrolling past exactly as the table reaches its pinned
+  position, just with nothing shown inside it any more. (2) new two-stage
+  reveal for every gameweek item: `revealOnScroll` gained an optional
+  third `options` argument (defaulting to its existing behaviour) so it
+  can be called twice over the same elements with two different
+  IntersectionObserver configs -- once as before (fades a block in as it
+  scrolls up from the bottom; its result chips render grey at this
+  point, a new default `.season-result-chip` colour), and again with
+  `rootMargin:'-50% 0px -50% 0px'` (the standard trick for "has this
+  reached the vertical middle of the screen"), which is what now actually
+  calls `item.onReveal()` (updates the table and the "Gameweek N" label)
+  and adds `.applied` (chips fade from grey to full colour via a CSS
+  transition) -- exactly the user's own spec: "the table should update
+  until the gameweek scores are halfway up the page, they can be greyed
+  out until they get applied to the table."
+  **Verified via a real headless-Chromium Playwright pass** (available in
+  this sandbox this round, unlike several recent ones) rather than just
+  `esprima` syntax-checking: confirmed the intro paragraph and its literal
+  "xxx" render; `getComputedStyle().gridTemplateColumns` on
+  `#game-reroll-track` shows 1 column at 1600×1000, 2 at 1280×800, and 1
+  again at the existing 390×844 mobile breakpoint (its own, unrelated,
+  already-proven stack); the pitch-pair measured >1000px wide at the new
+  breakpoint vs. ~400px at ordinary desktop widths; a real shot row's own
+  computed `padding-top` reads 16px; the season intro placeholder's text
+  content is empty while its rendered height still holds real spacer
+  space; a scripted scroll through the season section confirmed gameweek
+  1's block spends real time `revealed` but not yet `applied` (chip
+  colour `rgb(107,114,128)`, the `--muted` grey) before crossing the
+  screen's vertical middle, at which point it turns `applied` (chip
+  colour `rgb(26,29,35)`, `--ink`) and the table/label update to
+  "Gameweek 1" together, while gameweek 2/3's own blocks stay grey and
+  un-applied at that same moment; full-page scroll-throughs on
+  390×844/1280×800/1600×1000 all came back with zero real page or console
+  errors. Not yet committed.
+
+  **2026-09-11, later -- season-section closing copy/summary, and five
+  roster-card highlight edits (Arsenal, Man Utd, Liverpool, Man City,
+  Bournemouth).** All copy is the user's own (see CLAUDE.md authorship
+  convention); two plain typos ("recod"→"record", "deoending"→
+  "depending") were corrected in transcription, nothing else reworded.
+  **Season section**: the "after 5 games"/mid-season/exit-placeholder
+  copy (all previously `(copy TBD)`) is now the user's own text, verified
+  against `season-reroll-data.json` before wiring in -- gameweek 5 really
+  does have Bournemouth 5-0-0 top and Leeds inside the top 4; Chelsea
+  really do take 1st from gameweek 24 (one brief Man City blip at 36) and
+  hold it to a final day where they lose 4-1 away to Sunderland but still
+  win by 2 points. A new closing summary paragraph
+  (`#season-reroll-summary`, mirroring `#game-reroll-summary`) quotes the
+  season's total shot count and how often the re-rolled season's own 380
+  results match reality on scoreline/W-D-L -- both computed at export
+  time, not client-side: `export_season_reroll.py` now also emits
+  `total_shots`/`n_matches`/`same_scoreline_count`/`same_result_count`
+  (an exact join against the real per-match h_goals/a_goals already in
+  the shots CSV), regenerated and confirmed byte-identical on every
+  existing field (only the new top-level keys are new). Real numbers:
+  9,524 shots, 10.5% same scoreline, 48.9% same result.
+  **Roster highlights**: `CHAMPION_STORY_NOTES` (previously keyed by
+  curated-tour kind, which isn't unique -- 'title_tie' belongs to three
+  different clubs) is now keyed by `subjectTeam`, the same value every
+  champion-shaped story already computes for its crest/title. Arsenal's
+  closest_final_week story now renders both its tables (`table_before`
+  and the final table) via a new optional `limit` param on
+  `renderFinalTableRows` (top 5 only) and filters "final matchday
+  results" down to just the 3 games actually involving Arsenal/Man
+  City/Man Utd, out of that gameweek's 10 -- all per the user's ask.
+  Manchester United's worst_finish and Liverpool's title_tie stories both
+  gained a new editorial note; Man Utd's needed a real number
+  (`export_relegation_stories.py` only ever computed `n_relegated` for
+  its `RELEGATION_FOOTNOTE_TEAMS` list, not `WORST_FINISH_TEAMS` -- added
+  the same bottom-3-floor count there too, reran the full 1,000,000-sim
+  table-metrics sweep, confirmed the regenerated file byte-identical
+  except for the two new keys: 70 relegations, matching
+  `notes/pl-xg-relegated-top-team-candidates.md`'s own hand-run number
+  exactly). Liverpool's own title-tie story also drops its full campaign
+  table now (`renderCampaign(null, ...)`, scoped to `subjectTeam ===
+  'Liverpool' && entry.kind === 'title_tie'` specifically -- confirmed
+  Chelsea's own title-tie story, which shares the same `kind`, keeps its
+  campaign table, unaffected). Both `.final-table` instances in the
+  champion-body modal gained GF/GA columns (data already present on
+  every `final_table`/`table_before` record checked across all four
+  source JSON files) -- wrapped in a new `.final-table-wrap{
+  overflow-x:auto }` (mirroring `.campaign-table-wrap`'s existing
+  convention) since 9 columns can now exceed the modal's mobile width;
+  confirmed genuinely scrollable, not clipped, via a real
+  `scrollWidth`/`clientWidth` check and a scrolled screenshot revealing
+  the cut-off W/D/L columns. Manchester City's golden_boot (Haaland)
+  story now hides both `#modal-game-score` and `#modal-scorecard`
+  (previously always the Everton showcase match) per the user's own ask
+  -- explicit `style.display` resets added to the plain `'game'` kind
+  branch too, so a `'game'` story opened right after a golden_boot one
+  doesn't inherit its hidden state (the same style.display pitfall this
+  file has flagged repeatedly before, caught here before it ever
+  shipped). The relegation footnote moved to be the literal last child
+  of `#modal-game-body` in the HTML (not just visually last -- it now
+  renders after the full campaign block too). Bournemouth's
+  unexpected_golden_boot note is now the user's own paragraph (title
+  odds and xG-excess computed live from `teams`/`story.game_log`, not
+  hand-typed -- 0.8%/24 goals/18-more-than-real-life/12.18 xG excess all
+  independently verified against the data before wiring in), and both
+  golden-boot story kinds now drop the full campaign table uniformly
+  (`renderCampaign(null, ...)` unconditionally inside that branch --
+  previously only `golden_boot` did).
+  **Verified end-to-end via a real headless-Chromium Playwright pass**:
+  all five highlighted stories opened through their actual roster-card
+  buttons (not direct `openStory()` calls) and checked against every
+  claim above -- Arsenal's 5-row tables/3-game filter/GF-GA header,
+  Man Utd's note text and still-full 20-row table, Liverpool's
+  three-way-tie table (Liverpool/Man City/Arsenal genuinely share
+  81pts/+43GD, GF the real separator, now visible), Man City's
+  hidden score+scorecard and footnote-last placement, Bournemouth's
+  kept score+scorecard and dropped campaign, and Chelsea's title-tie
+  story (same `kind` as Liverpool's) confirmed *unaffected* -- campaign
+  still showing, no stray note. A `'game'`-kind story (Crystal Palace)
+  opened right after Man City's confirmed its score/scorecard came back
+  visible, not stuck hidden. Full-page scroll-throughs on
+  390×844/1280×800/1600×1000 all zero real page/console errors. Not yet
+  committed.

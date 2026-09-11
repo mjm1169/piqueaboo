@@ -112,8 +112,20 @@ def main():
         candidates = np.flatnonzero(worst_mask)
         sim = int(candidates[np.argmin(points[candidates, ti])])
         rec = build_record(team, sim, "worst_finish")
+        # Also how many times, out of the full million, this team lands in
+        # the relegation zone at all -- not just this one worst instance --
+        # for the roster-card copy's own "relegated in N replays" line
+        # (same bottom-3 floor as RELEGATION_FOOTNOTE_TEAMS below, and as
+        # check_relegated_top_teams.py's own default, which is where this
+        # number was first spotted by hand; computed here too so the site
+        # reads it live off relegation-stories.json rather than a number
+        # hand-copied from that one-off note).
+        relegation_floor = n_teams - 3 + 1
+        rec["n_relegated"] = int(np.count_nonzero(pos_col >= relegation_floor))
+        rec["n_sims"] = n_sims
         print(f"{team}: worst finish {rec['position']}th on {rec['points']} points, "
-              f"sim #{sim:,}, {rec['champion']} won that replay", file=sys.stderr)
+              f"sim #{sim:,}, {rec['champion']} won that replay; relegated in {rec['n_relegated']:,} of "
+              f"{n_sims:,} sims overall", file=sys.stderr)
         records.append(rec)
 
     for team in RELEGATION_FOOTNOTE_TEAMS:
