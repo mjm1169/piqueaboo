@@ -1,0 +1,162 @@
+[
+  {
+    "team": "Arsenal",
+    "position": 1,
+    "gd": 44,
+    "xgf": 78.98,
+    "xga": 34.46,
+    "xgd": 44.52
+  },
+  {
+    "team": "Manchester City",
+    "position": 2,
+    "gd": 42,
+    "xgf": 81.16,
+    "xga": 48.62,
+    "xgd": 32.54
+  },
+  {
+    "team": "Manchester United",
+    "position": 3,
+    "gd": 19,
+    "xgf": 74.25,
+    "xga": 50.84,
+    "xgd": 23.4
+  },
+  {
+    "team": "Aston Villa",
+    "position": 4,
+    "gd": 7,
+    "xgf": 58.45,
+    "xga": 57.54,
+    "xgd": 0.92
+  },
+  {
+    "team": "Liverpool",
+    "position": 5,
+    "gd": 10,
+    "xgf": 67.8,
+    "xga": 54.84,
+    "xgd": 12.96
+  },
+  {
+    "team": "Bournemouth",
+    "position": 6,
+    "gd": 4,
+    "xgf": 68.69,
+    "xga": 57.11,
+    "xgd": 11.58
+  },
+  {
+    "team": "Sunderland",
+    "position": 7,
+    "gd": -6,
+    "xgf": 43.55,
+    "xga": 61.37,
+    "xgd": -17.82
+  },
+  {
+    "team": "Brighton",
+    "position": 8,
+    "gd": 6,
+    "xgf": 58.64,
+    "xga": 54.34,
+    "xgd": 4.3
+  },
+  {
+    "team": "Brentford",
+    "position": 9,
+    "gd": 3,
+    "xgf": 66.62,
+    "xga": 60.68,
+    "xgd": 5.94
+  },
+  {
+    "team": "Chelsea",
+    "position": 10,
+    "gd": 6,
+    "xgf": 73.52,
+    "xga": 59.71,
+    "xgd": 13.8
+  },
+  {
+    "team": "Fulham",
+    "position": 11,
+    "gd": -4,
+    "xgf": 50.43,
+    "xga": 61.22,
+    "xgd": -10.79
+  },
+  {
+    "team": "Newcastle United",
+    "position": 12,
+    "gd": -2,
+    "xgf": 63.08,
+    "xga": 58.25,
+    "xgd": 4.82
+  },
+  {
+    "team": "Everton",
+    "position": 13,
+    "gd": -3,
+    "xgf": 50.55,
+    "xga": 60.53,
+    "xgd": -9.98
+  },
+  {
+    "team": "Leeds",
+    "position": 14,
+    "gd": -7,
+    "xgf": 61.99,
+    "xga": 57.24,
+    "xgd": 4.75
+  },
+  {
+    "team": "Crystal Palace",
+    "position": 15,
+    "gd": -10,
+    "xgf": 62.9,
+    "xga": 62.14,
+    "xgd": 0.76
+  },
+  {
+    "team": "Nottingham Forest",
+    "position": 16,
+    "gd": -3,
+    "xgf": 49.16,
+    "xga": 65.71,
+    "xgd": -16.54
+  },
+  {
+    "team": "Tottenham",
+    "position": 17,
+    "gd": -9,
+    "xgf": 47.93,
+    "xga": 56.13,
+    "xgd": -8.19
+  },
+  {
+    "team": "West Ham",
+    "position": 18,
+    "gd": -19,
+    "xgf": 50.23,
+    "xga": 70.05,
+    "xgd": -19.81
+  },
+  {
+    "team": "Burnley",
+    "position": 19,
+    "gd": -37,
+    "xgf": 37.27,
+    "xga": 84.1,
+    "xgd": -46.84
+  },
+  {
+    "team": "Wolverhampton Wanderers",
+    "position": 20,
+    "gd": -41,
+    "xgf": 38.67,
+    "xga": 68.99,
+    "xgd": -30.33
+  }
+]

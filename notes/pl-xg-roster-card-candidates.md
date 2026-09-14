@@ -312,3 +312,18 @@ round (own crest/name led with, story-team row highlighted distinct from
 the champion row). The old tiebreak-vs-Arsenal pick (sim #143,768) is
 still a real, valid record in `flagged-title-ties.json` if you'd rather
 swap back — nothing about it was removed, just unwired.
+
+## Status (2026-09-14) — every remaining club's card now has a highlight
+
+You gave a highlight paragraph for all 14 clubs that didn't have their own
+editorial note yet (the 12 winning clubs without one, plus new copy for
+the 4 zero-win clubs' existing best-season cards). All wired in — see
+CLAUDE.md's 2026-09-14 entry for the full detail on what was verified and
+the one factual correction (Aston Villa's highlight had Villa 5-3 up at
+half-time before a Trossard brace wiped it out; the real match never sits
+at 5-3 — half-time was 4-2, levelled to 4-4 by the brace — so the note
+uses the real numbers instead). Crystal Palace's card also now shows every
+shot in the Mateta match (not just the goals), via a new targeted
+single-sim regeneration (`export_shot_detail.py`). Every club on the
+roster now has at least one story button; nothing left open from this
+note.

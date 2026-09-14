@@ -1066,6 +1066,19 @@
         </div>
       </div>
 
+      <!-- Crystal Palace (Mateta's 10-goal haul, sim #509023) only: every
+           shot in the match, not just the goals -- see
+           export_shot_detail.py / renderFullShotList. -->
+      <div id="modal-fullshots-block" class="campaign-block" style="display:none">
+        <h4>Every shot in the match</h4>
+        <div class="campaign-table-wrap">
+          <table class="game-log">
+            <thead><tr><th>Min</th><th>Player</th><th class="num">xG</th><th>Real</th><th>Sim</th></tr></thead>
+            <tbody id="modal-fullshots-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Golden-boot story only: the scorer's own game-by-game goals
            against their own shots' xG that game -- how many they scored
            in each game from how much xG, across every game they took a
@@ -1714,6 +1727,8 @@
     fetch('pl-treemap-data/best-seasons.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/champion-margin-stories.json').then(function(r){ return r.json(); }),
     fetch('pl-treemap-data/relegation-stories.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/real-xg-table.json').then(function(r){ return r.json(); }),
+    fetch('pl-treemap-data/mateta-shot-detail.json').then(function(r){ return r.json(); }),
   ]);
   var data = fetched[0];
   // One byte per simulation, that byte being the champion's team index (see
@@ -1732,6 +1747,17 @@
   var relegationStoriesRaw = fetched[7];
   var relegationStoryByTeam = {};
   relegationStoriesRaw.forEach(function(r){ relegationStoryByTeam[r.team] = r; });
+  // Real-life GD/xG-for/xG-against per team -- feeds the "real-life GD vs.
+  // expected GD" numbers on a couple of roster-card highlights (Tottenham,
+  // Wolves, Burnley). See export_real_xg_table.py.
+  var realXgByTeam = {};
+  fetched[8].forEach(function(r){ realXgByTeam[r.team] = r; });
+  // Every shot (not just the scorers) in Crystal Palace's Mateta-haul game
+  // (sim #509023, see SECOND_STORY_PICKS below), with each shot's xG, real
+  // Understat result, and this specific sim's own re-rolled outcome -- the
+  // "list out all the shots" detail flagged-games.json itself doesn't keep
+  // (only an ordered scorer list). See export_shot_detail.py.
+  var mateta_shot_detail = fetched[9];
 
   var teams = data.teams.slice();
   var nonZero = teams.filter(function(t){ return t.title_count > 0; });
@@ -1869,6 +1895,129 @@
           + 'tight one. It was a three-way tie at the top. Unable to be separated from Man City on goal '
           + 'difference, head-to-head record was used to split them, giving Liverpool the title.',
       };
+    }
+
+    var chelsea = teams.filter(function(t){ return t.team === 'Chelsea'; })[0];
+    if (chelsea) {
+      CHAMPION_STORY_NOTES['Chelsea'] = {
+        before: 'Chelsea managed over 3,000 league wins. Perhaps the closest was this one. A three-way tie on '
+          + 'points with Man City and Man United, and the same goal difference and goals scored as City, the '
+          + 'season went to head-to-head record. Since this was tied on aggregate, away goals was used to split '
+          + 'them, handing Chelsea a title.',
+      };
+    }
+
+    CHAMPION_STORY_NOTES['Brighton'] = {
+      before: 'Brighton may not have won many of our simulations but they won this iteration comfortably after '
+        + 'a remarkable string of results in the first half of the season.',
+    };
+
+    CHAMPION_STORY_NOTES['Brentford'] = {
+      before: 'Brentford won 12 in a row after losing their opener in the season, amassing 91pts in this one of '
+        + 'their 0.1% of titles.',
+    };
+
+    var leedsStory = secondStoryByTeam['Leeds'];
+    if (leedsStory && leedsStory.record.campaign) {
+      var leedsMargins = { wins: [], losses: [] };
+      leedsStory.record.campaign.forEach(function(g){
+        var diff = g.sim_goals_for - g.sim_goals_against;
+        if (diff > 0) leedsMargins.wins.push(diff);
+        else if (diff < 0) leedsMargins.losses.push(-diff);
+      });
+      var avgWinMargin = leedsMargins.wins.reduce(function(a,b){ return a+b; }, 0) / leedsMargins.wins.length;
+      var avgLossMargin = leedsMargins.losses.reduce(function(a,b){ return a+b; }, 0) / leedsMargins.losses.length;
+      CHAMPION_STORY_NOTES['Leeds'] = {
+        before: 'Leeds\' most remarkable simulated league win came when they managed to clinch the title with '
+          + 'only 70pts and a negative goal difference. A bunched top five helped them as well as winning by '
+          + 'narrow margins. Their average margin of victory was ' + avgWinMargin.toFixed(1) + ' goals while '
+          + 'their average margin of defeat was ' + avgLossMargin.toFixed(1) + '.',
+      };
+    }
+
+    CHAMPION_STORY_NOTES['Newcastle United'] = {
+      before: 'Another away goals rule win here. This time Newcastle edging out Liverpool.',
+    };
+
+    var tottenham = teams.filter(function(t){ return t.team === 'Tottenham'; })[0];
+    var tottenhamXg = realXgByTeam['Tottenham'];
+    if (tottenham && tottenhamXg) {
+      CHAMPION_STORY_NOTES['Tottenham'] = {
+        before: 'Tottenham danced dangerously close to relegation in real-life but ran out as winners on '
+          + tottenham.title_count.toLocaleString() + ' occasions here. In real life their GD was '
+          + tottenhamXg.gd + ', against an xGD of ' + tottenhamXg.xgd.toFixed(1) + '.',
+      };
+    }
+
+    CHAMPION_STORY_NOTES['Fulham'] = {
+      before: 'Fulham took 3 titles. Although they suffered 10 defeats, they took the title from Arsenal here.',
+    };
+
+    CHAMPION_STORY_NOTES['Nottingham Forest'] = {
+      before: 'A true one in a million. Nottingham Forest took this close title race with just 70 points.',
+    };
+
+    var burnleyXg = realXgByTeam['Burnley'];
+    if (burnleyXg) {
+      CHAMPION_STORY_NOTES['Burnley'] = {
+        before: 'With an xGD of ' + burnleyXg.xgd.toFixed(1) + ', Burnley were never going to stand much of a '
+          + 'chance. The best they did was a 9th placed finish.',
+      };
+    }
+
+    CHAMPION_STORY_NOTES['Sunderland'] = {
+      before: 'Sunderland had a surprisingly good real-life season on their return to the Premier League. Their '
+        + 'best simulated finish was when they finished runners up to Manchester City with 74pts (which would '
+        + 'have been enough to win in other simulated seasons).',
+    };
+
+    CHAMPION_STORY_NOTES['West Ham'] = {
+      before: 'West Ham managed a 2nd place finish here as they were beaten to the title by Arsenal, returning '
+        + 'a very respectable 76pts.',
+    };
+
+    var wolvesXg = realXgByTeam['Wolverhampton Wanderers'];
+    if (wolvesXg) {
+      CHAMPION_STORY_NOTES['Wolverhampton Wanderers'] = {
+        before: 'Wolves finished in the Champions League places in this season with an even goal difference '
+          + '(real-life ' + wolvesXg.gd + '; expected ' + wolvesXg.xgd.toFixed(1) + ').',
+      };
+    }
+  })();
+
+  // Editorial narrative for the two plain 'game'-kind second stories
+  // (Crystal Palace / Aston Villa) -- keyed by sim number, not team, since
+  // 'game' kind stories don't go through the champion-shaped subjectTeam
+  // path CHAMPION_STORY_NOTES above uses. Text is the user's own (see
+  // CLAUDE.md authorship convention); numbers are computed live where the
+  // data allows. Crystal Palace's note (509023) also lists every shot in
+  // the match, not just the goals -- see mateta_shot_detail /
+  // renderFullShotList below.
+  var GAME_STORY_NOTES = {};
+  (function(){
+    var crystalPalace = teams.filter(function(t){ return t.team === 'Crystal Palace'; })[0];
+    if (crystalPalace) {
+      var mateta = mateta_shot_detail.shots.filter(function(s){ return s.player === 'Jean-Philippe Mateta'; });
+      var mateta_goals = mateta.filter(function(s){ return s.sim_goal; }).length;
+      GAME_STORY_NOTES[509023] = crystalPalace.title_count.toLocaleString() + ' of our simulations but the '
+        + 'highlight here was in a season Manchester City won. At home to Bournemouth, Mateta notched up the '
+        + 'biggest individual haul across the 380,000,000 games that were played out. He scored ' + mateta_goals
+        + ' from ' + mateta.length + ' shots.';
+    }
+
+    var astonVilla = teams.filter(function(t){ return t.team === 'Aston Villa'; })[0];
+    if (astonVilla) {
+      // The user's own recollection had Villa 5-3 up at half-time before
+      // Trossard's brace levelled it -- checked against the match's own
+      // minute-by-minute scorers (flagged-games.json) and that specific
+      // scoreline never actually occurs: half-time was 4-2, and Trossard's
+      // brace (49', 51') brings it level at 4-4, not from 5-3. Numbers
+      // below are the real ones; flagged to the user rather than silently
+      // shipped -- see the reply for how this was checked.
+      GAME_STORY_NOTES[269077] = astonVilla.title_count.toLocaleString() + ' of the million simulations, but '
+        + 'their highlight was this win over eventual champions Arsenal. A 15-goal thriller: Villa led 4-2 at '
+        + 'half-time, only for Arsenal to level it at 4-4 through a quickfire Trossard brace, before Villa\'s '
+        + 'late surge — six goals in the final half hour — saw them romp out 10-5 winners.';
     }
   })();
 
@@ -3276,6 +3425,25 @@
     }).join('');
   }
 
+  // Every shot in one specific flagged game (currently only Crystal
+  // Palace's Mateta-haul story, sim #509023) -- xG, real Understat result,
+  // and this one sim's own re-rolled outcome, reusing the game-reroll
+  // section's own .game-log row shape/classes for visual consistency (see
+  // export_shot_detail.py). Always explicitly hidden/cleared when absent,
+  // same style.display convention as every other optional modal block.
+  function renderFullShotList(shots){
+    var block = document.getElementById('modal-fullshots-block');
+    if (!shots || !shots.length) { block.style.display = 'none'; return; }
+    block.style.display = 'block';
+    document.getElementById('modal-fullshots-body').innerHTML = shots.map(function(s){
+      var realCell = s.real_goal ? '<span class="real-goal">Goal</span>' : s.real_result.replace(/([A-Z])/g, ' $1').trim();
+      var simCell = s.sim_goal ? '<span class="sim-goal">Goal</span>' : 'No goal';
+      return '<tr class="revealed' + (s.sim_goal ? ' is-goal' : '') + '"><td>' + s.minute + "'</td><td>" + s.player
+        + (s.penalty ? ' (p)' : '') + '</td><td class="num">' + s.xg.toFixed(2) + '</td><td>' + realCell
+        + '</td><td>' + simCell + '</td></tr>';
+    }).join('');
+  }
+
   function renderTiebreak(story){
     var block = document.getElementById('modal-tiebreak-block');
     if (!story.resolution) { block.style.display = 'none'; return; }
@@ -3317,15 +3485,22 @@
       document.getElementById('modal-game-score').innerHTML =
         '<span>' + story.home_team + ' vs ' + story.away_team + '</span>'
         + '<span class="score">' + story.home_goals + '–' + story.away_goals + '</span>';
-      document.getElementById('modal-game-note').textContent = story.haul
-        ? story.haul.player + ' scored ' + story.haul.goals + ' of ' + story.haul.team + '\'s goals in this simulated match.'
-        : (story.home_goals + story.away_goals) + ' goals in this one simulated match — one of the highest-scoring games across 1,000,000 replays of the season.';
+      // Crystal Palace / Aston Villa's second story slot get a richer,
+      // user-authored paragraph (see GAME_STORY_NOTES); every other
+      // flagged game falls back to the plain haul/high-scoring sentence.
+      document.getElementById('modal-game-note').textContent = GAME_STORY_NOTES[story.sim]
+        || (story.haul
+          ? story.haul.player + ' scored ' + story.haul.goals + ' of ' + story.haul.team + '\'s goals in this simulated match.'
+          : (story.home_goals + story.away_goals) + ' goals in this one simulated match — one of the highest-scoring games across 1,000,000 replays of the season.');
       renderScorecard(story.scorers || [], story.home_team, story.away_team);
       // No campaign or per-player game-log data on a plain flagged game --
       // explicitly clear/hide both rather than leaving a previous
       // golden-boot story's tables stale.
       renderCampaign(null, 'modal-game-campaign-block', 'modal-game-campaign-body');
       renderGoldenBootLog(null);
+      // Every shot in the match (not just the scorers) -- Crystal Palace's
+      // Mateta-haul story (sim #509023) only, per the user's own ask.
+      renderFullShotList(story.sim === 509023 ? mateta_shot_detail.shots : null);
       // Same for the relegation footnote below -- only a golden_boot story
       // about Manchester City ever sets it.
       document.getElementById('modal-game-footnote').style.display = 'none';

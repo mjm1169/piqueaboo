@@ -2233,3 +2233,96 @@ for the actual text and visual direction before drafting either.
   visible, not stuck hidden. Full-page scroll-throughs on
   390×844/1280×800/1600×1000 all zero real page/console errors. Not yet
   committed.
+
+  **2026-09-14, done — editorial highlights for the remaining 12 clubs'
+  roster cards, plus Crystal Palace's own full shot-by-shot list.** User
+  gave a highlight paragraph per club (14 in total — the 12 winning clubs
+  without one yet, plus new copy for the 4 zero-win clubs' existing
+  best-season cards). Every claim was checked against the underlying data
+  *before* wiring any of it in, per this file's own convention — most
+  turned out to already match an existing wired story exactly, needing
+  only the note text added, not new data:
+  - **Chelsea** (title_tie, sim #457,242): the three-way 79pt tie with
+    Man City/Man Utd, Chelsea/City's identical 89-47/+42 GF-GA-GD, and the
+    away-goals split (2 away goals to City's 1, after a 3-3 aggregate
+    head-to-head) all checked out exactly against `flagged-title-ties.json`.
+  - **Brighton** (biggest_margin, sim #404,580): a genuine first-half
+    surge confirmed directly from the campaign log — 15W-1D-3L across the
+    first 19 games vs. 11W-6D-2L after.
+  - **Brentford** (biggest_margin, sim #643,033): opening-day loss then a
+    genuine 12-game win streak, 91pts, all confirmed from the campaign log.
+  - **Leeds** (lowest_gd, sim #8,256): 70pts/-2 GD title, bunched top five
+    (70/69/68/67/67) confirmed; the `x.x`/`y.y` placeholders are now
+    computed live from the record's own campaign (1.4 average winning
+    margin, 3.2 average losing margin).
+  - **Newcastle United** (closest_tiebreak, sim #41,197): the away-goals
+    win over Liverpool confirmed exactly against `flagged-title-ties.json`.
+  - **Fulham** (biggest_margin, sim #313,828): 10 defeats and Arsenal as
+    runners-up both confirmed from the record's own final table.
+  - **Nottingham Forest** (fewest_wins, sim #753,793): 70pts, a genuinely
+    tight top four (69/68/67 behind) confirmed.
+  - **Burnley/Sunderland/West Ham/Wolves** (their existing "best-ever
+    finish" cards): every specific claim — Burnley's 9th, Sunderland's
+    74pt runners-up finish to Man City, West Ham's 76pt runners-up finish
+    to Arsenal, Wolves' 4th-place/even-GD finish — confirmed exactly
+    against `best-seasons.json`.
+  Two small new data passes filled in the placeholders these needed:
+  `simulations/export_real_xg_table.py` (new, standalone, purely
+  real-world arithmetic — no simulation, so none of the RNG-regeneration
+  care the rest of this pipeline needs) computes real-life GD and expected
+  (xG) GD per team from the shots CSV, written to
+  `articles/pl-treemap-data/real-xg-table.json` — fills Tottenham's
+  "GD xx, xGD xx" (real -9, expected -8.2), Wolves' "real-life xx;
+  expected xx" (real -41, expected -30.3), and Burnley's "xGD of xx"
+  (-46.8), all fetched and read live rather than hand-typed.
+  **Crystal Palace** (game, sim #509,023) needed one genuinely new piece:
+  "list out all the shots" for Mateta's 10-goal haul isn't something
+  `flagged-games.json` keeps (only an ordered scorer list, not the misses).
+  New `simulations/export_shot_detail.py` regenerates one flagged sim's
+  *entire* match shot-by-shot — reusing the big pass's own
+  `_match_rng(seed, match_index)` scheme at the full `(n_sims, ...)` shape
+  (same reason as every other targeted single-sim regeneration in this
+  codebase: a truncated shape desyncs `draws_a`'s stream position and
+  silently regenerates the wrong season) — written to
+  `articles/pl-treemap-data/mateta-shot-detail.json`. Verified bit-for-bit
+  against the already-committed record before shipping: the regenerated
+  sim reproduces the exact 12-2 scoreline and the exact 14-goal scorer
+  list (player/minute/penalty) already in `flagged-games.json`, match for
+  match. Mateta's own shot count (11, for "scored 10 from 11 shots") is
+  computed live from this file, not hand-typed. Frontend: a new
+  `renderFullShotList()` (reusing the game-reroll section's own
+  `.game-log` row markup/styling for visual consistency) renders all 28
+  shots of the match — both teams, not just Mateta's — inside a new
+  `#modal-fullshots-block`, shown only for this specific sim.
+  **Aston Villa's story (game, sim #269,077) — one genuine factual
+  correction, flagged rather than shipped silently.** The user's own
+  recollection had Villa 5-3 up at half-time before a Trossard brace
+  wiped it out. Checked directly against `flagged-games.json`'s own
+  minute-by-minute scorer list for that sim: no point in the match is
+  ever 5-3 (closest is 4-1, then 4-2 at the actual 45-minute mark), and
+  Trossard's brace (49', 51') actually brings the score level at 4-4, not
+  from 5-3. Rather than ship a specific, checkable score that doesn't
+  match the data next to a page that's otherwise scrupulous about this,
+  wrote the note with the real numbers instead, keeping the rest of the
+  sentence's shape and spirit intact: half-time 4-2 to Villa, levelled
+  4-4 by Trossard's brace, then Villa's own late surge (six goals in the
+  final half hour: 64', 77', 87', 93', 93', 94') sealing a 10-5 win. Every
+  other number in that highlight (268 titles, Arsenal as eventual
+  champion of that replay) checked out exactly as given.
+  All 12 new `CHAMPION_STORY_NOTES`/`GAME_STORY_NOTES` entries render
+  through the existing per-team (`CHAMPION_STORY_NOTES`, champion-shaped
+  stories) or per-sim (`GAME_STORY_NOTES`, the two plain `'game'`-kind
+  stories) lookup mechanisms already built for Arsenal/Man Utd/Liverpool —
+  no new rendering pathway needed beyond the one-off full shot list.
+  **Verified end-to-end via a real headless-Chromium Playwright pass**:
+  all 14 roster-card story buttons clicked for real (not direct
+  `openStory()` calls), each modal's note/game-note text captured and
+  checked against the intended copy and computed numbers; Crystal
+  Palace's full 28-row shot list checked row-by-row (minute, player, xG,
+  real result, sim result, Mateta's 10 sim-goals out of 11 shots all
+  correct, penalty flag showing on the 96th-minute spot kick); desktop
+  and mobile screenshots of the Crystal Palace modal confirm the new
+  table renders cleanly with no overflow (`scrollWidth`/`clientWidth`
+  checked directly, not just eyeballed) on either viewport; zero real
+  console/page errors on either. Pushed to `claude/pull-main-29bvpi`;
+  not merged to `main` this round.
