@@ -2021,6 +2021,46 @@
     }
   })();
 
+  // User-authored modal titles for each of the 16 winning clubs' own
+  // highlighted second story -- overrides the generic "X win the league"/
+  // "X vs Y" default set below, per club, once that story's own kind/team
+  // is known. The 4 zero-win clubs' "best-ever finish" cards (and Man
+  // City's own relegation footnote, a different story about the same
+  // team) deliberately keep their existing generic titles -- see the
+  // `entry.kind !== 'no_wins' && entry.kind !== 'relegation_footnote'`
+  // guard where this is applied below. Text is the user's own (see
+  // CLAUDE.md authorship convention); "avoid the drip" in Tottenham's
+  // given text was corrected to "avoid the drop" (the football idiom for
+  // survival, not relegation) as a plain transcription typo, same as
+  // previous rounds' typo fixes.
+  var STORY_TITLES = {
+    'Arsenal': 'A 3-way final day fight',
+    'Manchester United': 'A giant gets relegated',
+    'Liverpool': 'A close finish',
+    'Chelsea': 'An ever closer finish',
+    'Brighton': 'The Seagulls soar',
+    'Brentford': 'The Bees rack up the points',
+    'Leeds': 'A seemingly impossible victory',
+    'Newcastle United': 'Another narrow victory',
+    'Tottenham': 'Spurs do more than avoid the drop',
+    'Everton': '20 in a million',
+    'Fulham': '3 in a million',
+    'Nottingham Forest': '1 in a million',
+  };
+  // Golden-boot stops are keyed by kind, not team -- each kind already
+  // maps 1:1 to a fixed team (golden_boot is always Manchester
+  // City/Haaland, unexpected_golden_boot always Bournemouth/Evanilson).
+  var GOLDEN_BOOT_STORY_TITLES = {
+    golden_boot: 'Haaland\'s spectacular season',
+    unexpected_golden_boot: 'An unexpected Golden Boot',
+  };
+  // Plain 'game'-kind second stories (Crystal Palace / Aston Villa) are
+  // keyed by sim number, same convention as GAME_STORY_NOTES above.
+  var GAME_STORY_TITLES = {
+    509023: 'Mateta\'s day out',
+    269077: 'A 15-goal Villa thriller',
+  };
+
   function secondStoryLabel(entry){
     if (CURATED_TAG[entry.kind]) return CURATED_TAG[entry.kind];
     if (entry.kind === 'title_tie') return 'Title decided by tiebreak';
@@ -3284,12 +3324,19 @@
   // Zero-win teams get a card too -- no title-odds line worth showing (it's
   // always "0 / 1,000,000 · 0%"), so it leads with their own best-ever
   // finish across the same 1,000,000 sims instead.
+  // Display-only shortening for a card's own name line -- "Wolverhampton
+  // Wanderers" wraps to two lines in the card's narrow name slot (visibly
+  // uneven against every other card's single line), per the user's own
+  // ask. Only swaps what's shown here; every lookup/attribute elsewhere
+  // (crest alt text, data-story, bestSeasonByTeam, etc.) still keys off
+  // the team's real name, t.team, unchanged.
+  var ROSTER_DISPLAY_NAME = { 'Wolverhampton Wanderers': 'Wolves' };
   zero.forEach(function(t){
     var best = bestSeasonByTeam[t.team];
     html += '<div class="roster-card zero">'
       + '<span class="roster-swatch" style="background:' + t.color + '"></span>'
       + '<img class="roster-crest" src="../assets/logos/clubs/' + t.crest_file + '" alt="' + t.team + ' crest">'
-      + '<div class="roster-name">' + t.team + '</div>'
+      + '<div class="roster-name">' + (ROSTER_DISPLAY_NAME[t.team] || t.team) + '</div>'
       + '<div class="roster-stat">Never won it in 1,000,000 tries</div>'
       + (best
           ? '<button type="button" class="roster-story-btn" data-story="no_wins:' + t.team + '">' + CURATED_TAG.no_wins + '</button>'
@@ -3472,7 +3519,7 @@
       document.getElementById('modal-tag').textContent = story.triggers.map(function(tr){
         return tr === 'high_scoring' ? 'High-scoring game' : 'Big individual haul';
       }).join(' · ');
-      document.getElementById('modal-title').textContent = story.home_team + ' vs ' + story.away_team;
+      document.getElementById('modal-title').textContent = GAME_STORY_TITLES[story.sim] || (story.home_team + ' vs ' + story.away_team);
       var gameDateStr = story.date
         ? new Date(story.date.replace(' ', 'T')).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
         : '';
@@ -3522,7 +3569,7 @@
 
       var m = story.match;
       document.getElementById('modal-tag').textContent = CURATED_TAG[entry.kind];
-      document.getElementById('modal-title').textContent = story.player + ' — golden boot winner';
+      document.getElementById('modal-title').textContent = GOLDEN_BOOT_STORY_TITLES[entry.kind] || (story.player + ' — golden boot winner');
       document.getElementById('modal-sub').textContent =
         'Sim #' + story.sim.toLocaleString() + ' · ' + story.goals + ' goals this season (real 2025/26 tally: ' + story.real_goals + ')';
 
@@ -3665,6 +3712,15 @@
       document.getElementById('modal-title').textContent = story.champion + ' win the league';
       document.getElementById('modal-sub').textContent =
         'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
+    }
+
+    // Override with the user's own title for this club's designated
+    // highlight -- see STORY_TITLES above. Deliberately excludes
+    // no_wins (the 4 zero-win clubs' cards "stay as they are") and
+    // relegation_footnote (Manchester City's *other* story, about the
+    // same team but not this one) so neither picks up a mismatched title.
+    if (STORY_TITLES[subjectTeam] && entry.kind !== 'no_wins' && entry.kind !== 'relegation_footnote') {
+      document.getElementById('modal-title').textContent = STORY_TITLES[subjectTeam];
     }
 
     // Editorial narrative notes (see CHAMPION_STORY_NOTES) -- keyed by

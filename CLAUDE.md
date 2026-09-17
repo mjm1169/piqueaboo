@@ -2326,3 +2326,47 @@ for the actual text and visual direction before drafting either.
   checked directly, not just eyeballed) on either viewport; zero real
   console/page errors on either. Pushed to `claude/pull-main-29bvpi`;
   not merged to `main` this round.
+
+  **2026-09-17, done — story titles for all 16 winning clubs' highlights,
+  plus a Wolves display fix.** User gave a punchy title per club's own
+  highlighted story (the same 16 stories wired up on 2026-09-14), plus a
+  separate ask: "Wolves text is two lines... abbreviate to Wolves."
+  **Titles**: added as three small lookup maps (`STORY_TITLES` keyed by
+  team for the champion-shaped stories — Arsenal, Man Utd, Liverpool,
+  Chelsea, Brighton, Brentford, Leeds, Newcastle, Tottenham, Everton,
+  Fulham, Forest; `GOLDEN_BOOT_STORY_TITLES` keyed by kind, since
+  golden_boot/unexpected_golden_boot each already map 1:1 to a fixed team
+  — Man City/Haaland, Bournemouth/Evanilson; `GAME_STORY_TITLES` keyed by
+  sim number, same convention as the existing `GAME_STORY_NOTES` — Crystal
+  Palace #509,023, Aston Villa #269,077), each overriding `openStory()`'s
+  existing generic `modal-title` text ("X win the league", "X vs Y",
+  "Player — golden boot winner") right after it's set. The champion-shaped
+  override is explicitly gated off `no_wins`/`relegation_footnote` so
+  neither the 4 zero-win clubs' own "best-ever finish" cards (per the
+  user's own "the ones who didn't win can stay as they are") nor
+  Manchester City's *other* story (their own shock-relegation footnote,
+  same team, different kind) accidentally inherit Man City's or anyone
+  else's title. One transcription fix: Tottenham's given title said
+  "avoid the drip" — corrected to "avoid the drop" (the actual football
+  idiom for surviving relegation), same convention as previous rounds'
+  plain-typo fixes.
+  **Wolves**: the roster card's own name line was wrapping to two lines
+  for "Wolverhampton Wanderers" specifically (confirmed via a real
+  rendered screenshot and a `boundingBox()` height check — 41.6px vs.
+  every other card's single-line 20.8px) — not something touched by the
+  titles above, a separate display-only fix. New `ROSTER_DISPLAY_NAME`
+  map swaps in "Wolves" for just the `.roster-name` text; every other
+  reference to the team (crest alt text, `data-story` attribute,
+  `bestSeasonByTeam` lookup) still keys off the real "Wolverhampton
+  Wanderers" name, unchanged — confirmed directly (crest alt text still
+  reads "Wolverhampton Wanderers crest", the modal opened from the card
+  still reads "Wolverhampton Wanderers's best-ever finish", per the
+  user's own "stay as they are" for the zero-win cards' titles).
+  **Verified via a real headless-Chromium Playwright pass**: all 16
+  winning-club story buttons clicked for real and each resulting
+  `#modal-title` checked character-for-character against the intended
+  title (all 16 matched exactly); Burnley/Sunderland/West Ham's own
+  titles and single-line name height (20.8px, confirming they're
+  genuinely unaffected, not just visually similar) checked directly;
+  Wolves' card re-screenshotted showing "Wolves" on one line at the same
+  20.8px height as every other card; zero real console/page errors.
