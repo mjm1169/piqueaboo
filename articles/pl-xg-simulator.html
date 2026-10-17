@@ -192,7 +192,7 @@
      log should be "spaced out a little more" on desktop too, matching
      (rather than falling short of) the density already used below the
      640px breakpoint. */
-  .game-log td{ padding:16px 6px; border-bottom:1px solid #EFEFEF; }
+  .game-log td{ padding:24px 6px; border-bottom:1px solid #EFEFEF; }
   .game-log td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .game-log tr{ opacity:0; transition:opacity .25s ease; }
   .game-log tr.revealed{ opacity:1; }
@@ -222,7 +222,7 @@
        room here -- widened past desktop's own 13px per direct feedback
        that the shot scroll itself should be "more spaced out". */
     .game-log{ font-size:12.5px; }
-    .game-log td{ padding:16px 5px; }
+    .game-log td{ padding:22px 5px; }
     .game-log tr.comment-row td{ padding:15px 5px; }
     .game-log tr.kickoff-row td{ padding:13px 5px; }
   }
@@ -247,8 +247,18 @@
        treatment on the wrap itself (beyond .reveal-visual's own already-
        unconditional background) -- needed once the sticky card and the
        scrolling list share one column instead of sitting in two. */
+    /* top:var(--header-h) with no extra gap, unlike the base rule's
+       header-h + 20px: in this stacked layout the shot log scrolls up
+       *behind* the pitch card rather than beside it, and any clear space
+       between the site header and the top of the (opaque) sticky wrap is
+       a window the log's own rows are visible through on their way out --
+       a sliver of a row sitting above the pitch maps, reported directly.
+       Sticking the wrap flush under the header closes it; the breathing
+       room moves inside the wrap as padding-top instead, where it scrolls
+       nothing through. */
     #game-reroll-track .reveal-sticky-wrap{
-      z-index:2; background:var(--canvas); padding:8px 0 14px 0;
+      top:var(--header-h, 0px);
+      z-index:2; background:var(--canvas); padding:14px 0 14px 0;
     }
   }
 
@@ -375,6 +385,20 @@
     opacity:0; transition:opacity .3s ease;
   }
   .season-note.revealed{ opacity:1; }
+
+  /* The mid-season skip stands in for 28 gameweeks at once, and at the
+     ~80px of scroll each individual gameweek block gets it flashed past
+     in about the same distance as a single one of them -- the season
+     jumped from gameweek 5 to 34 with barely a pause. Generous margins
+     either side (not a taller box) buy that pause: the reader scrolls
+     through real empty space before and after the sentence, so the skip
+     reads as a long stretch of season passing rather than one more step.
+     Margins specifically, because the two-stage reveal keys off this
+     element's own box crossing the middle of the screen -- growing the
+     box would make the table update well before the sentence got there,
+     while margins leave that timing exactly as it is for every other
+     item in the feed. */
+  .season-note.season-skip{ margin:36vh 0 46vh; }
 
   /* Placeholder text scrolling in ahead of the table (sized, via
      padUntilPinnedIsBlank, to finish exactly as the table itself reaches
@@ -918,7 +942,7 @@
   <section id="treemap-section">
     <h2>A million alternate Premier League realities</h2>
     <p>Imagine if we played the season again. Every shot recreated as if were played again, with the same likelihood it would be scored. Some that were drilled past the keeper would be smashed wide. Others that were skied into row Z would nestle into the top corner. And some would play out exactly the same. How could the league have looked? What if we repeated it again, and again? Maybe our team would fluke an unlikely title! In a million simulations what might happen?</p>
-    <p>I took the 20xx/xx season and did just that. Here is how the league ended up all 1,000,000 times.</p>
+    <p>I took the 2025/26 season and did just that. Here is how the league ended up all 1,000,000 times.</p>
 
     <div class="treemap-card">
       <div class="treemap-canvas-wrap">
@@ -974,7 +998,7 @@
 
   <section id="leicester-section">
     <!-- HEADING: TBD -- user to fill in -->
-    <p>That was last year, but let’s take a moment to appreciate Leicester’s year of triumph. In 10,000 simulations of that season they triumphed xx% of the time. Yes, you could say they were fortunate to win some games (insert examples here), but they genuinely did create better chances than they were expected to before the season started.</p>
+    <p>That was last year, but let’s take a moment to appreciate Leicester’s year of triumph. In 10,000 simulations of that season they triumphed <span id="leicester-odds-inline">9.8</span>% of the time. Yes, you could say they were fortunate to win some games (insert examples here), but they genuinely did create better chances than they were expected to before the season started.</p>
     <div class="leicester-card">
       <img class="leicester-crest" src="../assets/logos/clubs/leicester.svg" alt="Leicester City crest">
       <div class="leicester-stats" id="leicester-stats"></div>
@@ -1589,7 +1613,7 @@
 
       if(midGws.length){
         var midDiv = document.createElement('div');
-        midDiv.className = 'season-note';
+        midDiv.className = 'season-note season-skip';
         // The sticky visual's own small label stays a short mechanical
         // tag (matching every other gameweek step); the fuller narrative
         // sentence lives in this aside instead, not the label itself.
@@ -3504,6 +3528,16 @@
     document.getElementById('modal-tiebreak-games').innerHTML = story.h2h_matches.map(gameLine).join('');
   }
 
+  // Every story's subtitle is just the simulation number -- the one
+  // thing that's true of all of them and the thing that actually locates
+  // the story in the million (it's the cell the treemap zooms to). The
+  // per-kind detail each branch used to append (final position, goals
+  // scored, points margin, who won that replay) is all said again, in
+  // full, inside the modal body it sits above.
+  function setModalSub(sim){
+    document.getElementById('modal-sub').textContent = 'Sim #' + sim.toLocaleString();
+  }
+
   function openStory(entry){
     var story = entry.record;
     var champBody = document.getElementById('modal-champion-body');
@@ -3520,10 +3554,7 @@
         return tr === 'high_scoring' ? 'High-scoring game' : 'Big individual haul';
       }).join(' · ');
       document.getElementById('modal-title').textContent = GAME_STORY_TITLES[story.sim] || (story.home_team + ' vs ' + story.away_team);
-      var gameDateStr = story.date
-        ? new Date(story.date.replace(' ', 'T')).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-        : '';
-      document.getElementById('modal-sub').textContent = 'Sim #' + story.sim.toLocaleString() + (gameDateStr ? ' · ' + gameDateStr : '');
+      setModalSub(story.sim);
       // Explicit display resets -- a previous golden_boot story hides
       // both of these (see below), and an inline style persists across
       // openStory() calls until something else overwrites it.
@@ -3570,8 +3601,7 @@
       var m = story.match;
       document.getElementById('modal-tag').textContent = CURATED_TAG[entry.kind];
       document.getElementById('modal-title').textContent = GOLDEN_BOOT_STORY_TITLES[entry.kind] || (story.player + ' — golden boot winner');
-      document.getElementById('modal-sub').textContent =
-        'Sim #' + story.sim.toLocaleString() + ' · ' + story.goals + ' goals this season (real 2025/26 tally: ' + story.real_goals + ')';
+      setModalSub(story.sim);
 
       // Manchester City/Haaland specifically: the score line and
       // scorecard are both about story.match alone (the Everton game,
@@ -3689,29 +3719,22 @@
 
     if (entry.kind === 'no_wins') {
       document.getElementById('modal-title').textContent = story.team + '\'s best-ever finish';
-      document.getElementById('modal-sub').textContent =
-        'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
+      setModalSub(story.sim);
     } else if (entry.kind === 'worst_finish') {
       document.getElementById('modal-title').textContent = story.team + '\'s worst-ever finish';
-      document.getElementById('modal-sub').textContent =
-        'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
+      setModalSub(story.sim);
     } else if (entry.kind === 'relegation_footnote') {
       document.getElementById('modal-title').textContent = story.team + '\'s shock relegation';
-      document.getElementById('modal-sub').textContent =
-        'Sim #' + story.sim.toLocaleString() + ' · ' + ordinal(story.position) + ' place · ' + story.champion + ' won the league this replay';
+      setModalSub(story.sim);
     } else if (entry.kind === 'most_tied_first') {
       document.getElementById('modal-title').textContent = story.champion + ' win the league';
-      document.getElementById('modal-sub').textContent =
-        'Sim #' + story.sim.toLocaleString() + ' · ' + story.tie_count + ' teams tied on points for first place';
+      setModalSub(story.sim);
     } else if (entry.kind === 'closest_final_week') {
       document.getElementById('modal-title').textContent = story.champion + ' win the league';
-      document.getElementById('modal-sub').textContent = 'Sim #' + story.sim.toLocaleString() + ' · '
-        + (story.pre_margin === 0 ? 'level on points' : story.pre_margin + ' point' + (story.pre_margin === 1 ? '' : 's') + ' clear')
-        + ' heading into the final gameweek';
+      setModalSub(story.sim);
     } else {
       document.getElementById('modal-title').textContent = story.champion + ' win the league';
-      document.getElementById('modal-sub').textContent =
-        'Sim #' + story.sim.toLocaleString() + ' · Real-life finish that season: ' + ordinal(story.champion_real_position);
+      setModalSub(story.sim);
     }
 
     // Override with the user's own title for this club's designated
@@ -3823,6 +3846,11 @@
       '<div><div class="num">' + (lei.title_odds*100).toFixed(1) + '%</div><div class="lbl">Leicester\'s simulated title odds that season, across 10,000 replays</div></div>'
       + '<div><div class="num">' + (favourite.title_odds*100).toFixed(1) + '%</div><div class="lbl">' + favourite.team + '\'s simulated odds — the model\'s actual favourite — who never won a single one</div></div>'
       + '<div><div class="num">' + (leicester.same_champion_odds*100).toFixed(1) + '%</div><div class="lbl">of the 10,000 replays produced the same champion as reality</div></div>';
+    // Same number quoted inline in the paragraph above the card -- read
+    // from the same record rather than typed twice, so the two can't
+    // drift apart if that run is ever regenerated.
+    var inlineOdds = document.getElementById('leicester-odds-inline');
+    if (inlineOdds) inlineOdds.textContent = (lei.title_odds*100).toFixed(1);
   }
 
 })();

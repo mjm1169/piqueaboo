@@ -572,25 +572,45 @@
     var f=idx-i0;
     return pdfVals[i0]*(1-f)+pdfVals[i1]*f;
   }
-  var MODE_DAY = grid[pdfVals.indexOf(MAX_PDF)]; // ~282, i.e. 40+2
+  // Reassigned below, once the curve has been shifted onto the 40+0
+  // due date (see DUE_DATE_DAY).
+  var MODE_DAY = grid[pdfVals.indexOf(MAX_PDF)];
 
-  // The due date is the day that splits the *displayed* curve's area
-  // exactly in half — not simply quantile(0.5) (the curve's own
-  // full-domain median), and not the clinical Naegele's-rule convention
-  // of exactly 40+0 weeks either. Both of those sit a hair off because
-  // the chart only draws [DISPLAY_MIN, DISPLAY_MAX] — a small sliver of
-  // this model's probability mass falls before DISPLAY_MIN (the curve's
-  // tail below 35+0 weeks isn't drawn at all), so the point that bisects
-  // the *displayed* area isn't quite the same as the point that bisects
-  // the full domain. That sliver is only ~0.2% of the total, but it was
-  // enough to visibly unbalance the two shaded regions when anchored to
-  // 40+0 weeks instead (pink ~52% vs blue ~48% of what's on screen,
-  // confirmed both by eye and by the numbers) — worth fixing properly
-  // since those two regions get explicit "50%" labels. Solving for the
-  // day whose displayed-cdf sits exactly halfway between the two
-  // displayed endpoints' own cdf values makes the regions exactly
-  // area-equal instead.
-  var MEDIAN_DAY = quantile((cdfAt(DISPLAY_MIN) + cdfAt(DISPLAY_MAX)) / 2);
+  // The due date is pinned to the clinical convention of exactly 40+0
+  // weeks (day 280, Naegele's rule) — that's the number the article's own
+  // prose and every label here talk about, so it has to read 40w + 0d.
+  //
+  // The two shaded regions either side of it also carry explicit "50%"
+  // labels, so they have to be genuinely area-equal about that same day.
+  // This model's own smoothed curve doesn't quite oblige: the day that
+  // bisects the *displayed* area ([DISPLAY_MIN, DISPLAY_MAX] — the curve's
+  // thin tail below 35+0 weeks isn't drawn at all) falls a little over
+  // half a day later than 280, which left the pink region visibly bigger
+  // than the blue one when the split was anchored to 280 regardless.
+  //
+  // Rather than pick one and live with the other being wrong, the whole
+  // curve is nudged along the day axis by that same sub-day offset, so
+  // its own displayed-area median lands exactly on day 280. The shift is
+  // well under a day — invisible against a chart whose axis ticks are a
+  // week apart, and the curve's shape is completely untouched — but it
+  // makes "40w + 0d" and "the two halves are equal" true at the same time
+  // rather than one at the expense of the other. Solved iteratively since
+  // shifting the curve also moves how much of it falls inside the fixed
+  // display window (by a vanishing amount, but it converges in a couple
+  // of passes rather than being assumed away).
+  var DUE_DATE_DAY = 280; // 40+0 weeks
+  function displayedMedian(){
+    return quantile((cdfAt(DISPLAY_MIN) + cdfAt(DISPLAY_MAX)) / 2);
+  }
+  for(var shiftPass=0; shiftPass<6; shiftPass++){
+    var delta = DUE_DATE_DAY - displayedMedian();
+    if(Math.abs(delta) < 1e-9) break;
+    for(var gi=0; gi<grid.length; gi++) grid[gi] += delta;
+    DOMAIN_MIN = grid[0];
+    DOMAIN_MAX = grid[grid.length-1];
+  }
+  MODE_DAY = grid[pdfVals.indexOf(MAX_PDF)];
+  var MEDIAN_DAY = DUE_DATE_DAY;
 
   // conditionalMedian() reads its answer off the smoothed curve via
   // quantile(0.5) (the curve's full-domain median), which is a hair
@@ -927,35 +947,15 @@
   var scrubPinWrap = document.getElementById('pin-wrap');
   var scrubRAF = null;
 
-  // Which of the four scrub-track steps should read as "active" (i.e. be
-  // highlighted, as far as CSS cares) is decided from `day` itself here,
-  // rather than left to the same viewport-geometry IntersectionObserver
-  // that drives every other step. That observer judges a step "active"
-  // once its midpoint nears the viewport's — a rule tuned around steps
-  // that are close to a full viewport tall. On the mobile layout each step
-  // is a much smaller fraction of the (shorter) viewport, so that same
-  // rule fires at a very different point in the scroll than it does on
-  // desktop, throwing the text out of step with the chart (e.g. the
-  // "38 weeks" text arriving well before the chart's "today" line does).
-  // Driving both off the same `day` value instead keeps them in lockstep
-  // on any viewport, and guarantees the "38w" text and chart line up
-  // exactly, since they're now quite literally the same number.
+  // The four scrub-track steps (return/today-38/today-39/today-41) are
+  // highlighted by the same text-crosses-the-halfway-line rule as every
+  // other step on the page (see pickActiveStep) — they just route through
+  // activateScrubStep() rather than activateStep(), since the chart here
+  // is driven continuously from `day` and must not be re-rendered as a
+  // discrete step. 'return' is also the sticky one, and its height is
+  // what the scrub's own calibration is measured against below.
   var stepReturn = document.querySelector('.step[data-step="return"]');
-  var stepToday38 = document.querySelector('.step[data-step="today-38"]');
-  var stepToday39 = document.querySelector('.step[data-step="today-39"]');
-  var stepToday41 = document.querySelector('.step[data-step="today-41"]');
 
-  function pickScrubStep(day){
-    // The three milestone steps split the milestone phase (38w0d to the
-    // end of the scrub) into equal thirds — matching their equal CSS
-    // heights, which is what the reader's scroll distance through each
-    // is actually proportional to.
-    var third = (SCRUB_DAY_END - SCRUB_DAY_MILESTONE) / 3;
-    if(day < SCRUB_DAY_MILESTONE) return stepReturn;
-    if(day < SCRUB_DAY_MILESTONE + third) return stepToday38;
-    if(day < SCRUB_DAY_MILESTONE + 2*third) return stepToday39;
-    return stepToday41;
-  }
 
   function activateScrubStep(el){
     if(!el || el === activeStep) return;
@@ -1015,7 +1015,13 @@
 
   function updateScrub(){
     scrubRAF = null;
-    if(!scrubTrack) return;
+
+    // Highlighting first, from the same scroll position: the chart only
+    // takes over once 'return' is genuinely the current step (see
+    // updateActiveStep), so the gestation chart can't start scrubbing
+    // underneath a dice paragraph that's still the one in black.
+    updateActiveStep();
+    if(!scrubTrack || !isScrubStep(activeStep)) return;
 
     var rect = scrubTrack.getBoundingClientRect();
     var vh = window.innerHeight;
@@ -1065,7 +1071,6 @@
 
     setScrubbing(true);
     showGroup('gestation');
-    activateScrubStep(pickScrubStep(day));
     renderTodayContinuous(day);
   }
 
@@ -1261,28 +1266,55 @@
 
   var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
   var activeStep = null;
-  var intersecting = new Map(steps.map(function(s){ return [s, false]; }));
 
-  // Pick the intersecting step closest to the vertical center of the
-  // viewport, rather than reacting to individual entries as they arrive.
-  // Fast scrolling can report several steps changing state in the same
-  // callback batch, and acting on each one in array order (rather than
-  // scroll order) was the cause of the chart flashing through the wrong step.
+  // Which step reads as "current" (black rather than grey) is decided by
+  // one rule for every step on the page: a step takes over the moment its
+  // own text has risen past the halfway point of the screen, and holds it
+  // until the next step's text does the same.
+  //
+  // This replaces two separate rules that disagreed with each other and,
+  // between them, could leave a paragraph greyed out for most of its time
+  // on screen. The static steps used an IntersectionObserver picking
+  // whichever step's *box* midpoint sat nearest the viewport's centre —
+  // which handed over early, while the incoming text was still near the
+  // bottom of the screen. The four scrub-track steps were picked off the
+  // chart's own `day` instead, splitting the milestone phase into equal
+  // day-thirds; because those thirds don't line up with where each step's
+  // text actually sits, "Say we reach 38 weeks" stayed grey from the
+  // bottom of the screen all the way up to a quarter from the top
+  // (measured: text top 884px → 244px on a 900px-tall window) while
+  // "If the baby still hasn't arrived" went black the instant it appeared.
+  //
+  // Anchoring on the text itself fixes both and costs nothing in
+  // chart/text sync, which was the original reason for driving the scrub
+  // steps off `day`: measured against the live chart, each milestone
+  // step's text crosses the halfway line at exactly the day it talks
+  // about (38w + 0d, 39w + 0d, and the due date itself).
+  var SCRUB_STEP_NAMES = ['return','today-38','today-39','today-41'];
+  function isScrubStep(el){
+    return el && SCRUB_STEP_NAMES.indexOf(el.getAttribute('data-step')) >= 0;
+  }
+
+  // A step's box is a whole viewport tall or more, with the text centred
+  // in it, so the box's own top is a poor stand-in for where the reader's
+  // eye actually is — measure the first real line of copy instead.
+  function stepTextTop(el){
+    var t = el.querySelector('h2, h3, p') || el;
+    return t.getBoundingClientRect().top;
+  }
+
   function pickActiveStep(){
-    var best = null, bestDist = Infinity;
-    intersecting.forEach(function(isIn, el){
-      if(!isIn) return;
-      var rect = el.getBoundingClientRect();
-      var mid = rect.top + rect.height / 2;
-      var dist = Math.abs(mid - window.innerHeight / 2);
-      if(dist < bestDist){ bestDist = dist; best = el; }
-    });
+    var mid = window.innerHeight / 2;
+    var best = steps[0] || null;
+    for(var i=0;i<steps.length;i++){
+      if(stepTextTop(steps[i]) <= mid) best = steps[i];
+    }
     return best;
   }
 
-  // Handles every step except the four scrub-track ones (return/today-38/
-  // today-39/today-41) — those are excluded from observation entirely and
-  // driven instead by activateScrubStep(), keyed off `day` — see there for why.
+  // Handles every step except the four scrub-track ones, which skip
+  // renderGestation() entirely (the scrub drives the chart itself, from
+  // `day`) and go through activateScrubStep() instead.
   function activateStep(el){
     if(!el || el === activeStep) return;
     activeStep = el;
@@ -1299,24 +1331,20 @@
     }
   }
 
-  var observer = new IntersectionObserver(function(entries){
-    entries.forEach(function(entry){
-      intersecting.set(entry.target, entry.isIntersecting);
-    });
-    activateStep(pickActiveStep());
-  }, { root:null, rootMargin:'-45% 0px -45% 0px', threshold:0 });
-
-  // The four scrub-track steps (return/today-38/today-39/today-41) are
-  // deliberately NOT observed here — see activateScrubStep() below for why.
-  steps.forEach(function(s){
-    var step = s.getAttribute('data-step');
-    if(step==='return' || step==='today-38' || step==='today-39' || step==='today-41') return;
-    observer.observe(s);
-  });
+  // Single entry point, called from the same rAF-throttled scroll handler
+  // the scrub itself uses (see updateScrub), so highlighting and chart
+  // can never be decided from two different scroll positions.
+  function updateActiveStep(){
+    var el = pickActiveStep();
+    if(!el) return;
+    if(isScrubStep(el)) activateScrubStep(el);
+    else activateStep(el);
+  }
 
   // initial state
   showGroup('gestation');
   renderGestation('intro');
+  updateActiveStep();
   requestScrubUpdate();
 
 })();

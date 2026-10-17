@@ -154,6 +154,64 @@ for the actual text and visual direction before drafting either.
   page-error listener attached confirmed zero JS errors from any of the
   three changes.
 
+- **2026-10-17, done — due date pinned to exactly 40w + 0d (curve nudged
+  rather than the split fudged), and one highlighting rule for every
+  step on the page.** Two pieces of user feedback.
+  **40 weeks**: `MEDIAN_DAY` was `quantile((cdfAt(DISPLAY_MIN)+
+  cdfAt(DISPLAY_MAX))/2)` — the day that genuinely bisects the displayed
+  area (day 280.57, labelled "40w + 1d"), chosen in the 2026-08-27 round
+  above specifically so the two explicitly-"50%"-labelled regions weren't
+  visibly unequal. The user now wants the label to read 40w. Rather than
+  pick one of the two and live with the other being wrong, the whole
+  curve is shifted along the day axis by that same ~0.57-day offset
+  (`DUE_DATE_DAY = 280`, solved iteratively since shifting also moves how
+  much of the curve falls inside the fixed `[245, 310]` display window —
+  converges in two passes), so its own displayed-area median lands
+  exactly on 280. Shape untouched, and a sub-day shift is invisible
+  against a chart whose only x-anchors are week ticks a week apart.
+  `MODE_DAY` moves with it (now reads 40w + 1d rather than 40w + 2d);
+  `MEDIAN_CALIBRATION` needed no change, being written generically
+  already. Verified: label reads "Due date · 40w + 0d"; a shoelace-area
+  check on the actual rendered SVG region paths gives a right/left ratio
+  of 0.993 (the residual is `areaPath()`'s pre-existing STEP=0.25
+  day-grid quantisation, same ~0.8% as the previous round measured, not
+  something this change introduced); the scrub's own start now reads
+  "New due date · 40w + 0d" at 35w + 0d, matching the static chart
+  exactly.
+  **Scroll highlighting**: reported as "sometimes the text is grey for
+  too long, it should go black about halfway up the screen". Measured
+  first — two different rules were in play and disagreed. Static steps
+  used an IntersectionObserver picking whichever step's *box* midpoint
+  sat nearest the viewport centre, which handed over *early* (text still
+  ~710px down a 900px window). The four scrub steps were picked off the
+  chart's `day`, splitting the milestone phase into equal day-thirds;
+  those thirds don't line up with where each step's text sits, so
+  `today-38` stayed grey from text-top 884px all the way to 244px (most
+  of its time on screen) while `today-41` went black the instant it
+  appeared at 844px. Replaced both with one rule for every step: a step
+  takes over once its own *first line of copy* rises past the halfway
+  point of the screen (`pickActiveStep`, `stepTextTop`), routed to
+  `activateScrubStep` or `activateStep` by a new `updateActiveStep()`
+  called from the same rAF-throttled scroll handler the scrub already
+  uses — so highlighting and chart can't be decided from two different
+  scroll positions. `pickScrubStep`, the IntersectionObserver, the
+  `intersecting` map and the three now-unused `stepToday*` refs are all
+  gone. **The original reason for the day-driven rule (keeping "38
+  weeks" text and chart in lockstep) costs nothing here, checked rather
+  than assumed**: measured against the live chart, each milestone step's
+  text crosses the halfway line at exactly the day it talks about (38w +
+  0d, 39w + 0d, and the due date itself) — better synced than the rule
+  it replaces. `updateScrub()` now also bails unless a scrub step is
+  genuinely the current one, so the gestation chart can't start scrubbing
+  underneath a dice paragraph that's still the one in black.
+  **Verified**: every step on both 1280x900 and 390x844 now turns black
+  with its text top at 370–450px against a halfway line of 450/422 —
+  previously 244–884px; full scroll sweeps on both viewports with a
+  page-error listener (zero errors, zero console errors), label
+  progression correct end to end (35w + 0d through 40w + 0d); dice
+  sections screenshotted rendering correctly with their text black at
+  the halfway mark.
+
 ## TODO
 
 - `articles/pl-xg-simulator.html` — replaced (2026-08-24) with a new piece
@@ -2370,3 +2428,71 @@ for the actual text and visual direction before drafting either.
   genuinely unaffected, not just visually similar) checked directly;
   Wolves' card re-screenshotted showing "Wolves" on one line at the same
   20.8px height as every other card; zero real console/page errors.
+
+  **2026-10-17, done — shot log no longer visible above the pitch card,
+  shots spaced out, a real pause for the skipped mid-season, sim-number-
+  only story subtitles, and two `xx` placeholders filled.** Five pieces
+  of user feedback.
+  **Log exiting above the pitch map**: reproduced before touching
+  anything — only happens on the wide-desktop (`min-width:1400px and
+  min-height:900px`) stacked layout, where the shot log scrolls up
+  *behind* the sticky pitch card rather than beside it in its own
+  column. That rule set `z-index`/background/padding on
+  `.reveal-sticky-wrap` but left the base `top:calc(var(--header-h) +
+  20px)` in place, and that 20px of clear space between the site header
+  and the top of the (opaque) wrap is exactly the window a row is
+  visible through on its way out — screenshotted showing a sliver of a
+  highlighted log row sitting above the pitch maps. Fixed by sticking
+  the wrap flush under the header (`top:var(--header-h)`, as the mobile
+  stacked rule already does) and moving the breathing room inside it as
+  `padding-top`, where nothing scrolls through. Re-screenshotted clean;
+  mobile and the ordinary two-column desktop were never affected and are
+  unchanged.
+  **Shot spacing**: `.game-log td` row padding 16px → 24px (desktop/wide)
+  and 16px → 22px below the 640px breakpoint. Also lengthens the track,
+  so each shot gets more scroll, which is the same thing the request is
+  asking for.
+  **Mid-season skip**: measured the actual pacing first — every
+  individual gameweek block gets ~80px of scroll on desktop (~160px on
+  mobile), and the 28-gameweek skip was getting the same, so the season
+  jumped 5 → 34 in about one gameweek's worth of scroll. Added
+  `.season-note.season-skip{ margin:36vh 0 46vh }`, giving it ~840px of
+  scroll on desktop / ~1200px on mobile (measured after, not estimated).
+  Margins deliberately, not a taller box: the two-stage reveal keys off
+  this element's own box crossing the middle of the screen, so growing
+  the box would make the table update well before the sentence got
+  there, while margins leave that timing identical to every other item
+  in the feed.
+  **Story subtitles**: all nine per-kind `modal-sub` assignments replaced
+  with one `setModalSub(story.sim)` — the subtitle is now just
+  "Sim #N". Everything the branches used to append (final position,
+  season goals, points margin, who won that replay) is already said in
+  full in the modal body below it. `gameDateStr`, left unused by this,
+  was removed.
+  **Placeholders**: "20xx/xx" → "2025/26"; Leicester's "xx%" → 9.8%,
+  wired as a `<span id="leicester-odds-inline">` filled from the same
+  `sim_leicester_2015_16.json` record the stats card beside it already
+  reads, rather than typed twice. **Deliberately not filled** (both the
+  user's own to resolve, per this file's authorship convention): the
+  game-reroll intro's "simulation xxx" — that section's re-roll has its
+  own dedicated seed and is not an index into `champions.bin`'s million,
+  so there is no sim number to put there — and "(insert examples here)"
+  in the Leicester paragraph.
+  **Verified** via headless-Chromium Playwright: all 20 roster-card
+  story buttons clicked for real (not direct `openStory()` calls), each
+  modal's subtitle confirmed to be exactly `Sim #N` with no trailing
+  clause; before/after screenshots of the wide-desktop game section
+  confirming the sliver is gone and rows are more widely spaced; mobile
+  game section re-screenshotted unchanged; gameweek-by-gameweek scroll
+  traces on both viewports showing the new mid-season pause against
+  unchanged per-gameweek pacing, plus a screenshot of it mid-scroll
+  (table correctly jumped to the end-of-mid state, following gameweeks
+  still grey/unapplied); the "genuinely blank at the pin moment" check
+  re-run for both sections (0 revealed at pin, unchanged by the padding
+  changes); and full-page scroll-throughs at 1280x800, 390x844 and
+  1600x1000 all reaching the correct final states (38/38 log rows, 4-2 /
+  1-4 scorelines, gameweek 38 with the champion row highlighted) with
+  zero page or console errors. **Noticed, not changed** (prose, so the
+  user's call): the zero-win cards' generated title reads
+  "Wolverhampton Wanderers's best-ever finish" — a doubled possessive on
+  the one club name that already ends in "s".
