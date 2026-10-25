@@ -232,9 +232,9 @@ The four clubs that never win a title keep an auto-generated title
 ("Burnley's best-ever finish", etc.) rather than one of their own. Say the word
 if you'd like to name those too.
 
-*One thing worth a decision: Wolves' reads "Wolverhampton Wanderers's best-ever
-finish" — a doubled possessive, because the club name already ends in an "s".
-Tell me how you'd like it and I'll fix it.*
+*Fixed: the four never-win clubs' titles now use the card's short name and a
+possessive that doesn't double the "s" — "Wolves' best-ever finish", not
+"Wolverhampton Wanderers's".*
 
 ---
 
@@ -381,14 +381,48 @@ Closest race into the final day
 [pl.tag.plain_league_win.pill]
 See a league win
 
-[pl.tag.plain_league_win.tag]
+*The pill (the button on the roster card) for the five cards whose story is
+simply "this club won the league" — Brighton, Brentford, Tottenham, Everton
+and Fulham. Every other card keeps its own pill, listed below.*
+
+### Tag lines
+
+The small line above your headline once a card is open. It used to repeat the
+pill word for word on every card; it now names the club instead, so the card's
+three lines say three different things. All mine, not yours — rewrite freely.
+
+[pl.tagline.closest_final_week]
+A final-day title for {{team}}
+
+[pl.tagline.biggest_margin]
 A league win for {{team}}
 
-*The standard pair for the five cards whose story is simply "this club won
-the league" — Brighton, Brentford, Tottenham, Everton and Fulham. The pill is
-the button on the roster card; the tag is the small line above your headline,
-which now names the club so the card's three lines say three different things.
-"Largest winning margin" (below) is no longer used by any card.*
+[pl.tagline.lowest_gd]
+A title on the finest margin for {{team}}
+
+[pl.tagline.fewest_wins]
+A rare title for {{team}}
+
+[pl.tagline.title_tie]
+A tiebreak title for {{team}}
+
+[pl.tagline.golden_boot]
+A golden boot for {{team}}
+
+[pl.tagline.unexpected_golden_boot]
+A surprise golden boot for {{team}}
+
+[pl.tagline.worst_finish]
+A relegation for {{team}}
+
+[pl.tagline.no_wins]
+A best-ever finish for {{team}}
+
+[pl.tagline.big_haul]
+A big individual haul for {{team}}
+
+[pl.tagline.high_scoring_game]
+A high-scoring game for {{team}}
 
 [pl.tag.biggest_margin]
 Largest winning margin

@@ -2779,3 +2779,44 @@ for the actual text and visual direction before drafting either.
   on the other fifteen cards the pill and tag still duplicate each
   other exactly -- out of scope for the chosen "just the 5" answer, but
   the same treatment would fix it if wanted.
+
+  **2026-10-25, later still — Wolves' possessive, and the pill/tag
+  duplication cleared on the remaining fifteen cards.** User asked for
+  "Wolves' best-ever finish", confirmed 8 mins as the football article's
+  reading time (no change), and -- not following the pill/tag
+  explanation in the abstract -- asked for the change to be made and
+  pushed so it could be judged on the live page.
+  **Possessive**: new `displayName()`/`possessive()` helpers next to
+  `ROSTER_DISPLAY_NAME`; the latter appends a bare apostrophe to a name
+  already ending in "s". Applied to all three
+  `<team>'s <thing>` modal titles (no_wins, worst_finish,
+  relegation_footnote), so it's a general fix rather than a Wolves
+  special case: "Wolves' best-ever finish" (short name + single
+  apostrophe), with Burnley/Sunderland/West Ham unchanged in substance
+  but now using the site's curly apostrophe like the rest of the prose.
+  **Pill vs tag**: previously the roster card's pill and the opened
+  card's tag line were the identical string on every one of the 20
+  cards. New `TAG_PHRASE` map (one short phrase per story kind) plus a
+  `storyTag(entry, team, fallback)` helper now renders the tag as
+  "<something> for <club>" -- so the pill says what kind of story it is
+  and the tag says the same kind of thing about this club, and the
+  card's three lines (tag / headline / sim number) are three different
+  statements. Applied across all three tag-setting branches
+  (champion-shaped, golden-boot, game), with the previous
+  `isPlainLeagueWin`-only special case folded into it. A 'game'-kind
+  story is about a match, not a club, so nothing in its record said
+  whose card it belonged to -- `secondStoryByTeam` entries now carry
+  `team`, and `storyTag` falls back to the old label whenever the club
+  isn't known (e.g. a story reached by clicking a bare grid cell).
+  These phrases are Claude-authored mechanical labels, same convention
+  as the `CURATED_TAG` set they sit alongside -- listed in
+  `notes/article-copy.md` for the user's own pass.
+  **Verified**: all 20 cards re-captured from real clicks -- every tag
+  now distinct from its pill and correctly club-named, every
+  user-written headline unchanged, Wolves reading "Wolves' best-ever
+  finish"; both footnote links still resolve correctly (Chelsea ->
+  coin-flip sim #129,326 "Arsenal win the league"; Manchester City ->
+  "A relegation for Manchester City" / "Manchester City's shock
+  relegation", sim #445,758); mobile screenshot of an opened card; full
+  scroll-throughs at three viewports and the table-alignment audit all
+  clean.

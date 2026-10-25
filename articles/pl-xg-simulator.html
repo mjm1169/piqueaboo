@@ -1850,7 +1850,7 @@
   Object.keys(SECOND_STORY_PICKS).forEach(function(team){
     var pick = SECOND_STORY_PICKS[team];
     var record = pick.kind === 'game' ? flaggedGameBySim[pick.sim] : flaggedTitleTieBySim[pick.sim];
-    if (record) secondStoryByTeam[team] = { kind: pick.kind, record: record };
+    if (record) secondStoryByTeam[team] = { kind: pick.kind, record: record, team: team };
   });
   // Tottenham/Fulham/Brighton/Brentford/Everton: their own biggest-margin
   // title win (export_treemap_data.py's OWN_BIGGEST_MARGIN_TEAMS pass)
@@ -2116,6 +2116,33 @@
   // standard pill; see secondStoryLabel/openStory.
   function isPlainLeagueWin(entry){ return entry.kind === 'biggest_margin'; }
   var PLAIN_LEAGUE_WIN_PILL = 'See a league win';
+
+  // "<something> for <club>" tag phrases, one per story kind. The roster
+  // card's pill names the kind of story; this names it again *for this
+  // club* once the card is open. Before this they were the identical
+  // string twice over, on every card.
+  var TAG_PHRASE = {
+    closest_final_week:     'A final-day title',
+    biggest_margin:         'A league win',
+    lowest_gd:              'A title on the finest margin',
+    fewest_wins:            'A rare title',
+    most_tied_first:        'A title from a crowded top',
+    title_tie:              'A tiebreak title',
+    closest_tiebreak:       'A tiebreak title',
+    golden_boot:            'A golden boot',
+    unexpected_golden_boot: 'A surprise golden boot',
+    worst_finish:           'A relegation',
+    relegation_footnote:    'A relegation',
+    no_wins:                'A best-ever finish',
+  };
+  function storyTag(entry, team, fallback){
+    var phrase = TAG_PHRASE[entry.kind];
+    if (entry.kind === 'game') {
+      phrase = entry.record.triggers.indexOf('six_plus_haul') !== -1
+        ? 'A big individual haul' : 'A high-scoring game';
+    }
+    return (phrase && team) ? phrase + ' for ' + displayName(team) : fallback;
+  }
 
   function secondStoryLabel(entry){
     if (isPlainLeagueWin(entry)) return PLAIN_LEAGUE_WIN_PILL;
@@ -3395,6 +3422,14 @@
   // (crest alt text, data-story, bestSeasonByTeam, etc.) still keys off
   // the team's real name, t.team, unchanged.
   var ROSTER_DISPLAY_NAME = { 'Wolverhampton Wanderers': 'Wolves' };
+  // Short name for display, plus a possessive that doesn't double the "s"
+  // on a club whose name already ends in one ("Wolves'", not "Wolves's",
+  // and never "Wolverhampton Wanderers's" -- the case that showed it).
+  function displayName(team){ return ROSTER_DISPLAY_NAME[team] || team; }
+  function possessive(team){
+    var n = displayName(team);
+    return n + (/s$/i.test(n) ? '\u2019' : '\u2019s');
+  }
   zero.forEach(function(t){
     var best = bestSeasonByTeam[t.team];
     html += '<div class="roster-card zero">'
@@ -3590,9 +3625,10 @@
       gameBody.style.display = 'block';
       crestEl.style.display = 'none';
 
-      document.getElementById('modal-tag').textContent = story.triggers.map(function(tr){
+      var gameFallback = story.triggers.map(function(tr){
         return tr === 'high_scoring' ? 'High-scoring game' : 'Big individual haul';
       }).join(' · ');
+      document.getElementById('modal-tag').textContent = storyTag(entry, entry.team, gameFallback);
       document.getElementById('modal-title').textContent = GAME_STORY_TITLES[story.sim] || (story.home_team + ' vs ' + story.away_team);
       setModalSub(story.sim);
       // Explicit display resets -- a previous golden_boot story hides
@@ -3639,7 +3675,8 @@
       crestEl.alt = story.team + ' crest';
 
       var m = story.match;
-      document.getElementById('modal-tag').textContent = CURATED_TAG[entry.kind];
+      document.getElementById('modal-tag').textContent =
+        storyTag(entry, story.team, CURATED_TAG[entry.kind]);
       document.getElementById('modal-title').textContent = GOLDEN_BOOT_STORY_TITLES[entry.kind] || (story.player + ' — golden boot winner');
       setModalSub(story.sim);
 
@@ -3754,18 +3791,17 @@
     crestEl.src = crestPath(subjectTeam);
     crestEl.alt = subjectTeam + ' crest';
 
-    document.getElementById('modal-tag').textContent = isPlainLeagueWin(entry)
-      ? 'A league win for ' + (ROSTER_DISPLAY_NAME[subjectTeam] || subjectTeam)
-      : (CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak' : 'Unexpected winner'));
+    document.getElementById('modal-tag').textContent = storyTag(entry, subjectTeam,
+      CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak' : 'Unexpected winner'));
 
     if (entry.kind === 'no_wins') {
-      document.getElementById('modal-title').textContent = story.team + '\'s best-ever finish';
+      document.getElementById('modal-title').textContent = possessive(story.team) + ' best-ever finish';
       setModalSub(story.sim);
     } else if (entry.kind === 'worst_finish') {
-      document.getElementById('modal-title').textContent = story.team + '\'s worst-ever finish';
+      document.getElementById('modal-title').textContent = possessive(story.team) + ' worst-ever finish';
       setModalSub(story.sim);
     } else if (entry.kind === 'relegation_footnote') {
-      document.getElementById('modal-title').textContent = story.team + '\'s shock relegation';
+      document.getElementById('modal-title').textContent = possessive(story.team) + ' shock relegation';
       setModalSub(story.sim);
     } else if (entry.kind === 'most_tied_first') {
       document.getElementById('modal-title').textContent = story.champion + ' win the league';
