@@ -211,6 +211,8 @@
     text-transform:uppercase; letter-spacing:.05em; font-size:12px;
     color:var(--accent-step); border-bottom:1px solid #EFEFEF;
   }
+  .meta-line{ font-size:14px; margin:-4px 0 18px 0; }
+
   #game-reroll-summary{ margin-top:32px; font-size:17px; }
   #season-reroll-summary{ margin-top:32px; font-size:17px; }
 
@@ -594,6 +596,16 @@
   .final-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; border-bottom:1px solid #E5E5E5; }
   .final-table td{ padding:5px 6px; border-bottom:1px solid #EFEFEF; }
   .final-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* A numeric column's header follows the same alignment as its own
+     values. Each of these tables already right-aligns td.num but none
+     had the matching th rule, so every numeric header (Pts, GD, GF, GA,
+     W, D, L, xG...) sat left-aligned over right-aligned figures. */
+  .final-table th.num,
+  .season-table th.num,
+  .campaign-table th.num,
+  .sim-table th.num,
+  .game-log th.num{ text-align:right; }
   .final-table tr.champion td{ font-weight:500; }
   .final-table tr.champion{ background:rgba(17,206,238,.08); }
   /* a non-champion row the story is actually about (e.g. a zero-win
@@ -665,6 +677,8 @@
   .result-badge.loss{ background:var(--negative-step); }
   @media (max-width:640px){
     .campaign-table{ font-size:12px; }
+    .final-table{ font-size:12px; }
+    .final-table th, .final-table td{ padding:5px 3px; }
     .campaign-table th:nth-child(4), .campaign-table td:nth-child(4){ width:48px; }
     .campaign-table th:nth-child(5), .campaign-table td:nth-child(5){ width:80px; }
   }
@@ -706,25 +720,6 @@
 
   #modal-finalweek-block{ display:none; }
   #modal-finalweek-games .game-line{ background:rgba(0,0,0,.03); border-radius:8px; padding:8px 12px; margin-bottom:4px; }
-
-  /* ---------- leicester section ---------- */
-
-  .leicester-card{
-    background:var(--surface);
-    border-radius:12px;
-    padding:20px 24px;
-    display:flex;
-    gap:20px;
-    align-items:center;
-  }
-  .leicester-crest{ width:64px; height:64px; object-fit:contain; flex:none; }
-  .leicester-stats{ display:flex; gap:28px; flex-wrap:wrap; }
-  .leicester-stats .num{ font-size:28px; font-weight:500; line-height:1; }
-  .leicester-stats .lbl{ font-size:12px; color:var(--muted); font-weight:300; margin-top:4px; max-width:160px; }
-
-  @media (max-width:640px){
-    .leicester-card{ flex-direction:column; align-items:flex-start; }
-  }
 
   /* ---------- simulate-it-yourself (2025/26) ---------- */
 
@@ -777,20 +772,21 @@
 
   <div class="intro">
     <h1>One in a million Premier Leagues</h1>
-    <h2>What is xG</h2>
+    <p class="muted meta-line">25 October 2026 · Reading time: 8 mins</p>
+    <h2>What is xG?</h2>
     <p>If you’ve clicked on this there’s a pretty good chance you’ll be familiar with the concept of xG anyway, so I’ll keep this bit short.</p>
     <p>Every time a shot is taken in a football game, a probability is calculated that is associated with it. This represents the probability that that shot would result in a goal. A tap-in from a yard out would have a very high xG, close to 1, and a speculative hit from 35 yards out would have a low xG, close to 0.</p>
-    <p>Naturally, there are times when the outcome doesn’t go the way the xG would suggest. A team may score from a rare, low quality effort on goal, while their opponents fail to convert any of their more numerous, better chances. You’d expect this sort of thing to even over the course of a season, but have you ever wondered, “What if…?”.</p>
+    <p>Naturally, there are times when the outcome of a game doesn’t go the way the xG would suggest. A team may score from a rare, low quality effort on goal, while their opponents fail to convert any of their more numerous, better chances. You’d expect this sort of thing to even over the course of a season, but have you ever wondered, “What if…?”.</p>
     <p>What if a relegation candidate kept scoring from half-chances all season? Could they win the league?</p>
-    <p>How many goals could be scored in a game in an alternate reality where everyone had their shooting boots on?</p>
+    <p>It is an article for the dreamers. Based on the 2025/26 season, supporters of your Wolves, your West Hams and your Burnleys will no doubt have giddy highs at the thought their season could have ended with European football rather than being demoted to the Championship.</p>
 
     <details class="data-info">
-      <summary>Data information</summary>
+      <summary>A quick note on the data</summary>
       <ul>
         <li>Data is taken from Understat.</li>
-        <li>Shots are treated as independent of each other. In real life game-management would come into play, but for a bit of fun such as this we will suspend disbelief.</li>
-        <li>Own goals are modelled in Understat, sparing the blushes of millions of players in this article.</li>
-        <li>League position tie-breaks are done on goal difference, goals for, then a random coin toss.</li>
+        <li>Shots are treated as independent of each other. In real life, game-management would come into play, but for a bit of fun such as this we will suspend disbelief.</li>
+        <li>Own goals don’t get an xG in Understat, sparing the blushes of millions of players in this article.</li>
+        <li>League position tie-breaks are done on goal difference, goals for, head-to-head record, away goals in head-to-head, then a virtual coin toss. (A play-off would have replaced this in real life.)</li>
       </ul>
     </details>
   </div>
@@ -799,7 +795,7 @@
 
   <section id="game-reroll-section">
     <h2>What could have been in the first game?</h2>
-    <p>The first game of the season saw Bournemouth take on Liverpool at Anfield. There were shots aplenty, but how could it have played out differently? Here are all the shots, what happened in the actual game, and what happened in simulation xxx.</p>
+    <p>The first game of the season saw Bournemouth take on Liverpool at Anfield. There were shots aplenty, but how could it have played out differently? Here are all the shots, what happened in the actual game, and what happened in simulation #<span id="game-reroll-sim-no">10,917</span>.</p>
 
     <div class="reveal-track" id="game-reroll-track">
       <div class="reveal-sticky-wrap">
@@ -885,7 +881,7 @@
   <!-- ===================== simulated season ===================== -->
 
   <section id="season-reroll-section">
-    <h2>Simulating the season</h2>
+    <h2>Simulating a season</h2>
     <p>Let's go a step further and replay every shot from every game for the entire season. We can see our Liverpool vs. Bournemouth result in gameweek 1, as well as nine other replayed games.</p>
 
     <div class="reveal-track" id="season-reroll-track">
@@ -941,8 +937,8 @@
 
   <section id="treemap-section">
     <h2>A million alternate Premier League realities</h2>
-    <p>Imagine if we played the season again. Every shot recreated as if were played again, with the same likelihood it would be scored. Some that were drilled past the keeper would be smashed wide. Others that were skied into row Z would nestle into the top corner. And some would play out exactly the same. How could the league have looked? What if we repeated it again, and again? Maybe our team would fluke an unlikely title! In a million simulations what might happen?</p>
-    <p>I took the 2025/26 season and did just that. Here is how the league ended up all 1,000,000 times.</p>
+    <p>That was one season. It turned out very differently, but still, a ‘big’ team won it. So let’s go a step further, or rather, 999,999 step further.</p>
+    <p>Many simulated shots, games and seasons later, here is how the league ended up all 1,000,000 times.</p>
 
     <div class="treemap-card">
       <div class="treemap-canvas-wrap">
@@ -981,7 +977,7 @@
         <div>
           <table class="sim-table" id="sim-table">
             <thead>
-              <tr><th>#</th><th>Team</th><th>Pts</th><th>GD</th><th>vs. real</th></tr>
+              <tr><th class="num">#</th><th>Team</th><th class="num">Pts</th><th class="num">GD</th><th>vs. real</th></tr>
             </thead>
             <tbody id="sim-table-body"></tbody>
           </table>
@@ -994,16 +990,6 @@
     </div>
   </section>
 
-  <!-- ===================== leicester 2015-16 ===================== -->
-
-  <section id="leicester-section">
-    <!-- HEADING: TBD -- user to fill in -->
-    <p>That was last year, but let’s take a moment to appreciate Leicester’s year of triumph. In 10,000 simulations of that season they triumphed <span id="leicester-odds-inline">9.8</span>% of the time. Yes, you could say they were fortunate to win some games (insert examples here), but they genuinely did create better chances than they were expected to before the season started.</p>
-    <div class="leicester-card">
-      <img class="leicester-crest" src="../assets/logos/clubs/leicester.svg" alt="Leicester City crest">
-      <div class="leicester-stats" id="leicester-stats"></div>
-    </div>
-  </section>
 
 </div>
 
@@ -1074,6 +1060,14 @@
         <h4>Biggest wins</h4>
         <div id="modal-wins"></div>
       </div>
+
+      <!-- Champion-body twin of #modal-game-footnote (which lives in
+           #modal-game-body, hidden for a champion-shaped story, so this
+           needs its own slot rather than reusing that one). Currently
+           only Chelsea's title_tie story, whose own tiebreak went to
+           away goals -- the footnote points at the two sims in the
+           million that went one step further still. -->
+      <p class="modal-game-footnote" id="modal-champion-footnote" style="display:none"></p>
     </div>
 
     <div id="modal-game-body">
@@ -1391,9 +1385,9 @@
         { minute: 36, player: 'Hugo Ekitike',
           text: "Two good chances for both sides. In our simulation, Tavernier puts Bournemouth 0-2 up, while in real life his shot is saved, only for Ekitike to fire Liverpool into a 1-0 lead." },
         { minute: 48, player: 'Cody Gakpo',
-          text: "Gakpo converts a 10% xG chance to double Liverpool's real-life advantage." },
+          text: "Gakpo converts a 0.10 xG chance to double Liverpool's real-life advantage." },
         { minute: 63, player: 'Antoine Semenyo',
-          text: "Semenyo scores a high (43% xG) probability chance in both real-life and the simulation." },
+          text: "Semenyo scores a high (0.43 xG) probability chance in both real-life and the simulation." },
         { minute: 75, player: 'Antoine Semenyo',
           text: "And again! Not a great chance, but Semenyo equalises in real-life, and completes a hat-trick in our re-run." },
         { minute: 87, player: 'Cody Gakpo',
@@ -1501,6 +1495,12 @@
       });
       var homeTotals = shotTotals[game.home_team] || { shots: 0, xg: 0 };
       var awayTotals = shotTotals[game.away_team] || { shots: 0, xg: 0 };
+      // The simulation number quoted in this section's intro paragraph --
+      // read from the data rather than hard-coded, so it can't drift if
+      // GAME_REROLL_SIM is ever pointed at a different one of the million.
+      var simNoEl = document.getElementById('game-reroll-sim-no');
+      if (simNoEl && game.sim != null) simNoEl.textContent = game.sim.toLocaleString();
+
       document.getElementById('game-reroll-summary').textContent =
         'The game saw ' + game.home_team + ' take ' + homeTotals.shots + ' shots with a combined xG of '
         + homeTotals.xg.toFixed(2) + ', and ' + game.away_team + ' take ' + awayTotals.shots + ', with an xG of '
@@ -1617,7 +1617,7 @@
         // The sticky visual's own small label stays a short mechanical
         // tag (matching every other gameweek step); the fuller narrative
         // sentence lives in this aside instead, not the label itself.
-        var midMechanicalLabel = '…' + midGws.length + ' mid-season games…';
+        var midMechanicalLabel = '…' + midGws.length + ' mid-season games later…';
         // Text (from here through the exit placeholder's own paragraph
         // above) is the user's own, one sentence split across the two
         // reveal points -- verified against the data before wiring in:
@@ -1834,6 +1834,18 @@
   var flaggedTitleTieBySim = {};
   flaggedTitleTiesRaw.forEach(function(t){ flaggedTitleTieBySim[t.sim] = t; });
 
+  // Of every title-level tie in the million, the handful that exhausted
+  // the whole tie-break chain -- level on points, goal difference, goals
+  // scored, head-to-head points AND head-to-head away goals -- and had to
+  // be settled on a coin flip. Counted from the data rather than written
+  // down. The footnote's own wording is the user's and states the count
+  // ("Two") in words, so it isn't interpolated -- but this still drives
+  // which sim the footnote links to, and the grid cell it flags.
+  // Checked against the data when written: exactly 2 of the 37 title
+  // ties go to a coin flip, and Arsenal win both.
+  var coinFlipTies = flaggedTitleTiesRaw.filter(function(t){ return t.resolution === 'coin_flip'; });
+  var COIN_FLIP_FOOTNOTE_SIM = coinFlipTies.length ? coinFlipTies[0].sim : null;
+
   var secondStoryByTeam = {};
   Object.keys(SECOND_STORY_PICKS).forEach(function(team){
     var pick = SECOND_STORY_PICKS[team];
@@ -1928,6 +1940,20 @@
           + 'points with Man City and Man United, and the same goal difference and goals scored as City, the '
           + 'season went to head-to-head record. Since this was tied on aggregate, away goals was used to split '
           + 'them, handing Chelsea a title.',
+      };
+    }
+
+    var everton = teams.filter(function(t){ return t.team === 'Everton'; })[0];
+    var evertonStory = secondStoryByTeam['Everton'];
+    if (everton && evertonStory && evertonStory.record.final_table) {
+      // Winning margin off the record's own final table rather than typed
+      // in, same as every other number quoted in these notes.
+      var evTable = evertonStory.record.final_table.slice().sort(function(a, b){ return a.position - b.position; });
+      var evMargin = evTable[0].points - evTable[1].points;
+      CHAMPION_STORY_NOTES['Everton'] = {
+        before: 'Everton came out on top ' + everton.title_count.toLocaleString() + ' times. They won this '
+          + 'season by ' + evMargin + ' point' + (evMargin === 1 ? '' : 's') + ', despite hitting a rocky patch '
+          + 'mid-campaign.',
       };
     }
 
@@ -2085,7 +2111,14 @@
     269077: 'A 15-goal Villa thriller',
   };
 
+  // The stories that are simply "this club won the league" -- as opposed
+  // to a story about something other than winning it. These share one
+  // standard pill; see secondStoryLabel/openStory.
+  function isPlainLeagueWin(entry){ return entry.kind === 'biggest_margin'; }
+  var PLAIN_LEAGUE_WIN_PILL = 'See a league win';
+
   function secondStoryLabel(entry){
+    if (isPlainLeagueWin(entry)) return PLAIN_LEAGUE_WIN_PILL;
     if (CURATED_TAG[entry.kind]) return CURATED_TAG[entry.kind];
     if (entry.kind === 'title_tie') return 'Title decided by tiebreak';
     return entry.record.triggers.indexOf('six_plus_haul') !== -1 ? 'Big individual haul' : 'High-scoring game';
@@ -2156,6 +2189,13 @@
   relegationStoriesRaw.forEach(function(r){
     addFlag(teamForSim(r.sim).team, rankOfSim[r.sim], { kind: r.kind, record: r });
   });
+  // Chelsea's story footnote links to a title decided by coin flip (see
+  // COIN_FLIP_FOOTNOTE_SIM) -- flag that cell too, so a reader who finds
+  // it by zooming around the grid gets the same story.
+  if (COIN_FLIP_FOOTNOTE_SIM != null && flaggedTitleTieBySim[COIN_FLIP_FOOTNOTE_SIM]) {
+    addFlag(teamForSim(COIN_FLIP_FOOTNOTE_SIM).team, rankOfSim[COIN_FLIP_FOOTNOTE_SIM],
+            { kind: 'title_tie', record: flaggedTitleTieBySim[COIN_FLIP_FOOTNOTE_SIM] });
+  }
 
   /* =========================================================
      2. NOTCHED TREEMAP LAYOUT
@@ -3714,8 +3754,9 @@
     crestEl.src = crestPath(subjectTeam);
     crestEl.alt = subjectTeam + ' crest';
 
-    document.getElementById('modal-tag').textContent =
-      CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak' : 'Unexpected winner');
+    document.getElementById('modal-tag').textContent = isPlainLeagueWin(entry)
+      ? 'A league win for ' + (ROSTER_DISPLAY_NAME[subjectTeam] || subjectTeam)
+      : (CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak' : 'Unexpected winner'));
 
     if (entry.kind === 'no_wins') {
       document.getElementById('modal-title').textContent = story.team + '\'s best-ever finish';
@@ -3738,11 +3779,18 @@
     }
 
     // Override with the user's own title for this club's designated
-    // highlight -- see STORY_TITLES above. Deliberately excludes
-    // no_wins (the 4 zero-win clubs' cards "stay as they are") and
-    // relegation_footnote (Manchester City's *other* story, about the
-    // same team but not this one) so neither picks up a mismatched title.
-    if (STORY_TITLES[subjectTeam] && entry.kind !== 'no_wins' && entry.kind !== 'relegation_footnote') {
+    // highlight -- see STORY_TITLES above. The title belongs to one
+    // specific story, not to the club, so it's matched on that story's
+    // own sim rather than just the team: a club can be the subject of
+    // more than one story (Manchester City's relegation footnote, the
+    // coin-flip tie Chelsea's footnote links to, or any flagged cell a
+    // reader finds by zooming around its grid), and those must not
+    // inherit the card's headline. no_wins is excluded outright -- the
+    // four zero-win clubs' cards "stay as they are".
+    var designated = secondStoryByTeam[subjectTeam];
+    var isDesignatedStory = designated && designated.record
+      && designated.record.sim === story.sim;
+    if (STORY_TITLES[subjectTeam] && isDesignatedStory && entry.kind !== 'no_wins') {
       document.getElementById('modal-title').textContent = STORY_TITLES[subjectTeam];
     }
 
@@ -3758,6 +3806,28 @@
     noteBeforeEl.style.display = notes ? 'block' : 'none';
     noteAfterEl.textContent = notes && notes.after ? notes.after : '';
     noteAfterEl.style.display = notes && notes.after ? 'block' : 'none';
+
+    // Chelsea's own title tie went to away goals -- the deepest any story
+    // on this page gets. This footnote points past it, to the two sims in
+    // the million that even that couldn't separate. Scoped to Chelsea
+    // specifically (not to `title_tie`, which Liverpool and Newcastle
+    // share) and explicitly cleared for every other story, same
+    // convention as every other optional block in this modal.
+    var champFootnoteEl = document.getElementById('modal-champion-footnote');
+    var showCoinFlipNote = subjectTeam === 'Chelsea' && entry.kind === 'title_tie'
+      && COIN_FLIP_FOOTNOTE_SIM != null;
+    if (showCoinFlipNote) {
+      champFootnoteEl.innerHTML = 'Footnote: there were simulations closer than this. Two of '
+        + 'Arsenal\'s simulated wins came as a result of a virtual coin toss. Tied on points, goal '
+        + 'difference, goals for, and unsplittable on head-to-head, they were split randomly. In real '
+        + 'life, a play-off would have determined the winner. '
+        + '<button type="button" class="footnote-link" data-sim="' + COIN_FLIP_FOOTNOTE_SIM
+        + '">See it in the treemap →</button>';
+      champFootnoteEl.style.display = 'block';
+    } else {
+      champFootnoteEl.innerHTML = '';
+      champFootnoteEl.style.display = 'none';
+    }
 
     renderTiebreak(story);
     // Liverpool's own title-tie story specifically drops the full
@@ -3823,6 +3893,17 @@
     zoomToStory({ kind: relegation.kind, record: relegation });
   });
 
+  // Same delegation as the game footnote above, for the champion body's
+  // own footnote (Chelsea's coin-flip link).
+  document.getElementById('modal-champion-footnote').addEventListener('click', function(e){
+    var link = e.target.closest('.footnote-link');
+    if (!link) return;
+    var tie = flaggedTitleTieBySim[Number(link.dataset.sim)];
+    if (!tie) return;
+    backdrop.classList.remove('open');
+    zoomToStory({ kind: 'title_tie', record: tie });
+  });
+
   document.getElementById('modal-close').addEventListener('click', function(){
     backdrop.classList.remove('open');
   });
@@ -3832,26 +3913,6 @@
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape') backdrop.classList.remove('open');
   });
-
-  /* =========================================================
-     8. LEICESTER 2015-16 STATS (data only -- see HTML comment)
-     ========================================================= */
-
-  var leicester = await fetch('../simulations/results/sim_leicester_2015_16.json').then(function(r){ return r.json(); }).catch(function(){ return null; });
-  if (leicester) {
-    var lei = leicester.per_team.filter(function(r){ return r.team === 'Leicester'; })[0];
-    var favourite = leicester.per_team[0];
-    var stats = document.getElementById('leicester-stats');
-    stats.innerHTML =
-      '<div><div class="num">' + (lei.title_odds*100).toFixed(1) + '%</div><div class="lbl">Leicester\'s simulated title odds that season, across 10,000 replays</div></div>'
-      + '<div><div class="num">' + (favourite.title_odds*100).toFixed(1) + '%</div><div class="lbl">' + favourite.team + '\'s simulated odds — the model\'s actual favourite — who never won a single one</div></div>'
-      + '<div><div class="num">' + (leicester.same_champion_odds*100).toFixed(1) + '%</div><div class="lbl">of the 10,000 replays produced the same champion as reality</div></div>';
-    // Same number quoted inline in the paragraph above the card -- read
-    // from the same record rather than typed twice, so the two can't
-    // drift apart if that run is ever regenerated.
-    var inlineOdds = document.getElementById('leicester-odds-inline');
-    if (inlineOdds) inlineOdds.textContent = (lei.title_odds*100).toFixed(1);
-  }
 
 })();
 </script>

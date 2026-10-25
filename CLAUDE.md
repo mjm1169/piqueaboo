@@ -2496,3 +2496,286 @@ for the actual text and visual direction before drafting either.
   user's call): the zero-win cards' generated title reads
   "Wolverhampton Wanderers's best-ever finish" — a doubled possessive on
   the one club name that already ends in "s".
+
+  **2026-10-25, done — all article prose pulled into one editable file;
+  "simulation xxx" resolved to a real sim; Leicester section removed.**
+  **`notes/article-copy.md`** (new) holds every reader-facing string from
+  both articles as 126 `[id]`-tagged blocks for the user to edit in one
+  pass and hand back. Live-computed numbers appear as `{{placeholders}}`
+  with their current real value annotated, so edited copy can't hard-code
+  a figure that later goes stale. **Verified rather than assumed**: 118
+  blocks matched the HTML source directly; the 8 assembled from
+  concatenated JS string fragments were matched as regexes (placeholders
+  → `.+?`) against the live rendered modal text in headless Chromium.
+  That pass caught five wrong figures in my own annotations (not in the
+  article): Haaland's real tally is 27 not 38, Man Utd 3.4% not 3.7%,
+  Liverpool 0.9% not 1.8%, Tottenham 60 titles not 2,520, Crystal Palace
+  414 not 20,164.
+  **"simulation xxx"**: previously unresolvable because the game-reroll
+  section was a standalone draw under its own `GAME_REROLL_SEED`, not one
+  of the indexed million. Per the user's own suggestion (find a sim with
+  the right scoreline), searched the big pass's own draws for match index
+  0 (Liverpool v Bournemouth, the opener) across all 1,000,000 sims.
+  7,703 reproduce the 1-4 scoreline, but — crucially, since this
+  section's hand-written commentary names specific individual shots
+  (Tavernier's 0-2, Gakpo at 48' and 87', Semenyo's hat-trick) — **16
+  reproduce the published re-roll's per-shot outcome vector exactly**
+  (predicted ~14.3 from the vector's own probability of 1.43e-05 × 1M, so
+  the count is where it should be). `export_game_reroll.py` now takes
+  `--sim` and regenerates the match through the big pass's own
+  `_match_rng(seed, match_index)` at the full `(n_sims, …)` shape (same
+  draws_h/draws_a stream-position reason documented on
+  `build_campaign_for_sim`) rather than its own seed; `GAME_REROLL_SIM =
+  10917`, the lowest of the 16. **Confirmed purely additive before
+  shipping**: the regenerated `game-reroll-data.json` is identical to the
+  committed one field for field across all 29 shots, with `sim` the only
+  new key — so nothing a reader sees changed, but the quoted number is
+  now real and the shot data genuinely is that simulation's. The intro
+  paragraph's number is rendered from `game.sim` via a new
+  `#game-reroll-sim-no` span, not hard-coded, so it tracks
+  `GAME_REROLL_SIM` if that's ever repointed. Of the 16, thirteen are
+  Arsenal title seasons, two Manchester City (#220032, #485151) and one
+  Manchester United (#235660) — offered to the user in case they'd prefer
+  the number to foreshadow something.
+  **Everton**: user asked whether its card was missing. It isn't missing
+  — it has a title ("20 in a million") and a wired story (biggest margin,
+  sim #190,331) — but it is the one winning club with no entry in
+  `CHAMPION_STORY_NOTES`, so its card opens with no write-up paragraph.
+  Flagged in the copy file as an empty block for the user to fill, not
+  written for them.
+  **Leicester section removed** outright per the user's ask: the
+  `#leicester-section` markup, its CSS block, and script section 8 (the
+  `sim_leicester_2015_16.json` fetch and stats card). Took the
+  `leicester-odds-inline` span added the previous round with it. The
+  underlying `simulations/results/sim_leicester_2015_16.json` and its
+  generating script are left in place — data/pipeline, not article
+  content, and removing them was beyond the ask. The page now ends on the
+  simulator section.
+  **Verified**: zero Leicester references left in the HTML and none in
+  the rendered page text; the sim number renders as "simulation #10,917";
+  full-page scroll-throughs at 1280x900, 390x844 and 1600x1000 all reach
+  the correct final states (38/38 log rows, 4-2 / 1-4, gameweek 38) with
+  zero page errors, zero console errors and zero failed requests (the
+  previously-flagged Google Fonts block doesn't occur against a local
+  server); all 20 roster-card stories still open correctly; a screenshot
+  of the new end of the page confirms it closes cleanly on the roster
+  cards and "Simulate a season" with no leftover gap. Not committed.
+
+  **2026-10-25, later — the user's rewritten copy applied to both
+  articles (24 edits).** Handed back `notes/article-copy.md` after a
+  rewrite. Applied by diffing every `[id]`-tagged block against the live
+  article text rather than by reading the file top to bottom, so an edit
+  can't be missed and an unchanged block can't be needlessly rewritten:
+  115 of 127 blocks already matched, 24 were genuine edits, and the
+  remaining mismatches were the 8 known data-driven blocks (verified
+  unchanged a second time by regex-matching them against the live
+  rendered modal text in headless Chromium, placeholders → `.+?`).
+  **A stale-buffer rollback, caught and deliberately not honoured**: the
+  saved file turned out to be based on the version from *before* the
+  previous round's three edits — it still carried "simulation xxx", the
+  Leicester section, and no Everton block. Confirmed by checking for
+  this session's own annotations (all absent) alongside the mtime.
+  Treated as an editor artifact rather than an instruction, since all
+  three were the user's own explicit asks minutes earlier: the article
+  keeps simulation #10,917 and the Leicester removal, and the copy file
+  was re-synced to reality afterward rather than the article being
+  reverted to the copy file.
+  **Edits applied** — football: "What is xG?" (added question mark),
+  "outcome of a game", a new closing intro paragraph about the dreamers,
+  "A quick note on the data", three reworded data-info bullets, two
+  commentary lines switched from percentages to xG decimals ("0.10 xG",
+  "0.43 xG"), "Simulating a season", "…N mid-season games later…", and
+  two rewritten treemap intro paragraphs. Due-date: a new "About the
+  data" ending, a betting line added to the mode step, four rewritten
+  dice-detour paragraphs, "Now, back to the due date.", two reworded
+  return-step paragraphs, a rewritten 39-weeks step, and "To summarise".
+  **Two plain typos corrected in transcription** (same convention as
+  previous rounds, both reported): "Is is an article" → "It is an
+  article", and "maths-speak how your beliefs change" → "maths-speak for
+  how your beliefs change".
+  **Flagged, not silently handled**: the new intro paragraph ends
+  mid-sentence ("...at the thought their season could") and needs an
+  ending — applied as written so the work isn't lost, but it is visibly
+  unfinished on the page. The rewritten tie-break bullet ("goal
+  difference, goals for, head-to-head record, then away goals in
+  head-to-head") is a genuine improvement on the old "then a random coin
+  toss", which was wrong for the big pass — but checked against the code
+  rather than assumed, and two caveats remain: `resolve_tied_group()`
+  does still fall back to a coin flip after away goals (standing in for
+  a play-off), and the client-side "Simulate a season" widget's own
+  `rank()` sorts on points → GD → GF only, with no head-to-head at all,
+  so the bullet doesn't describe that widget. Offered to align the
+  widget rather than changing it unprompted. The rewritten `dice-half`
+  step also drops the sentence naming which faces are highlighted;
+  harmless (the chart still shows them) but noted. Everton's card is
+  still the one winning club with no write-up paragraph.
+  **Verified**: the block diff re-run after applying shows only the
+  expected residue; full scroll-throughs of the football article at
+  1280x900 and 390x844 reach the correct final states with zero page
+  errors, console errors or failed requests; the due-date article's step
+  highlighting still fires with every step's text at 391–446px against a
+  450/422 halfway line, the due date still reads 40w + 0d, zero errors on
+  both viewports; and a screenshot of the football intro confirms the new
+  copy and expanded data-info list render correctly. Not committed.
+
+  **2026-10-25, later still — updated copy applied, plus a coin-flip
+  footnote on Chelsea's card linking into the treemap.** Three more copy
+  edits applied by the same block-diff method (116 of 127 blocks already
+  matched): the intro's dreamers paragraph now finishes its sentence
+  ("...rather than being demoted to the Championship"), the tie-break
+  bullet gained the coin toss and its play-off aside, and Everton's
+  write-up is written. **Everton's numbers verified before wiring, and
+  wired live** rather than hard-coded, same convention as every other
+  note: `title_count` (20) and the winning margin computed off the
+  story record's own final table (76 to Manchester United's 72 = 4).
+  The "rocky patch mid-campaign" also checks out — sim #190,331's
+  campaign really does read `LLDWLLDWLWLLWDWL` between two long winning
+  runs.
+  **"Were any sims decided by a coin toss?"** — answered from the data,
+  not the code: of the million, 37 end in a title-level tie (the
+  pipeline flags every sim where 2+ teams share the top rank_key, so
+  that's the complete set, not a sample), resolved 26 on head-to-head
+  points, 9 on head-to-head away goals, and **2 on a coin flip** --
+  #129,326 (Arsenal over Manchester United, both 74pts/+36/78/42, 1-0
+  each way so zero away goals apiece) and #498,845 (Arsenal over
+  Liverpool, both 76pts/+31/72/41, same 1-0/1-0 shape). Both are
+  perfect ties through the entire chain.
+  **The footnote**: added to Chelsea's card (its own tie went to away
+  goals, the deepest any written-up story gets, so it's the natural
+  place to point one step further). Needed a new
+  `#modal-champion-footnote` slot -- `#modal-game-footnote`, which
+  Manchester City's relegation link uses, lives inside
+  `#modal-game-body`, hidden for a champion-shaped story, so reusing it
+  was not an option (the `display:none` ancestor pitfall this file has
+  flagged repeatedly). Counts are computed from
+  `flaggedTitleTiesRaw` rather than written down, so the sentence can't
+  go stale if the sims are regenerated. The "See ... in the treemap"
+  link reuses the existing `zoomToStory()` path and the same delegated
+  click handling (listener on the footnote element, team/sim read off a
+  data attribute, since its innerHTML is rebuilt on every openStory),
+  and the linked sim is now flagged in the grid so a reader who finds
+  that cell by zooming gets the same story. Scoped to Chelsea
+  specifically, not to `title_tie` (which Liverpool and Newcastle share)
+  -- verified hidden on both of those plus Arsenal and Manchester City.
+  **A real bug this exposed and fixed**: `STORY_TITLES` was applied on
+  `subjectTeam` alone, so the newly-reachable coin-flip sim (champion:
+  Arsenal) opened under Arsenal's *card* headline, "A 3-way final day
+  fight" -- a title belonging to a completely different story. The
+  override now also requires the story's own sim to match that team's
+  designated card story (`secondStoryByTeam[subjectTeam].record.sim`),
+  so any other sim a reader reaches -- this one, Manchester City's
+  relegation footnote, or any flagged cell found by zooming -- falls
+  back to the generic title instead. Confirmed the linked story now
+  opens as "Arsenal win the league", and re-checked all 20 cards still
+  show their own titles unchanged.
+  **Footnote wording replaced same round** with the user's own text
+  ("there were simulations closer than this. Two of Arsenal's simulated
+  wins came as a result of a virtual coin toss..."), checked against the
+  data before wiring (exactly 2 coin-flip titles, Arsenal champion in
+  both, both level on points/GD/GF). Four plain typos fixed in
+  transcription, all reported: "Arsenals" → "Arsenal's", "simulated win"
+  → "simulated wins", "Tied on point" → "Tied on points", "unsplitable"
+  → "unsplittable"; a stray "with" also dropped from "and with
+  unsplitable on head-to-head", flagged as the one change beyond a
+  typo. The counts are no longer interpolated (the user's text writes
+  "Two" as a word), so that number is literal where the previous
+  draft's was live -- noted in the copy file; the computed
+  `coinFlipTies` still drives which sim the footnote links to and
+  which grid cell gets flagged.
+  **Verified**: Chelsea's footnote renders with the right counts and
+  teams, the link zooms to Arsenal's grid (crest badge confirms) and
+  opens sim #129,326 with the correct coin-flip tiebreak explanation;
+  footnote confirmed hidden on four other stories; screenshots on
+  desktop and 390px mobile show it rendering cleanly with no overflow;
+  full scroll-throughs at 1280x900, 390x844 and 1600x1000 plus the
+  due-date article all pass with zero page errors, console errors or
+  failed requests. Not committed.
+
+  **2026-10-25, later still — Chelsea footnote reworded, table header
+  alignment, mobile table width, publish dates and reading times.**
+  **Footnote**: replaced with the user's own wording ("there were
+  simulations closer than this. Two of Arsenal's simulated wins came as
+  a result of a virtual coin toss..."), every claim checked against the
+  data first (exactly 2 coin-flip titles, Arsenal champion in both, both
+  level on points/GD/GF). Four plain typos fixed in transcription, all
+  reported: "Arsenals" → "Arsenal's", "simulated win" → "simulated
+  wins", "Tied on point" → "Tied on points", "unsplitable" →
+  "unsplittable"; a stray "with" also dropped from "and with unsplitable
+  on head-to-head", flagged as the one change beyond a typo. The count
+  is now literal ("Two", written as a word) where the previous draft
+  interpolated it -- noted in the copy file; `coinFlipTies` still drives
+  which sim is linked and which grid cell is flagged.
+  **Table header alignment**: every table on the page
+  (`.final-table`, `.season-table`, `.campaign-table`, `.sim-table`,
+  `.game-log`) right-aligns `td.num` but none had the matching `th.num`
+  rule, so every numeric header sat left-aligned over right-aligned
+  figures. Added one shared rule covering all five. `.sim-table` also
+  never marked its numeric headers at all -- added `class="num"` to its
+  `#`/`Pts`/`GD` headers, but deliberately NOT to `vs. real`, whose own
+  cells are `.delta` (left-aligned): a first pass did add it there and
+  created a fresh mismatch in the opposite direction, caught by the
+  audit below rather than shipped.
+  **Mobile table width**: measured before fixing -- inside a 390px
+  viewport the modal's final table rendered 352px into a 310px wrapper,
+  a 42px overflow forcing the sideways scroll the user reported (9
+  columns × 6px side padding = 108px of the available 310). Tightened to
+  3px side padding with a half-step smaller font past the existing 640px
+  breakpoint; re-measured at 0px overflow on mobile and unchanged on
+  desktop. `.final-table-wrap`'s `overflow-x` stays as a safety net for
+  an unusually long team name.
+  **Verified** with a new whole-page audit that walks every *visible*
+  table, compares each header's computed `text-align` against its own
+  column's first real data cell, and normalises `start`/`end` to
+  `left`/`right` (a first run reported 10 "mismatches" that were purely
+  `left` vs `start` on the same column, plus one on the game log's
+  kickoff row -- a `colspan=5` label, not a data row, now skipped):
+  31 columns checked on desktop and 27 on mobile, **zero mismatches**.
+  **Dates and reading times**: both articles now carry "25 October 2026"
+  (today). Reading times estimated from actual word counts of the
+  reader-facing prose in `notes/article-copy.md` rather than guessed:
+  due-date is 698 words ≈ 3.0 min at ~230wpm, so its existing "3 mins"
+  was already right and was left alone; the football article is 800
+  words of main-flow prose plus 877 in the click-to-open club cards
+  (1,677 total ≈ 7.3 min), rounded to 8 given how much of it is
+  scrolling and clicking -- flagged in the copy file in case the user
+  prefers 6 (a straight read-through skipping the cards). The football
+  article had no meta line at all, so it gained one under its `<h1>`
+  plus a small `.meta-line` rule mirroring due-date.html's own (that
+  class lives in each page's own `<style>`, not the shared sheet).
+  **Full regression**: football scroll-throughs at 1280x900, 390x844 and
+  1600x1000; the due-date article on mobile (due date still 40w + 0d);
+  all 20 roster-card stories still opening; both meta lines rendering --
+  zero page errors, console errors or failed requests anywhere.
+  Not committed.
+
+  **2026-10-25, later still — standard pill/tag for the five plain
+  league-win cards.** User feedback: the roster cards' pill text is
+  "quite duplicative", proposing a standard "See a league win" unless a
+  story is genuinely unique, with "A league win for [team]" alongside.
+  Audited all 20 cards first (pill / modal tag / title captured live
+  from real clicks) rather than reasoning from the source, which
+  surfaced duplication in two directions, not one: the pill repeats
+  across cards ("Largest winning margin" x5, "Best-ever finish" x4,
+  "Title decided by tiebreak" x3), AND the pill and the modal's own tag
+  line are the *same string on every single card*, so a reader meets it
+  twice in a row. **Asked before changing anything**, since "the card's
+  title" was genuinely ambiguous between the modal's tag line and the
+  headline -- and the headline reading would have destroyed the user's
+  own just-written titles ("The Seagulls soar", "20 in a million"...).
+  User picked: the tag line, titles kept; and the narrow unique set
+  (only the five that currently duplicate "Largest winning margin").
+  **Implemented** as `isPlainLeagueWin(entry)` (`kind === 'biggest_margin'`,
+  which maps exactly to the five `OWN_BIGGEST_MARGIN_TEAMS` cards --
+  verified no curated-tour stop uses that kind, so the scope can't leak)
+  driving both `secondStoryLabel()` (pill -> "See a league win") and
+  openStory's tag (-> "A league win for <team>", through
+  `ROSTER_DISPLAY_NAME` so a future long club name abbreviates the same
+  way the roster card does). Every other card untouched.
+  **Verified**: all 20 cards re-captured -- the five now read
+  "See a league win" / "A league win for X" / their own unchanged
+  headline, and the other fifteen are byte-identical to before;
+  screenshots of the roster grid and the Brighton card on desktop and
+  390px mobile; zero page errors. **Known residue, flagged not fixed**:
+  on the other fifteen cards the pill and tag still duplicate each
+  other exactly -- out of scope for the chosen "just the 5" answer, but
+  the same treatment would fix it if wanted.
