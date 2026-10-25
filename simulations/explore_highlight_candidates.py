@@ -7,7 +7,9 @@ roster-card stories don't already cover:
   2. fewest / most points to win the title
   3. most defeats and still win the title
   4. fewest (ideally zero) losses in a campaign
-  5. longest run of games scoring, for a player
+  5. longest run of games scoring, for a player -- counted over the
+     player's CLUB FIXTURES, not just the games they took a shot in (see
+     club_eligibility)
   6. longest run of games without conceding, for a team
 
 Every candidate is reported alongside its xG context -- what the run was
@@ -28,6 +30,7 @@ Usage:
 """
 
 import argparse
+import bisect
 import sys
 import time
 
@@ -39,9 +42,9 @@ BIG_PASS_SEED = 20252026
 BIG_PASS_N_SIMS = 1_000_000
 
 # A player's scoring streak can't be longer than the number of matches
-# they take a shot in, so players below this bound are not tracked. The
-# run asserts the record found is >= this, which proves no untracked
-# player could have beaten it.
+# they score in, which can't exceed the number they take a shot in, so
+# players below this bound are not tracked. The run asserts the record
+# found is >= this, which proves no untracked player could have beaten it.
 MIN_SHOT_GAMES = 10
 
 
@@ -49,7 +52,56 @@ def _match_rng(seed, match_index):
     return np.random.default_rng(np.random.SeedSequence([seed, match_index]))
 
 
-def run_sweep(matches, teams, n_sims, seed, tracked_players):
+def club_eligibility(shots, matches, players):
+    """
+    For every match, which of `players` are on each side's books that day:
+    [(home_set, away_set), ...] aligned to `matches`.
+
+    This is what lets a scoring streak be counted over a player's club
+    FIXTURES rather than only the games they happened to take a shot in.
+    The shot data has no appearance records, so a game where a player
+    shoots zero times is invisible -- and under a "games with a shot"
+    definition would silently not break a run. Counting every fixture of
+    the player's club instead means any game without a goal -- subbed on
+    and quiet, benched, injured, or simply no attempt -- resets the run.
+    That is the strict reading (it can understate a run that spans a game
+    the player genuinely didn't play), never an overstated one.
+
+    A player's club on a date is the club of their most recent shot on or
+    before it, so a mid-season mover counts for their old club until their
+    first shot for the new one. Six of the 255 tracked players move club
+    in 2025/26 (Semenyo, B. Johnson, Eze, Strand Larsen, Guehi, Bobb).
+    """
+    s = shots[shots["player"].isin(players)]
+    club = np.where(s["h_a"] == "h", s["h_team"], s["a_team"])
+    hist = {}
+    for p, g in s.assign(club=club).groupby("player"):
+        g = g.sort_values("date", kind="stable")
+        hist[p] = (g["date"].astype(str).tolist(), g["club"].tolist())
+
+    def club_on(p, d):
+        dates, clubs = hist[p]
+        return clubs[max(bisect.bisect_right(dates, d) - 1, 0)]
+
+    out = []
+    for m in matches:
+        d = str(m["date"])
+        eh, ea = set(), set()
+        for p in hist:
+            c = club_on(p, d)
+            if c == m["home_team"]:
+                eh.add(p)
+            elif c == m["away_team"]:
+                ea.add(p)
+        # Anyone who actually shot in this match must be on that side's books.
+        for pl, e in ((m["players_h"], eh), (m["players_a"], ea)):
+            missing = {x for x in pl if x in hist} - e
+            assert not missing, f"shooters not eligible for their own side: {missing}"
+        out.append((eh, ea))
+    return out
+
+
+def run_sweep(matches, teams, n_sims, seed, tracked_players, eligible):
     """One date-ordered pass over all 380 matches, vectorised across sims."""
     n_teams = len(teams)
     team_idx = {t: i for i, t in enumerate(teams)}
@@ -102,15 +154,20 @@ def run_sweep(matches, teams, n_sims, seed, tracked_players):
             cs_cur[:, side] = np.where(~conceded, cs_cur[:, side] + 1, 0)
             np.maximum(cs_max[:, side], cs_cur[:, side], out=cs_max[:, side])
 
-        for players, draws_side in ((m["players_h"], dh), (m["players_a"], da)):
-            for p in np.unique(players):
-                if p not in p_cur:
-                    continue
-                cols = np.flatnonzero(players == p)
-                scored = draws_side[:, cols].any(axis=1)
+        # Every tracked player on a side's books this fixture is updated --
+        # one who took no shot (so can't have scored) resets, exactly as a
+        # shot-without-a-goal does.
+        for players, draws_side, elig in ((m["players_h"], dh, eligible[mi][0]),
+                                          (m["players_a"], da, eligible[mi][1])):
+            for p in elig:
                 cur = p_cur[p]
-                np.add(cur, 1, out=cur, where=scored)
-                cur[~scored] = 0
+                cols = np.flatnonzero(players == p)
+                if len(cols):
+                    scored = draws_side[:, cols].any(axis=1)
+                    np.add(cur, 1, out=cur, where=scored)
+                    cur[~scored] = 0
+                else:
+                    cur[:] = 0
                 np.maximum(p_max[p], cur, out=p_max[p])
 
         if (mi + 1) % 50 == 0:
@@ -121,7 +178,7 @@ def run_sweep(matches, teams, n_sims, seed, tracked_players):
                 p_max=p_max)
 
 
-def real_world_baselines(shots, teams):
+def real_world_baselines(shots, teams, matches, real_elig):
     """The same six metrics, measured on what actually happened in 2025/26."""
     res = shots.drop_duplicates("match_id")[["match_id", "h_team", "a_team", "h_goals", "a_goals", "date"]]
     res = res.sort_values("date", kind="stable")
@@ -144,16 +201,31 @@ def real_world_baselines(shots, teams):
             umax[side] = max(umax[side], ucur[side])
     champ = max(teams, key=lambda t: pts[t])
     goals = shots[shots["result"] == "Goal"]
+    scored_in = set(zip(goals["player"], goals["match_id"]))
+
+    # Same definition as the simulated streaks: consecutive club FIXTURES,
+    # every one of the player's club's games counting whether or not they
+    # shot in it. All players (not just the tracked subset) -- this is the
+    # real-life figure the simulated ones are compared against.
+    cur, best = {}, {}
+    for i in sorted(range(len(matches)), key=lambda k: str(matches[k]["date"])):
+        for elig in real_elig[i]:
+            for p in elig:
+                cur[p] = cur.get(p, 0) + 1 if (p, matches[i]["match_id"]) in scored_in else 0
+                best[p] = max(best.get(p, 0), cur[p])
+    best_n = max(best.values())
+    best_players = sorted(p for p, v in best.items() if v == best_n)
+
+    # The looser, shot-games-only reading the first cut of this used --
+    # kept only so the report can say how much the stricter definition costs.
     order = {int(r["match_id"]): k for k, (_, r) in enumerate(res.iterrows())}
-    best_p, best_n = None, 0
+    loose_n = 0
     for player, g in shots.groupby("player"):
         seen = sorted(set(g["match_id"]), key=lambda m: order[int(m)])
-        scored_in = set(goals[goals["player"] == player]["match_id"])
-        cur = 0
+        cur_l = 0
         for m in seen:
-            cur = cur + 1 if m in scored_in else 0
-            if cur > best_n:
-                best_n, best_p = cur, player
+            cur_l = cur_l + 1 if (player, m) in scored_in else 0
+            loose_n = max(loose_n, cur_l)
     return {
         "champion": champ, "champion_points": pts[champ], "champion_losses": L[champ],
         "best_win_streak": max(wmax.values()),
@@ -164,7 +236,9 @@ def real_world_baselines(shots, teams):
         "best_unbeaten_team": max(teams, key=lambda t: umax[t]),
         "fewest_losses": min(L.values()),
         "fewest_losses_team": min(teams, key=lambda t: L[t]),
-        "best_scoring_streak": best_n, "best_scoring_streak_player": best_p,
+        "best_scoring_streak": best_n,
+        "best_scoring_streak_players": best_players,
+        "best_scoring_streak_shotgames": loose_n,
     }
 
 
@@ -179,7 +253,7 @@ def team_season_xg(shots, teams):
     return out
 
 
-def replay_sims(matches, n_sims, seed, sim_list):
+def replay_sims(matches, n_sims, seed, sim_list, eligible):
     """
     One more date-ordered pass, keeping full per-match detail for just the
     handful of candidate sims -- same full-shape draw as the sweep, so the
@@ -193,18 +267,23 @@ def replay_sims(matches, n_sims, seed, sim_list):
         dh = rng_i.random((n_sims, len(m["xg_h"]))) < m["xg_h"] if len(m["xg_h"]) else np.zeros((n_sims, 0), dtype=bool)
         da = rng_i.random((n_sims, len(m["xg_a"]))) < m["xg_a"] if len(m["xg_a"]) else np.zeros((n_sims, 0), dtype=bool)
         sub_h, sub_a = dh[sims], da[sims]
-        scorers = []
-        for players, sub in ((m["players_h"], sub_h), (m["players_a"], sub_a)):
-            d = {}
+        scorers, pxg = [], []
+        for players, sub, xgs in ((m["players_h"], sub_h, m["xg_h"]),
+                                  (m["players_a"], sub_a, m["xg_a"])):
+            d, x = {}, {}
             for p in np.unique(players):
                 cols = np.flatnonzero(players == p)
                 d[str(p)] = sub[:, cols].sum(axis=1)
+                x[str(p)] = float(xgs[cols].sum())
             scorers.append(d)
+            pxg.append(x)
         per_match.append({
             "home": m["home_team"], "away": m["away_team"],
             "hg": sub_h.sum(axis=1), "ag": sub_a.sum(axis=1),
             "xg_h": float(m["xg_h"].sum()), "xg_a": float(m["xg_a"].sum()),
             "goals_h": scorers[0], "goals_a": scorers[1],
+            "pxg_h": pxg[0], "pxg_a": pxg[1],
+            "elig_h": eligible[mi][0], "elig_a": eligible[mi][1],
         })
     return pos, per_match
 
@@ -232,14 +311,19 @@ def streak_games(per_match, slot, team, kind, length):
 
 
 def player_streak_games(per_match, slot, player, length):
+    """The run of club fixtures behind a scoring streak, for the report.
+    Every fixture of the player's club counts; one with no goal (shot or
+    not) ends the run -- same rule as the sweep."""
     cur = []
     for pm in per_match:
-        for side, opp in (("goals_h", pm["away"]), ("goals_a", pm["home"])):
-            if player not in pm[side]:
+        for side, opp, home, elig in (("goals_h", pm["away"], True, "elig_h"),
+                                      ("goals_a", pm["home"], False, "elig_a")):
+            if player not in pm[elig]:
                 continue
-            g = int(pm[side][player][slot])
+            g = int(pm[side][player][slot]) if player in pm[side] else 0
             if g > 0:
-                cur.append({"opp": opp, "goals": g,
+                cur.append({"opp": opp, "home": home, "goals": g,
+                            "xg": pm["pxg_h" if home else "pxg_a"][player],
                             "score": str(int(pm["hg"][slot])) + "-" + str(int(pm["ag"][slot]))})
                 if len(cur) >= length:
                     return cur[:length]
@@ -270,9 +354,12 @@ def main():
     for _, r in shots.iterrows():
         player_club.setdefault(r["player"], r["h_team"] if r["h_a"] == "h" else r["a_team"])
 
-    real = real_world_baselines(shots, teams)
+    print("building club-fixture eligibility...", file=sys.stderr)
+    elig_tracked = club_eligibility(shots, matches, set(tracked))
+    elig_all = club_eligibility(shots, matches, set(shots["player"]))
+    real = real_world_baselines(shots, teams, matches, elig_all)
     xg = team_season_xg(shots, teams)
-    sw = run_sweep(matches, teams, args.n_sims, args.seed, set(tracked))
+    sw = run_sweep(matches, teams, args.n_sims, args.seed, set(tracked), elig_tracked)
 
     pts, gf, ga = sw["pts"].astype(np.int32), sw["gf"].astype(np.int32), sw["ga"].astype(np.int32)
     losses, wins = sw["losses"], sw["wins"]
@@ -311,12 +398,12 @@ def main():
     p_len = p_best[p_name]
     p_sim = int(sw["p_max"][p_name].argmax())
     assert p_len >= MIN_SHOT_GAMES, (
-        f"record scoring streak {p_len} is below the {MIN_SHOT_GAMES}-shot-game tracking "
+        f"record scoring streak {p_len} is below the {MIN_SHOT_GAMES}-game tracking "
         "bound, so an untracked player could in principle beat it -- lower MIN_SHOT_GAMES")
 
     cands = [win_sim, cs_sim, unb_sim, fl_sim, fewest_pts_sim, most_pts_sim, most_def_sim, p_sim]
     print(f"replaying {len(set(cands))} candidate sims for detail...", file=sys.stderr)
-    slot, per_match = replay_sims(matches, args.n_sims, args.seed, cands)
+    slot, per_match = replay_sims(matches, args.n_sims, args.seed, cands, elig_tracked)
 
     def table_line(sim, ti):
         t = teams[ti]
@@ -366,8 +453,8 @@ def main():
     w(f"- Longest run without conceding: **{real['best_cs_streak']}** "
       f"({real['best_cs_streak_team']})")
     w(f"- Fewest defeats: **{real['fewest_losses']}** ({real['fewest_losses_team']})")
-    w(f"- Longest run of games scoring: **{real['best_scoring_streak']}** "
-      f"({real['best_scoring_streak_player']})")
+    w(f"- Longest run of games scoring: **{real['best_scoring_streak']}** consecutive "
+      f"club fixtures ({' and '.join(real['best_scoring_streak_players'])})")
     w("")
 
     def section(n, title, sim, ti, body_lines):
@@ -431,17 +518,30 @@ def main():
     pg = player_streak_games(per_match, slot[p_sim], p_name, p_len)
     w(f"## 5. Longest run of games scoring — {p_len} games")
     w("")
-    w(f"**{p_name}** ({player_club.get(p_name, '?')}), sim #{p_sim:,} (real-life best that season: "
-      f"{real['best_scoring_streak']}, {real['best_scoring_streak_player']}).")
+    w(f"**{p_name}** ({player_club.get(p_name, '?')}), sim #{p_sim:,} "
+      f"(real-life best that season: {real['best_scoring_streak']}, "
+      f"{' and '.join(real['best_scoring_streak_players'])}).")
     w("")
-    w("| # | Opponent | Goals | Match score |")
-    w("|---|---|---|---|")
+    w(f"Counted over **consecutive club fixtures**: every league game {player_club.get(p_name, 'the club')} "
+      "play counts, whether or not the player took a shot in it, so a game with no goal "
+      "— played and quiet, benched, or simply no attempt — ends the run. The shot data "
+      "has no appearance records, so this is the strict reading: it can understate a run "
+      "that spans a game the player genuinely didn't play, but it can't overstate one.")
+    w("")
+    w("| # | Opponent | H/A | Goals | xG | Match score |")
+    w("|---|---|---|---|---|---|")
+    tgoals = txg = 0
     for k, x in enumerate(pg, 1):
-        w(f"| {k} | {x['opp']} | {x['goals']} | {x['score']} |")
+        w(f"| {k} | {x['opp']} | {'H' if x['home'] else 'A'} | {x['goals']} | "
+          f"{x['xg']:.2f} | {x['score']} |")
+        tgoals += x["goals"]; txg += x["xg"]
+    w(f"| | **Total** | | **{tgoals}** | **{txg:.2f}** | |")
     w("")
-    w(f"*Caveat worth knowing: a \"game\" here means a match the player took at "
-      f"least one shot in — the shot data can't see appearances where they didn't "
-      f"shoot, so a streak is never broken by a quiet game with no attempt.*")
+    w(f"*Across the run: {tgoals} goals from {txg:.2f} xG ({tgoals - txg:+.2f}).*")
+    w("")
+    w(f"*How much the stricter definition costs: counting only games the player took a "
+      f"shot in (the first cut of this), the real-life best would read "
+      f"{real['best_scoring_streak_shotgames']} rather than {real['best_scoring_streak']}.*")
     w("")
 
     # ---- per-club menu -------------------------------------------------
@@ -483,9 +583,11 @@ def main():
 
     w("### Longest run of games scoring, by player")
     w("")
+    w("Consecutive club fixtures, as in section 5.")
+    w("")
     w("| Player | Club | Longest run | Sim |")
     w("|---|---|---|---|")
-    top = sorted(p_best.items(), key=lambda kv: -kv[1])[:15]
+    top = [kv for kv in sorted(p_best.items(), key=lambda kv: -kv[1]) if kv[1] >= MIN_SHOT_GAMES][:15]
     for name, n in top:
         w(f"| {name} | {player_club.get(name, '?')} | {n} | #{int(sw['p_max'][name].argmax()):,} |")
     w("")
@@ -496,8 +598,13 @@ def main():
       f"A title-level tie (37 sims in the million) would be resolved on "
       f"head-to-head when wired up, as the existing stories are.")
     w(f"- Player streaks tracked for the {len(tracked)} players with at least "
-      f"{MIN_SHOT_GAMES} shot-games. The record found ({p_len}) is longer than "
-      f"that bound, so no untracked player could have beaten it.")
+      f"{MIN_SHOT_GAMES} shot-games. A run needs a goal in every game, so it can't "
+      f"be longer than the games a player shoots in — and the record found ({p_len}) "
+      f"is at least that bound, so no untracked player could have beaten it. The "
+      f"by-player table below the cut-off is only complete down to {MIN_SHOT_GAMES}.")
+    w(f"- Player streaks run over the club's fixtures, not just games with a shot "
+      f"(see section 5). A mid-season mover counts for their old club until their "
+      f"first shot for the new one.")
     w(f"- Team xG for/against is a property of the real shot list, identical in "
       f"every simulation — it's what makes a run read as lucky or deserved.")
     w("")
