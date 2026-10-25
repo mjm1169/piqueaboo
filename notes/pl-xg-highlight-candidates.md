@@ -49,7 +49,7 @@ to replace with something from this file.
 - Longest unbeaten run: **18** (Bournemouth)
 - Longest run without conceding: **4** (Arsenal)
 - Fewest defeats: **5** (Arsenal)
-- Longest run of games scoring: **6** (Dominic Calvert-Lewin)
+- Longest run of games scoring: **6** consecutive club fixtures (Dominic Calvert-Lewin and Erling Haaland)
 
 ## 1. Longest winning streak — 27 games
 
@@ -192,38 +192,40 @@ Real life: Arsenal lost 5.
 
 282 of 1,000,000 sims contain a team on 0 defeats; this is the highest-scoring of them. An unbeaten season happens in **282** sims (0.028%). Real-life fewest: 5 (Arsenal).
 
-## 5. Longest run of games scoring — 24 games
+## 5. Longest run of games scoring — 21 games
 
-**Thiago** (Brentford), sim #8,103 (real-life best that season: 6, Dominic Calvert-Lewin).
+**Erling Haaland** (Manchester City), sim #529,282 (real-life best that season: 6, Dominic Calvert-Lewin and Erling Haaland).
 
-| # | Opponent | Goals | Match score |
-|---|---|---|---|
-| 1 | Manchester City | 1 | 1-2 |
-| 2 | West Ham | 1 | 0-3 |
-| 3 | Liverpool | 1 | 2-3 |
-| 4 | Newcastle United | 1 | 2-1 |
-| 5 | Brighton | 1 | 1-1 |
-| 6 | Burnley | 2 | 5-1 |
-| 7 | Tottenham | 2 | 3-2 |
-| 8 | Bournemouth | 2 | 4-3 |
-| 9 | Tottenham | 1 | 1-0 |
-| 10 | Everton | 3 | 4-4 |
-| 11 | Sunderland | 2 | 4-2 |
-| 12 | Chelsea | 1 | 2-3 |
-| 13 | Nottingham Forest | 1 | 3-3 |
-| 14 | Newcastle United | 1 | 4-2 |
-| 15 | Arsenal | 2 | 2-0 |
-| 16 | Brighton | 1 | 3-2 |
-| 17 | Burnley | 1 | 3-3 |
-| 18 | Wolverhampton Wanderers | 2 | 2-3 |
-| 19 | Leeds | 1 | 1-1 |
-| 20 | Everton | 1 | 1-2 |
-| 21 | Fulham | 1 | 2-0 |
-| 22 | West Ham | 1 | 1-0 |
-| 23 | Manchester City | 1 | 3-1 |
-| 24 | Crystal Palace | 1 | 1-1 |
+Counted over **consecutive club fixtures**: every league game Manchester City play counts, whether or not the player took a shot in it, so a game with no goal — played and quiet, benched, or simply no attempt — ends the run. The shot data has no appearance records, so this is the strict reading: it can understate a run that spans a game the player genuinely didn't play, but it can't overstate one.
 
-*Caveat worth knowing: a "game" here means a match the player took at least one shot in — the shot data can't see appearances where they didn't shoot, so a streak is never broken by a quiet game with no attempt.*
+| # | Opponent | H/A | Goals | xG | Match score |
+|---|---|---|---|---|---|
+| 1 | Wolverhampton Wanderers | A | 4 | 1.79 | 1-5 |
+| 2 | Tottenham | H | 1 | 0.50 | 2-1 |
+| 3 | Brighton | A | 1 | 1.37 | 2-2 |
+| 4 | Manchester United | H | 1 | 1.22 | 1-1 |
+| 5 | Arsenal | A | 1 | 0.63 | 0-1 |
+| 6 | Burnley | H | 1 | 1.74 | 2-0 |
+| 7 | Brentford | A | 1 | 0.29 | 1-2 |
+| 8 | Everton | H | 1 | 1.25 | 2-1 |
+| 9 | Aston Villa | A | 1 | 0.41 | 0-4 |
+| 10 | Bournemouth | H | 2 | 1.35 | 2-0 |
+| 11 | Liverpool | H | 1 | 0.81 | 2-1 |
+| 12 | Newcastle United | A | 1 | 1.27 | 2-2 |
+| 13 | Leeds | H | 1 | 0.07 | 5-2 |
+| 14 | Fulham | A | 1 | 0.79 | 1-1 |
+| 15 | Sunderland | H | 1 | 0.58 | 5-0 |
+| 16 | Crystal Palace | A | 2 | 1.06 | 1-3 |
+| 17 | West Ham | H | 3 | 2.21 | 4-1 |
+| 18 | Nottingham Forest | A | 1 | 0.20 | 1-1 |
+| 19 | Sunderland | A | 2 | 0.52 | 0-3 |
+| 20 | Chelsea | H | 1 | 0.37 | 1-1 |
+| 21 | Brighton | H | 2 | 1.62 | 4-1 |
+| | **Total** | | **30** | **20.04** | |
+
+*Across the run: 30 goals from 20.04 xG (+9.96).*
+
+*Real life is unaffected by the stricter definition: the best is 6 whether counted over club fixtures or only games with a shot.*
 
 ## Per-club bests — a menu, to avoid the same crest everywhere
 
@@ -254,26 +256,26 @@ Nearly every outright record above belongs to the same one or two clubs. These a
 
 ### Longest run of games scoring, by player
 
+Consecutive club fixtures, as in section 5.
+
 | Player | Club | Longest run | Sim |
 |---|---|---|---|
-| Thiago | Brentford | 24 | #8,103 |
-| Erling Haaland | Manchester City | 22 | #119,382 |
-| Dominic Calvert-Lewin | Leeds | 21 | #708,437 |
-| Ollie Watkins | Aston Villa | 16 | #138,486 |
-| Hugo Ekitike | Liverpool | 14 | #34,371 |
+| Erling Haaland | Manchester City | 21 | #529,282 |
 | Jean-Philippe Mateta | Crystal Palace | 14 | #706,551 |
-| João Pedro | Chelsea | 14 | #368,326 |
-| Mohamed Salah | Liverpool | 14 | #728,554 |
-| Thierno Barry | Everton | 14 | #168,070 |
-| Benjamin Sesko | Manchester United | 13 | #296,708 |
-| Beto | Everton | 13 | #67,399 |
-| Evanilson | Bournemouth | 13 | #40,871 |
-| Morgan Gibbs-White | Nottingham Forest | 13 | #561,319 |
-| Tomas Soucek | West Ham | 13 | #249,945 |
-| Bryan Mbeumo | Manchester United | 12 | #118,052 |
+| Jarrod Bowen | West Ham | 12 | #505,401 |
+| Raúl Jiménez | Fulham | 12 | #185,665 |
+| Antoine Semenyo | Bournemouth | 11 | #144,074 |
+| Eli Junior Kroupi | Bournemouth | 11 | #515,184 |
+| João Pedro | Chelsea | 11 | #46,990 |
+| Phil Foden | Manchester City | 11 | #579,666 |
+| Bryan Mbeumo | Manchester United | 10 | #575,519 |
+| Bukayo Saka | Arsenal | 10 | #79,194 |
+| Dominic Calvert-Lewin | Leeds | 10 | #39,860 |
+| Mohamed Salah | Liverpool | 10 | #52,788 |
 
 ## Notes on method
 
 - Champion is taken on points, then goal difference, then goals scored. A title-level tie (37 sims in the million) would be resolved on head-to-head when wired up, as the existing stories are.
-- Player streaks tracked for the 255 players with at least 10 shot-games. The record found (24) is longer than that bound, so no untracked player could have beaten it.
+- Player streaks tracked for the 255 players with at least 10 shot-games. A run needs a goal in every game, so it can't be longer than the games a player shoots in — and the record found (21) is at least that bound, so no untracked player could have beaten it. The by-player table below the cut-off is only complete down to 10.
+- Player streaks run over the club's fixtures, not just games with a shot (see section 5). A mid-season mover counts for their old club until their first shot for the new one.
 - Team xG for/against is a property of the real shot list, identical in every simulation — it's what makes a run read as lucky or deserved.

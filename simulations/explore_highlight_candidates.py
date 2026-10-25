@@ -539,9 +539,14 @@ def main():
     w("")
     w(f"*Across the run: {tgoals} goals from {txg:.2f} xG ({tgoals - txg:+.2f}).*")
     w("")
-    w(f"*How much the stricter definition costs: counting only games the player took a "
-      f"shot in (the first cut of this), the real-life best would read "
-      f"{real['best_scoring_streak_shotgames']} rather than {real['best_scoring_streak']}.*")
+    if real["best_scoring_streak_shotgames"] != real["best_scoring_streak"]:
+        w(f"*How much the stricter definition costs: counting only games the player took a "
+          f"shot in (the first cut of this), the real-life best would read "
+          f"{real['best_scoring_streak_shotgames']} rather than {real['best_scoring_streak']}.*")
+    else:
+        w(f"*Real life is unaffected by the stricter definition: the best is "
+          f"{real['best_scoring_streak']} whether counted over club fixtures or only games "
+          f"with a shot.*")
     w("")
 
     # ---- per-club menu -------------------------------------------------
