@@ -2820,3 +2820,59 @@ for the actual text and visual direction before drafting either.
   relegation", sim #445,758); mobile screenshot of an opened card; full
   scroll-throughs at three viewports and the table-alignment audit all
   clean.
+
+  **2026-10-25, later still — six new highlight metrics explored across
+  the full million.** User asked what a set of suggested metrics would
+  actually produce, "contextualised with xG", to get away from repetitive
+  card stories: longest winning streak; fewest/most points to win the
+  title; most defeats and still win; fewest/no losses; longest scoring
+  streak for a player; longest run without conceding.
+  **New `simulations/explore_highlight_candidates.py`** (read-only --
+  writes a notes file, touches nothing the site reads). One date-ordered
+  pass over all 380 matches, vectorised across all 1,000,000 sims,
+  carrying per-team running streak state (win / unbeaten / clean sheet,
+  current + max) alongside points/W/D/L/GF/GA, plus per-player scoring
+  streaks. Same `_match_rng(seed, match_index)` at full `(n_sims, ...)`
+  shape as every other script here, so every sim number quoted maps onto
+  the same simulation as champions.bin. ~4 min, ~1.5GB peak at full
+  scale. A second, smaller pass (`replay_sims`) regenerates full match
+  detail for just the handful of candidate sims, which is what the
+  per-run xG tables are built from.
+  **Validated before scaling**: replayed 5 sims match-by-match from
+  scratch and compared every team's points, defeats, win streak,
+  clean-sheet streak and unbeaten run plus all 255 tracked players'
+  scoring streaks -- zero mismatches. The headline "most defeats and
+  still champion" result was separately recomputed from scratch at full
+  scale and matched exactly (Manchester City 65pts, 21W/2D/15L).
+  **Player streaks are rigorously bounded, not just sampled**: only
+  players with >= `MIN_SHOT_GAMES` (10) shot-games are tracked (255 of
+  449), and the script asserts the record found exceeds that bound --
+  which proves no untracked player could have beaten it, since a streak
+  can't exceed a player's own appearance count.
+  **Results** (real 2025/26 in brackets): longest winning run 27 (8);
+  longest run without conceding 15 (4); longest unbeaten run 38, i.e. a
+  full Invincibles season (18); fewest points to win it 64 (85); most
+  107 (85); most defeats and still champion 15 (5); an unbeaten season
+  happens in 282 of 1,000,000 sims (0.028%); longest run of games
+  scoring 24, Thiago (6, Calvert-Lewin).
+  **A problem found in the results themselves, and fixed**: nearly every
+  outright record belongs to Arsenal, who have the league's best xG --
+  so a highlight set built from the headline list would put the same
+  crest on almost every card, which is exactly the repetition the user
+  was trying to escape. Added a per-club menu (every club's own best
+  winning run / shutout run / unbeaten run / fewest defeats / best
+  title-winning points, each with its sim) plus a top-15 of scoring
+  streaks by player and club. Caught and fixed a bug in that table
+  during the dry run: the "best title" sim was read off the club's
+  highest-points season overall, which isn't necessarily one they won --
+  now taken among that club's champion sims only.
+  **Known limitation, stated in the file**: a "game" in a player's
+  scoring streak means a match they took at least one shot in; the shot
+  data can't see appearances with no attempt, so a quiet game doesn't
+  break a run.
+  Output: `notes/pl-xg-highlight-candidates.md`, which also carries a
+  "how to pick this up later" header (the regeneration command, and a
+  table of what every club's card currently shows, so a new pick doesn't
+  duplicate an existing story). Nothing wired into the site -- which
+  story to tell is the user's call, same convention as the relegation
+  and roster-card notes.
