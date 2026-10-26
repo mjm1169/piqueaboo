@@ -2876,3 +2876,41 @@ for the actual text and visual direction before drafting either.
   duplicate an existing story). Nothing wired into the site -- which
   story to tell is the user's call, same convention as the relegation
   and roster-card notes.
+
+  **2026-10-26, done — Arsenal's card is now the 27-game winning streak;
+  season table header reads "Premier League" / "After Gameweek N".**
+  **Arsenal**: replaced the closest-final-week story with the longest
+  winning run in the million (27 wins in a row, sim #833,296: 100pts,
+  32W/4D/2L, GD +66, games 6-32), per the user's ask, with the user's own
+  note ("Arsenal won the most titles, {n}. One was this season where they
+  strung together a remarkable {27} wins in a row" -- "the strung" fixed
+  to "they strung") above the full final table and 38-game campaign. New
+  `simulations/export_win_streak_story.py` regenerates the sim
+  bit-for-bit through the big pass's own `_match_rng` at the full
+  `(n_sims, ...)` shape and writes `articles/pl-treemap-data/win-streak-
+  story.json`; it asserts champions.bin agrees the sim is an Arsenal
+  title, that the table has no unresolved tie, and computes the run over
+  the date-ordered campaign. Cross-checked against the candidates note
+  (100pts, 32W/4D/2L, 27). The old closest-final-week stop stays in
+  curated-tour.json (still a flagged cell) but is no longer on a card.
+  Card pill "Longest winning streak", tag "A winning streak for Arsenal".
+  **Left for the user**: Arsenal's headline -- the old "A 3-way final day
+  fight" no longer fits, so it falls back to "Arsenal win the league"
+  until they write one. `notes/article-copy.md` updated to say so.
+  **Season table header**: "Kick-off" -> "Premier League"; "Gameweek N" ->
+  "After Gameweek N". The mid-season skip still shows the user's own
+  "...28 mid-season games later..." label -- left as written, flagged as
+  the one step that doesn't follow the new pattern.
+  **Checked, not wired**: Thiago's 24-game run was 24 consecutive games he
+  *shot* in, spanning 32 Brentford fixtures (he scored in 24 of those 32,
+  25 of 38 over the season) -- there is no "23 of 24": the best 24-fixture
+  window in the million has him scoring in 19, and his best strict run is
+  6. Brighton are never unbeaten in any of the million sims (fewest
+  defeats 2, sim #730,682: 78pts, 21W/15D/2L, 2nd behind Man City); only
+  Arsenal and Manchester City reach 0 defeats.
+  **Verified** in headless Chromium: Arsenal's card opens with the right
+  tag, note, sim number, 20-row table (Arsenal 100pts highlighted) and 38
+  campaign rows (5 games, then 27 consecutive wins, then 6); final-week
+  block and coin-flip footnote hidden; all 20 cards still open with
+  their own titles; header label progresses Premier League -> After
+  Gameweek 1/2/4/5 -> ... -> 36/37/38; zero page errors or failed requests.

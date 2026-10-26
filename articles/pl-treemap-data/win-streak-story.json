@@ -1,0 +1,575 @@
+{
+ "kind": "longest_win_streak",
+ "team": "Arsenal",
+ "sim": 833296,
+ "champion": "Arsenal",
+ "champion_real_position": 1,
+ "streak_length": 27,
+ "streak_start": 5,
+ "final_table": [
+  {
+   "team": "Arsenal",
+   "position": 1,
+   "points": 100,
+   "gf": 94,
+   "ga": 28,
+   "gd": 66,
+   "w": 32,
+   "d": 4,
+   "l": 2
+  },
+  {
+   "team": "Manchester City",
+   "position": 2,
+   "points": 75,
+   "gf": 82,
+   "ga": 51,
+   "gd": 31,
+   "w": 22,
+   "d": 9,
+   "l": 7
+  },
+  {
+   "team": "Manchester United",
+   "position": 3,
+   "points": 65,
+   "gf": 76,
+   "ga": 52,
+   "gd": 24,
+   "w": 18,
+   "d": 11,
+   "l": 9
+  },
+  {
+   "team": "Bournemouth",
+   "position": 4,
+   "points": 65,
+   "gf": 73,
+   "ga": 58,
+   "gd": 15,
+   "w": 19,
+   "d": 8,
+   "l": 11
+  },
+  {
+   "team": "Chelsea",
+   "position": 5,
+   "points": 63,
+   "gf": 76,
+   "ga": 51,
+   "gd": 25,
+   "w": 18,
+   "d": 9,
+   "l": 11
+  },
+  {
+   "team": "Liverpool",
+   "position": 6,
+   "points": 61,
+   "gf": 58,
+   "ga": 47,
+   "gd": 11,
+   "w": 17,
+   "d": 10,
+   "l": 11
+  },
+  {
+   "team": "Aston Villa",
+   "position": 7,
+   "points": 58,
+   "gf": 63,
+   "ga": 52,
+   "gd": 11,
+   "w": 15,
+   "d": 13,
+   "l": 10
+  },
+  {
+   "team": "Brentford",
+   "position": 8,
+   "points": 57,
+   "gf": 67,
+   "ga": 57,
+   "gd": 10,
+   "w": 12,
+   "d": 21,
+   "l": 5
+  },
+  {
+   "team": "Crystal Palace",
+   "position": 9,
+   "points": 55,
+   "gf": 64,
+   "ga": 62,
+   "gd": 2,
+   "w": 15,
+   "d": 10,
+   "l": 13
+  },
+  {
+   "team": "Leeds",
+   "position": 10,
+   "points": 53,
+   "gf": 68,
+   "ga": 74,
+   "gd": -6,
+   "w": 15,
+   "d": 8,
+   "l": 15
+  },
+  {
+   "team": "Everton",
+   "position": 11,
+   "points": 48,
+   "gf": 53,
+   "ga": 60,
+   "gd": -7,
+   "w": 15,
+   "d": 3,
+   "l": 20
+  },
+  {
+   "team": "Brighton",
+   "position": 12,
+   "points": 46,
+   "gf": 61,
+   "ga": 61,
+   "gd": 0,
+   "w": 13,
+   "d": 7,
+   "l": 18
+  },
+  {
+   "team": "Fulham",
+   "position": 13,
+   "points": 44,
+   "gf": 56,
+   "ga": 65,
+   "gd": -9,
+   "w": 11,
+   "d": 11,
+   "l": 16
+  },
+  {
+   "team": "Tottenham",
+   "position": 14,
+   "points": 42,
+   "gf": 45,
+   "ga": 57,
+   "gd": -12,
+   "w": 9,
+   "d": 15,
+   "l": 14
+  },
+  {
+   "team": "Newcastle United",
+   "position": 15,
+   "points": 40,
+   "gf": 49,
+   "ga": 56,
+   "gd": -7,
+   "w": 9,
+   "d": 13,
+   "l": 16
+  },
+  {
+   "team": "Nottingham Forest",
+   "position": 16,
+   "points": 38,
+   "gf": 45,
+   "ga": 73,
+   "gd": -28,
+   "w": 10,
+   "d": 8,
+   "l": 20
+  },
+  {
+   "team": "West Ham",
+   "position": 17,
+   "points": 37,
+   "gf": 56,
+   "ga": 74,
+   "gd": -18,
+   "w": 10,
+   "d": 7,
+   "l": 21
+  },
+  {
+   "team": "Sunderland",
+   "position": 18,
+   "points": 36,
+   "gf": 39,
+   "ga": 65,
+   "gd": -26,
+   "w": 8,
+   "d": 12,
+   "l": 18
+  },
+  {
+   "team": "Burnley",
+   "position": 19,
+   "points": 32,
+   "gf": 40,
+   "ga": 74,
+   "gd": -34,
+   "w": 8,
+   "d": 8,
+   "l": 22
+  },
+  {
+   "team": "Wolverhampton Wanderers",
+   "position": 20,
+   "points": 29,
+   "gf": 36,
+   "ga": 84,
+   "gd": -48,
+   "w": 8,
+   "d": 5,
+   "l": 25
+  }
+ ],
+ "campaign": [
+  {
+   "opponent": "Manchester United",
+   "home": false,
+   "date": "2025-08-17 15:30:00",
+   "sim_goals_for": 1,
+   "sim_goals_against": 0,
+   "xg_for": 1.33,
+   "xg_against": 1.39
+  },
+  {
+   "opponent": "Leeds",
+   "home": true,
+   "date": "2025-08-23 16:30:00",
+   "sim_goals_for": 5,
+   "sim_goals_against": 1,
+   "xg_for": 2.77,
+   "xg_against": 0.16
+  },
+  {
+   "opponent": "Liverpool",
+   "home": false,
+   "date": "2025-08-31 15:30:00",
+   "sim_goals_for": 0,
+   "sim_goals_against": 0,
+   "xg_for": 0.49,
+   "xg_against": 0.48
+  },
+  {
+   "opponent": "Nottingham Forest",
+   "home": true,
+   "date": "2025-09-13 11:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 0,
+   "xg_for": 2.88,
+   "xg_against": 0.29
+  },
+  {
+   "opponent": "Manchester City",
+   "home": true,
+   "date": "2025-09-21 15:30:00",
+   "sim_goals_for": 0,
+   "sim_goals_against": 0,
+   "xg_for": 0.72,
+   "xg_against": 1.12
+  },
+  {
+   "opponent": "Newcastle United",
+   "home": false,
+   "date": "2025-09-28 15:30:00",
+   "sim_goals_for": 1,
+   "sim_goals_against": 0,
+   "xg_for": 2.07,
+   "xg_against": 0.74
+  },
+  {
+   "opponent": "West Ham",
+   "home": true,
+   "date": "2025-10-04 14:00:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 2,
+   "xg_for": 3.12,
+   "xg_against": 0.86
+  },
+  {
+   "opponent": "Fulham",
+   "home": false,
+   "date": "2025-10-18 16:30:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 1,
+   "xg_for": 2.13,
+   "xg_against": 0.5
+  },
+  {
+   "opponent": "Crystal Palace",
+   "home": true,
+   "date": "2025-10-26 13:00:00",
+   "sim_goals_for": 1,
+   "sim_goals_against": 0,
+   "xg_for": 0.88,
+   "xg_against": 0.35
+  },
+  {
+   "opponent": "Burnley",
+   "home": false,
+   "date": "2025-11-01 15:00:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 0,
+   "xg_for": 2.52,
+   "xg_against": 0.68
+  },
+  {
+   "opponent": "Sunderland",
+   "home": false,
+   "date": "2025-11-08 17:30:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 0,
+   "xg_for": 2.59,
+   "xg_against": 1.2
+  },
+  {
+   "opponent": "Tottenham",
+   "home": true,
+   "date": "2025-11-23 16:30:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 0,
+   "xg_for": 2.28,
+   "xg_against": 0.03
+  },
+  {
+   "opponent": "Chelsea",
+   "home": false,
+   "date": "2025-11-30 16:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 1,
+   "xg_for": 1.23,
+   "xg_against": 0.79
+  },
+  {
+   "opponent": "Brentford",
+   "home": true,
+   "date": "2025-12-03 19:30:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 1,
+   "xg_for": 2.69,
+   "xg_against": 0.59
+  },
+  {
+   "opponent": "Aston Villa",
+   "home": false,
+   "date": "2025-12-06 12:30:00",
+   "sim_goals_for": 4,
+   "sim_goals_against": 0,
+   "xg_for": 1.86,
+   "xg_against": 3.13
+  },
+  {
+   "opponent": "Wolverhampton Wanderers",
+   "home": true,
+   "date": "2025-12-13 20:00:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 2,
+   "xg_for": 1.62,
+   "xg_against": 0.62
+  },
+  {
+   "opponent": "Everton",
+   "home": false,
+   "date": "2025-12-20 20:00:00",
+   "sim_goals_for": 5,
+   "sim_goals_against": 1,
+   "xg_for": 1.88,
+   "xg_against": 0.21
+  },
+  {
+   "opponent": "Brighton",
+   "home": true,
+   "date": "2025-12-27 15:00:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 0,
+   "xg_for": 2.85,
+   "xg_against": 0.73
+  },
+  {
+   "opponent": "Aston Villa",
+   "home": true,
+   "date": "2025-12-30 20:15:00",
+   "sim_goals_for": 5,
+   "sim_goals_against": 4,
+   "xg_for": 4.44,
+   "xg_against": 3.6
+  },
+  {
+   "opponent": "Bournemouth",
+   "home": false,
+   "date": "2026-01-03 17:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 0,
+   "xg_for": 1.32,
+   "xg_against": 0.95
+  },
+  {
+   "opponent": "Liverpool",
+   "home": true,
+   "date": "2026-01-08 20:00:00",
+   "sim_goals_for": 1,
+   "sim_goals_against": 0,
+   "xg_for": 0.7,
+   "xg_against": 0.32
+  },
+  {
+   "opponent": "Nottingham Forest",
+   "home": false,
+   "date": "2026-01-17 17:30:00",
+   "sim_goals_for": 5,
+   "sim_goals_against": 0,
+   "xg_for": 2.88,
+   "xg_against": 0.32
+  },
+  {
+   "opponent": "Manchester United",
+   "home": true,
+   "date": "2026-01-25 16:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 1,
+   "xg_for": 1.42,
+   "xg_against": 0.64
+  },
+  {
+   "opponent": "Leeds",
+   "home": false,
+   "date": "2026-01-31 15:00:00",
+   "sim_goals_for": 5,
+   "sim_goals_against": 1,
+   "xg_for": 3.55,
+   "xg_against": 0.18
+  },
+  {
+   "opponent": "Sunderland",
+   "home": true,
+   "date": "2026-02-07 15:00:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 1,
+   "xg_for": 1.19,
+   "xg_against": 0.43
+  },
+  {
+   "opponent": "Brentford",
+   "home": false,
+   "date": "2026-02-12 20:00:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 1,
+   "xg_for": 0.78,
+   "xg_against": 1.81
+  },
+  {
+   "opponent": "Wolverhampton Wanderers",
+   "home": false,
+   "date": "2026-02-18 20:00:00",
+   "sim_goals_for": 1,
+   "sim_goals_against": 0,
+   "xg_for": 2.03,
+   "xg_against": 0.17
+  },
+  {
+   "opponent": "Tottenham",
+   "home": false,
+   "date": "2026-02-22 16:30:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 1,
+   "xg_for": 3.32,
+   "xg_against": 0.38
+  },
+  {
+   "opponent": "Chelsea",
+   "home": true,
+   "date": "2026-03-01 16:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 1,
+   "xg_for": 1.72,
+   "xg_against": 1.35
+  },
+  {
+   "opponent": "Brighton",
+   "home": false,
+   "date": "2026-03-04 19:30:00",
+   "sim_goals_for": 1,
+   "sim_goals_against": 0,
+   "xg_for": 0.51,
+   "xg_against": 0.92
+  },
+  {
+   "opponent": "Everton",
+   "home": true,
+   "date": "2026-03-14 17:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 1,
+   "xg_for": 1.91,
+   "xg_against": 1.19
+  },
+  {
+   "opponent": "Bournemouth",
+   "home": true,
+   "date": "2026-04-11 11:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 0,
+   "xg_for": 3.16,
+   "xg_against": 1.4
+  },
+  {
+   "opponent": "Manchester City",
+   "home": false,
+   "date": "2026-04-19 15:30:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 4,
+   "xg_for": 2.63,
+   "xg_against": 2.82
+  },
+  {
+   "opponent": "Newcastle United",
+   "home": true,
+   "date": "2026-04-25 16:30:00",
+   "sim_goals_for": 0,
+   "sim_goals_against": 1,
+   "xg_for": 0.64,
+   "xg_against": 0.87
+  },
+  {
+   "opponent": "Fulham",
+   "home": true,
+   "date": "2026-05-02 17:30:00",
+   "sim_goals_for": 6,
+   "sim_goals_against": 0,
+   "xg_for": 4.13,
+   "xg_against": 0.7
+  },
+  {
+   "opponent": "West Ham",
+   "home": false,
+   "date": "2026-05-10 16:30:00",
+   "sim_goals_for": 2,
+   "sim_goals_against": 2,
+   "xg_for": 1.52,
+   "xg_against": 1.32
+  },
+  {
+   "opponent": "Burnley",
+   "home": true,
+   "date": "2026-05-18 20:00:00",
+   "sim_goals_for": 0,
+   "sim_goals_against": 0,
+   "xg_for": 1.23,
+   "xg_against": 0.19
+  },
+  {
+   "opponent": "Crystal Palace",
+   "home": false,
+   "date": "2026-05-24 15:00:00",
+   "sim_goals_for": 3,
+   "sim_goals_against": 1,
+   "xg_for": 3.97,
+   "xg_against": 1.0
+  }
+ ]
+}

@@ -25,7 +25,7 @@ So a new pick doesn't repeat one that's already used.
 
 | Club | Current story |
 |---|---|
-| Arsenal | Closest race into the final day |
+| Arsenal | Longest winning streak (27 in a row, sim #833,296) |
 | Manchester City | Highest-scoring golden boot (Haaland) + shock-relegation footnote |
 | Manchester United | Worst-ever finish (19th) |
 | Liverpool | Title decided by tiebreak |

@@ -181,7 +181,10 @@ Let's explore the highlights.
 These are the headlines on each club's story card.
 
 [pl.title.Arsenal]
-A 3-way final day fight
+
+*Empty on purpose: Arsenal's card is now the longest-winning-streak story, so the old
+"A 3-way final day fight" no longer fits it. It currently falls back to the generic
+"Arsenal win the league" — write a new headline here.*
 
 [pl.title.Manchester City]
 Haaland's spectacular season
@@ -241,14 +244,9 @@ possessive that doesn't double the "s" — "Wolves' best-ever finish", not
 ## Club highlight cards — the write-ups
 
 [pl.note.Arsenal.before]
-Arsenal won {{arsenal_pct}}% of our million simulations including this simulation which went down to the final day. Fighting with Manchester City and Manchester United going into the final gameweek...
+Arsenal won the most titles, {{arsenal_titles}}. One was this season where they strung together a remarkable {{arsenal_streak}} wins in a row
 
-*Currently reads: 71.7%. This paragraph sits above the two tables.*
-
-[pl.note.Arsenal.after]
-...Arsenal thump Crystal Palace 0-7 away from home to clinch one of their {{arsenal_titles}} titles.
-
-*Currently reads: 716,922. This paragraph sits below the two tables.*
+*Currently reads: 716,922 and 27. Sits above the full final table and Arsenal's 38-game campaign (sim #833,296: 100pts, 32W/4D/2L, 27 wins in a row from games 6 to 32). Your wording, with "the strung" corrected to "they strung". The old two-paragraph final-day story is retired, so there is no "after" paragraph any more.*
 
 [pl.note.Manchester City]
 {{player}} won the Golden Boot (most league goals in the season) award in real-life with {{real_goals}} for the season. In this simulation, City ran out winners thanks to {{sim_goals}} goals from the Norwegian. He had his shooting boots amassing {{hat_tricks}} hat-tricks (including {{four_goal}} four-goal haul and {{five_goal}} five-goal matches). With a shot conversion rate of {{conversion_pct}}% he exceeded his xG by {{xg_excess}}.
@@ -613,7 +611,7 @@ pull any of it in too:
 
 - Table column headers (`Pts`, `GD`, `W`, `D`, `L`, `Minute`, `Player`, `xG`…)
 - Chart and card labels on the football page: `Real`, `Simulated`, `Shot`,
-  `Kick-off`, `Gameweek N`, `Final table`, `Game by game`, `Shots`
+  `Premier League` (the season table's header before anything has happened), `After Gameweek N`, `Final table`, `Game by game`, `Shots`
 - Team names, player names and crest alt text (these come from the data, not
   from copy)
 - The site header, nav and footer, which are shared across every page
