@@ -131,70 +131,24 @@
      text scroll normally through here. Height set in JS alongside the pin. */
   .scrub-lead{ min-height:30vh; }
 
-  /* ---------- info icon / tooltip ---------- */
+  /* ---------- "about the data" disclosure ----------
+     Same treatment as the football article's own note, rather than this
+     page's previous hover/tap tooltip -- that one anchored itself to an
+     icon in the meta line and behaved unpredictably once the page was
+     scrolled on a phone. A plain <details> has no positioning to get
+     wrong. */
 
-  .meta-line{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    position:relative;
-  }
+  .meta-line{ display:flex; align-items:center; gap:8px; }
 
-  .info-icon{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    width:16px;
-    height:16px;
-    border-radius:50%;
-    border:1px solid var(--muted);
-    color:var(--muted);
-    background:none;
-    font-family:'Poppins', sans-serif;
-    font-size:10px;
-    font-weight:500;
-    line-height:1;
-    cursor:pointer;
-    padding:0;
-    flex:none;
+  .data-info{ margin:16px 0 20px 0; font-size:14px; }
+  .data-info summary{
+    cursor:pointer; font-weight:500; color:var(--accent-step);
+    list-style:none;
   }
-
-  .info-icon:hover,
-  .info-icon:focus-visible,
-  .info-icon.open{
-    border-color:var(--accent-step);
-    color:var(--accent-step);
-    outline:none;
-  }
-
-  .info-tooltip{
-    position:absolute;
-    top:calc(100% + 8px);
-    left:0;
-    z-index:5;
-    width:260px;
-    background:var(--surface);
-    border-left:3px solid var(--muted);
-    border-radius:0 8px 8px 0;
-    padding:12px 16px 12px 13px;
-    font-size:13px;
-    font-weight:300;
-    color:var(--muted);
-    line-height:1.5;
-    box-shadow:0 6px 20px rgba(0,0,0,.12);
-    opacity:0;
-    transform:translateY(-4px);
-    pointer-events:none;
-    transition:opacity .2s ease, transform .2s ease;
-  }
-
-  .info-icon:hover + .info-tooltip,
-  .info-icon:focus-visible + .info-tooltip,
-  .info-tooltip.open{
-    opacity:1;
-    transform:translateY(0);
-    pointer-events:auto;
-  }
+  .data-info summary::-webkit-details-marker{ display:none; }
+  .data-info summary:before{ content:'+ '; }
+  .data-info[open] summary:before{ content:'– '; }
+  .data-info p{ margin:10px 0 0 0; color:var(--muted); font-weight:300; }
 
   /* ---------- svg chart elements ---------- */
 
@@ -416,13 +370,12 @@
     <div class="intro">
       <div class="eyebrow">A short explainer</div>
       <h1>What is a due date?</h1>
-      <p class="muted meta-line">
-        25 October 2026 · Reading time: 3 mins
-        <button type="button" class="info-icon" id="about-data-btn" aria-label="About the data" aria-describedby="about-data-tip">i</button>
-        <span class="info-tooltip" id="about-data-tip" role="tooltip">
-          About the data. The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made. It's roughly the right shape and good enough for a bit of fun, but obviously not clinical advice.
-        </span>
-      </p>
+      <p class="muted meta-line">25 October 2026 · Reading time: 3 mins</p>
+
+      <details class="data-info">
+        <summary>A quick note on the data</summary>
+        <p>The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made. It's roughly the right shape and good enough for a bit of fun, but obviously not clinical advice.</p>
+      </details>
       <p>I didn't know either. But if you think about it for a moment, you'll probably land close to the real answer.</p>
     </div>
 
@@ -598,19 +551,46 @@
   // shifting the curve also moves how much of it falls inside the fixed
   // display window (by a vanishing amount, but it converges in a couple
   // of passes rather than being assumed away).
-  var DUE_DATE_DAY = 280; // 40+0 weeks
+  var DUE_DATE_DAY = 280; // 40+0 weeks — what the due date must read as
+  var MODE_LABEL_DAY = 282; // 40+2 weeks — what "most likely day" must read as
   function displayedMedian(){
     return quantile((cdfAt(DISPLAY_MIN) + cdfAt(DISPLAY_MAX)) / 2);
   }
+
+  // Two labels have to come out right off one curve, and the curve's own
+  // numbers don't oblige either of them exactly: its displayed-area
+  // median falls at ~280.6 (reading "40w + 1d") and its peak at 282.0.
+  // Pinning the median to exactly 280 fixes the due date but drags the
+  // peak down to ~281.4, which rounds to "40w + 1d" — losing the 40+2
+  // the mode should read.
+  //
+  // Both labels round, though, so neither needs its exact day — only a
+  // day that rounds to the right one. Solve for the window of shifts
+  // where both do, and sit in the middle of it. The median-to-mode gap
+  // is a property of the curve, so this adapts if the source data is
+  // ever regenerated rather than hard-coding a magic offset.
+  var rawMedian = displayedMedian();
+  var rawMode = grid[pdfVals.indexOf(MAX_PDF)];
+  var medianToMode = rawMode - rawMedian;
+  // median must land in [DUE-0.5, DUE+0.5); mode in [MODE-0.5, MODE+0.5),
+  // i.e. the median in [MODE-0.5-gap, MODE+0.5-gap).
+  var loTarget = Math.max(DUE_DATE_DAY - 0.5, MODE_LABEL_DAY - 0.5 - medianToMode);
+  var hiTarget = Math.min(DUE_DATE_DAY + 0.5, MODE_LABEL_DAY + 0.5 - medianToMode);
+  // If the curve ever shifts enough that no single day satisfies both,
+  // fall back to getting the due date right — it's the article's subject.
+  var targetMedian = (loTarget < hiTarget) ? (loTarget + hiTarget) / 2 : DUE_DATE_DAY;
+
   for(var shiftPass=0; shiftPass<6; shiftPass++){
-    var delta = DUE_DATE_DAY - displayedMedian();
+    var delta = targetMedian - displayedMedian();
     if(Math.abs(delta) < 1e-9) break;
     for(var gi=0; gi<grid.length; gi++) grid[gi] += delta;
     DOMAIN_MIN = grid[0];
     DOMAIN_MAX = grid[grid.length-1];
   }
   MODE_DAY = grid[pdfVals.indexOf(MAX_PDF)];
-  var MEDIAN_DAY = DUE_DATE_DAY;
+  // The real bisector of the displayed area, not the round number it
+  // prints as — so the two shaded halves stay exactly equal.
+  var MEDIAN_DAY = displayedMedian();
 
   // conditionalMedian() reads its answer off the smoothed curve via
   // quantile(0.5) (the curve's full-domain median), which is a hair
@@ -665,13 +645,22 @@
   function xScale(day){ return PLOT.left + (day-DISPLAY_MIN)/(DISPLAY_MAX-DISPLAY_MIN)*PW; }
   function yScale(p){ return PLOT.bottom - (p/MAX_PDF)*PH; }
 
+  // Both ends are pinned to the exact day asked for, not just to the
+  // nearest grid point inside it. The grid steps every 0.25 days and the
+  // boundary days (the due date, "today") almost never land on one, so
+  // filtering alone left each region stopping short -- the two shaded
+  // halves met with a ~2px gap of background between them, bridged only
+  // because the due-date line happened to be drawn over it. Interpolating
+  // the endpoint closes the seam and makes the line sit exactly on it.
   function curvePoints(dMin,dMax){
     var pts=[];
+    if(dMin>DOMAIN_MIN && dMin<DOMAIN_MAX) pts.push([xScale(dMin), yScale(pdfAt(dMin))]);
     for(var i=0;i<=GRID_N;i++){
       var day=grid[i];
       if(day<dMin-1e-9 || day>dMax+1e-9) continue;
       pts.push([xScale(day), yScale(pdfVals[i])]);
     }
+    if(dMax>DOMAIN_MIN && dMax<DOMAIN_MAX) pts.push([xScale(dMax), yScale(pdfAt(dMax))]);
     return pts;
   }
   function areaPath(dMin,dMax){
@@ -1303,8 +1292,29 @@
     return t.getBoundingClientRect().top;
   }
 
+  // "Halfway up the screen" means halfway up the part of the screen the
+  // reader is actually reading. On desktop the chart sits in its own
+  // column beside the text, so that's the whole viewport. On mobile it's
+  // a sticky band across the top (36vh) with the text below it, and
+  // measuring from the top of the viewport puts the line barely below
+  // that band -- a paragraph had to climb almost all the way to the
+  // chart before its own step fired, which is why the chart read as
+  // updating later than it should on a phone.
+  function activationLine(){
+    var vis = document.querySelector('.visual-col');
+    var readableTop = 0;
+    if(vis){
+      var r = vis.getBoundingClientRect();
+      // A full-height desktop column reaches the bottom of the screen; a
+      // mobile band stops well short of it. Only the band displaces the
+      // readable area.
+      if(r.bottom < window.innerHeight * 0.6) readableTop = r.bottom;
+    }
+    return readableTop + (window.innerHeight - readableTop) / 2;
+  }
+
   function pickActiveStep(){
-    var mid = window.innerHeight / 2;
+    var mid = activationLine();
     var best = steps[0] || null;
     for(var i=0;i<steps.length;i++){
       if(stepTextTop(steps[i]) <= mid) best = steps[i];
@@ -1350,24 +1360,6 @@
 })();
 </script>
 
-<script>
-// "About the data" info icon: hover works via CSS; this adds tap-to-toggle
-// for touch devices, closing again on an outside tap.
-(function(){
-  var btn = document.getElementById('about-data-btn');
-  var tip = document.getElementById('about-data-tip');
-  if(!btn || !tip) return;
-  btn.addEventListener('click', function(e){
-    e.stopPropagation();
-    var open = tip.classList.toggle('open');
-    btn.classList.toggle('open', open);
-  });
-  document.addEventListener('click', function(){
-    tip.classList.remove('open');
-    btn.classList.remove('open');
-  });
-})();
-</script>
 
 <script src="../assets/js/nav.js"></script>
 <script>renderNav('articles');</script>

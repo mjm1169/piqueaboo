@@ -2087,6 +2087,7 @@
   // survival, not relegation) as a plain transcription typo, same as
   // previous rounds' typo fixes.
   var STORY_TITLES = {
+    'Arsenal': 'Arsenal\u2019s 27-game hot streak',
     'Manchester United': 'A giant gets relegated',
     'Liverpool': 'A close finish',
     'Chelsea': 'An ever closer finish',
@@ -2145,6 +2146,18 @@
         ? 'A big individual haul' : 'A high-scoring game';
     }
     return (phrase && team) ? phrase + ' for ' + displayName(team) : fallback;
+  }
+
+  // The tag only earns its place when the headline below it is the
+  // user's own: a bespoke headline ("The Seagulls soar") says nothing
+  // factual, so the tag names the story for it. Where no headline has
+  // been written the generic fallback already *is* the story's name
+  // ("Burnley's best-ever finish"), and the tag just says it twice --
+  // so it's hidden there and the card shows two lines instead of three.
+  function setModalTag(text, hasOwnHeadline){
+    var el = document.getElementById('modal-tag');
+    el.textContent = hasOwnHeadline ? text : '';
+    el.style.display = hasOwnHeadline ? 'block' : 'none';
   }
 
   function secondStoryLabel(entry){
@@ -3633,7 +3646,7 @@
       var gameFallback = story.triggers.map(function(tr){
         return tr === 'high_scoring' ? 'High-scoring game' : 'Big individual haul';
       }).join(' · ');
-      document.getElementById('modal-tag').textContent = storyTag(entry, entry.team, gameFallback);
+      setModalTag(storyTag(entry, entry.team, gameFallback), !!GAME_STORY_TITLES[story.sim]);
       document.getElementById('modal-title').textContent = GAME_STORY_TITLES[story.sim] || (story.home_team + ' vs ' + story.away_team);
       setModalSub(story.sim);
       // Explicit display resets -- a previous golden_boot story hides
@@ -3680,8 +3693,8 @@
       crestEl.alt = story.team + ' crest';
 
       var m = story.match;
-      document.getElementById('modal-tag').textContent =
-        storyTag(entry, story.team, CURATED_TAG[entry.kind]);
+      setModalTag(storyTag(entry, story.team, CURATED_TAG[entry.kind]),
+                  !!GOLDEN_BOOT_STORY_TITLES[entry.kind]);
       document.getElementById('modal-title').textContent = GOLDEN_BOOT_STORY_TITLES[entry.kind] || (story.player + ' — golden boot winner');
       setModalSub(story.sim);
 
@@ -3796,8 +3809,16 @@
     crestEl.src = crestPath(subjectTeam);
     crestEl.alt = subjectTeam + ' crest';
 
-    document.getElementById('modal-tag').textContent = storyTag(entry, subjectTeam,
-      CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak' : 'Unexpected winner'));
+    // Same test the headline override below applies -- computed here so
+    // the tag can be hidden on exactly the cards that fall back to a
+    // generic headline.
+    var designated = secondStoryByTeam[subjectTeam];
+    var isDesignatedStory = designated && designated.record
+      && designated.record.sim === story.sim;
+    var hasOwnHeadline = !!(STORY_TITLES[subjectTeam] && isDesignatedStory && entry.kind !== 'no_wins');
+    setModalTag(storyTag(entry, subjectTeam,
+      CURATED_TAG[entry.kind] || (entry.kind === 'title_tie' ? 'Title decided by tiebreak' : 'Unexpected winner')),
+      hasOwnHeadline);
 
     if (entry.kind === 'no_wins') {
       document.getElementById('modal-title').textContent = possessive(story.team) + ' best-ever finish';
@@ -3828,10 +3849,7 @@
     // reader finds by zooming around its grid), and those must not
     // inherit the card's headline. no_wins is excluded outright -- the
     // four zero-win clubs' cards "stay as they are".
-    var designated = secondStoryByTeam[subjectTeam];
-    var isDesignatedStory = designated && designated.record
-      && designated.record.sim === story.sim;
-    if (STORY_TITLES[subjectTeam] && isDesignatedStory && entry.kind !== 'no_wins') {
+    if (hasOwnHeadline) {
       document.getElementById('modal-title').textContent = STORY_TITLES[subjectTeam];
     }
 

@@ -2914,3 +2914,78 @@ for the actual text and visual direction before drafting either.
   block and coin-flip footnote hidden; all 20 cards still open with
   their own titles; header label progresses Premier League -> After
   Gameweek 1/2/4/5 -> ... -> 36/37/38; zero page errors or failed requests.
+
+  **2026-10-28, done — Arsenal's headline, tag-only-where-a-headline-
+  exists, index cards, and four due-date fixes.**
+  **Card text**: new `notes/card-text.md` captures every card's pill /
+  tag / headline from the live page for the user to edit. Asked whether
+  three lines was too many; audit showed the duplication is confined to
+  the five cards *without* a bespoke headline (the four never-win clubs
+  repeat word for word -- "A best-ever finish for Burnley" above
+  "Burnley's best-ever finish"), while the other fifteen read as
+  complementary. User picked: show the tag only where a headline of
+  their own exists. New `setModalTag(text, hasOwnHeadline)` applied
+  across all three tag branches; the champion-shaped branch now computes
+  the same designated-story test the headline override already used
+  (hoisted above the tag rather than duplicated). Arsenal's own headline
+  ("Arsenal's 27-game hot streak") arrived the same round, so its tag
+  came back automatically -- which is the rule working as intended.
+  **Index cards**: both meta lines are now just the publish date
+  (25 October 2026), matching the date at the top of each article;
+  football description replaced with the user's own copy.
+  **Due-date, data info**: the hover/tap tooltip anchored to an icon in
+  the meta line "acted funny on mobile once scrolled" -- replaced with
+  the football article's own `<details>` disclosure, which has no
+  positioning to get wrong. Tooltip CSS and its tap-to-toggle script
+  deleted.
+  **Due-date, mode label**: user noticed "most likely day" now reads
+  40w + 1d where it used to read 40w + 2d. Confirmed from the data: the
+  raw peak is day 282.0, and the 2026-10-17 shift that pinned the
+  displayed median to exactly 280 dragged it to 281.43, which rounds to
+  +1d. Rather than label a marker with a day it isn't drawn at, solved
+  for the shift window where *both* labels round correctly: the median
+  must land in [279.5, 280.5) and the peak in [281.5, 282.5), so the
+  median target is the midpoint of the intersection. Computed from the
+  curve's own median-to-peak gap rather than hard-coded, with a
+  documented fallback to prioritising the due date if the two ever stop
+  being jointly satisfiable. `MEDIAN_DAY` is now the real displayed-area
+  bisector (not the round number it prints as), so the halves stay
+  exactly equal.
+  **Due-date, mobile chart timing** ("charts update slightly later than
+  I wanted"): root-caused rather than nudged. The chart is a sticky 36vh
+  band across the top on mobile with the text below it, but
+  `pickActiveStep` used the midpoint of the *whole viewport* -- which
+  sits just under that band, so a paragraph had to climb almost to the
+  chart before its step fired. New `activationLine()` measures the
+  readable area below the band (detecting the band by its own rect
+  stopping short of the viewport bottom, so a full-height desktop column
+  is unaffected). Measured: mobile steps now fire with their text top at
+  582-609px against a readable midpoint of 614, ~190px of scroll earlier
+  than the old 422px line; desktop unchanged at 417-438 against 450.
+  The same fix covers the separately-reported "final 'ticking along'
+  chart doesn't show at the right time on mobile" -- same root cause,
+  confirmed by tracing the scrub engaging as that paragraph reaches the
+  readable midpoint and ticking 35w+0d through 40w+0d.
+  **Due-date, "line moves left between scenes"**: found and fixed a real
+  defect while investigating -- `curvePoints` only kept grid points
+  *inside* the requested range, and the 0.25-day grid almost never lands
+  on a boundary day, so the two shaded halves stopped short of each
+  other with a ~2px gap of background between them, bridged only because
+  the 2px due-date line happened to be drawn over it (and visible as a
+  pale sliver on the `regions` step, which draws no line). Both ends now
+  interpolate to the exact day asked for: the halves meet at 332.26 with
+  the line centred on the seam, and the 50/50 area ratio improved from
+  0.993 to 1.0001 -- the long-standing quantisation residual this file
+  has flagged since 2026-08-27 is gone. **Disclosed, not overclaimed**:
+  pixel-measuring the line across scenes could not reproduce a visible
+  leftward move beyond this (identical to the pixel between `line` and
+  `mode`; 0.25px *right* entering the scrub), so the seam is the best
+  candidate rather than a confirmed match for the report -- the user was
+  asked for a screenshot if it persists.
+  **Verified**: both articles swept at 1280x900 and 390x844 -- due date
+  reads "40w + 0d" and the peak "40w + 2d" on both, scrub completes to
+  40w + 0d, 12 steps seen, data-info renders as a real `<details>`,
+  zero page/console errors; all 20 football cards re-checked for the
+  tag/headline split; mobile screenshot of the new disclosure (which
+  also prompted a small `margin-bottom` so the open note doesn't crowd
+  the paragraph under it).
