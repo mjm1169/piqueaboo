@@ -2989,3 +2989,42 @@ for the actual text and visual direction before drafting either.
   tag/headline split; mobile screenshot of the new disclosure (which
   also prompted a small `margin-bottom` so the open note doesn't crowd
   the paragraph under it).
+
+  **2026-10-28, later — mode prose made exact, the disclosure actually
+  matched to the football one, and an earlier dice-to-chart handover.**
+  Three follow-ups.
+  **Prose**: with the peak now labelled 40w + 2d, "falls a couple of
+  days after the due date... place it a couple of days later" became
+  both vague and repetitive where an exact number was available -- now
+  "two days" in both places. Changed on the user's explicit invitation
+  ("you can do this"), which is the exception to this file's authorship
+  convention, not a precedent.
+  **Disclosure**: the previous round swapped the tooltip for a
+  `<details>` but it still didn't match. Diffed the two pages'
+  *computed* styles rather than eyeballing it, which found three real
+  differences: margin-top 16px vs 24px, body rendered as a `<p>` with no
+  indent vs football's `<ul>` at padding-left 20px, and -- the most
+  visible one -- it sat between the meta line and the intro paragraph
+  instead of last in the intro. All three now match exactly (re-diffed:
+  four properties, all MATCH). The note is split across two bullets to
+  suit the list form.
+  **Earlier handover**: "Now, back to the due date" needed to bring the
+  gestation chart back sooner so its own "ticking along, day by day"
+  line reads against a chart that is already moving. Rather than lower
+  the activation line globally (which would have shifted every step),
+  `pickActiveStep` now takes a per-step fraction, and `return` alone
+  uses 0.9 of the readable area instead of 0.5 -- it takes over as its
+  heading enters the readable band. Measured on mobile: handover moves
+  from y=4050 to y=3825, the chart reaches full opacity by y=4100 with
+  the "ticking along" paragraph at 567px (well inside the readable area)
+  and the scrub showing 35w + 0d by y=4200. Checked for the obvious
+  risk of swapping too early: at handover dice-newhalf's paragraph sits
+  at 314px, already scrolled up past the readable top, so the dice
+  conclusion is off-screen before the chart changes. Also sampled every
+  25px through the handover to confirm the step flips once and does not
+  oscillate (an apparent opacity dip at coarse sampling turned out to be
+  the crossfade caught mid-transition, not a flicker).
+  **Verified**: both viewports -- due date "40w + 0d", peak
+  "40w + 2d", scrub completes to 40w + 0d, 12 steps, zero page/console
+  errors; computed-style diff of the two disclosures all matching;
+  mobile screenshot of the new disclosure.

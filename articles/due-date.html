@@ -140,7 +140,7 @@
 
   .meta-line{ display:flex; align-items:center; gap:8px; }
 
-  .data-info{ margin:16px 0 20px 0; font-size:14px; }
+  .data-info{ margin-top:24px; font-size:14px; }
   .data-info summary{
     cursor:pointer; font-weight:500; color:var(--accent-step);
     list-style:none;
@@ -148,7 +148,8 @@
   .data-info summary::-webkit-details-marker{ display:none; }
   .data-info summary:before{ content:'+ '; }
   .data-info[open] summary:before{ content:'– '; }
-  .data-info p{ margin:10px 0 0 0; color:var(--muted); font-weight:300; }
+  .data-info ul{ margin:10px 0 0 0; padding-left:20px; color:var(--muted); font-weight:300; }
+  .data-info li{ margin-bottom:6px; }
 
   /* ---------- svg chart elements ---------- */
 
@@ -372,11 +373,15 @@
       <h1>What is a due date?</h1>
       <p class="muted meta-line">25 October 2026 · Reading time: 3 mins</p>
 
+      <p>I didn't know either. But if you think about it for a moment, you'll probably land close to the real answer.</p>
+
       <details class="data-info">
         <summary>A quick note on the data</summary>
-        <p>The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made. It's roughly the right shape and good enough for a bit of fun, but obviously not clinical advice.</p>
+        <ul>
+          <li>The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made.</li>
+          <li>It's roughly the right shape and good enough for a bit of fun, but obviously not clinical advice.</li>
+        </ul>
       </details>
-      <p>I didn't know either. But if you think about it for a moment, you'll probably land close to the real answer.</p>
     </div>
 
     <!-- ===================== GROUP A: what is a due date ===================== -->
@@ -396,7 +401,7 @@
     </section>
 
     <section class="step" data-group="gestation" data-step="mode">
-      <p>Interestingly, the due date isn't the single most likely day for the baby to be born. Because of the skewed shape, the peak of the curve (the mode) falls a couple of days after the due date. So if you had to bet on an exact day, place it a couple of days later.</p>
+      <p>Interestingly, the due date isn't the single most likely day for the baby to be born. Because of the skewed shape, the peak of the curve (the mode) falls two days after the due date. So if you had to bet on an exact day, place it two days later.</p>
     </section>
 
     <!-- ===================== GROUP B: conditional probability / dice ===================== -->
@@ -1300,24 +1305,34 @@
   // that band -- a paragraph had to climb almost all the way to the
   // chart before its own step fired, which is why the chart read as
   // updating later than it should on a phone.
-  function activationLine(){
+  function readableTop(){
     var vis = document.querySelector('.visual-col');
-    var readableTop = 0;
-    if(vis){
-      var r = vis.getBoundingClientRect();
-      // A full-height desktop column reaches the bottom of the screen; a
-      // mobile band stops well short of it. Only the band displaces the
-      // readable area.
-      if(r.bottom < window.innerHeight * 0.6) readableTop = r.bottom;
-    }
-    return readableTop + (window.innerHeight - readableTop) / 2;
+    if(!vis) return 0;
+    var r = vis.getBoundingClientRect();
+    // A full-height desktop column reaches the bottom of the screen; a
+    // mobile band stops well short of it. Only the band displaces the
+    // readable area.
+    return (r.bottom < window.innerHeight * 0.6) ? r.bottom : 0;
   }
 
+  function activationLine(frac){
+    var top = readableTop();
+    return top + (window.innerHeight - top) * (frac == null ? 0.5 : frac);
+  }
+
+  // 'return' is the handover back from the dice chart to the gestation
+  // one, and its own copy ("let's imagine we're ticking along, day by
+  // day") only makes sense once that chart is actually back and moving.
+  // Waiting for the usual halfway line meant the swap happened as the
+  // reader arrived at that line rather than before it, so this step
+  // alone takes over as its heading enters the readable area instead.
+  var EARLY_ACTIVATION = { 'return': 0.9 };
+
   function pickActiveStep(){
-    var mid = activationLine();
     var best = steps[0] || null;
     for(var i=0;i<steps.length;i++){
-      if(stepTextTop(steps[i]) <= mid) best = steps[i];
+      var line = activationLine(EARLY_ACTIVATION[steps[i].getAttribute('data-step')]);
+      if(stepTextTop(steps[i]) <= line) best = steps[i];
     }
     return best;
   }
