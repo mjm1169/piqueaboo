@@ -3028,3 +3028,20 @@ for the actual text and visual direction before drafting either.
   "40w + 2d", scrub completes to 40w + 0d, 12 steps, zero page/console
   errors; computed-style diff of the two disclosures all matching;
   mobile screenshot of the new disclosure.
+
+  **2026-10-29, done — plural "Missed Shots" fix, longer final hold on the
+  season table, treemap caption, simulate button, replay panel.**
+  Understat's `MissedShots` label was shown verbatim in the game log's Real
+  column (and the Crystal Palace full-shot list); singularised to
+  "Missed Shot". The season exit sentence is now `position:sticky` inside a
+  160vh box, so it pins beside the held final table for roughly 1,400px of
+  scroll (checked on both viewports: every scroll step with the sentence
+  fully visible also had the table pinned). Treemap caption replaced with
+  the user's own text ("Click or tab" kept as written -- possibly meant
+  "tap"); the right-hand caption is gone. Simulate button: ▶/↻ glyphs
+  removed, turns green (`--positive-step`) on press and while rolling.
+  "From this replay" now sits above the league table and holds exactly
+  three lines: golden boot winner, most different position to reality,
+  total goals, plus a small info box on why the total runs high. **The info
+  box wording is Claude's draft** (computed live: season xG sums to 1,184
+  vs. 1,045 real goals) -- the user's to rewrite.

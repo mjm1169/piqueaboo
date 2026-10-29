@@ -413,9 +413,17 @@
   .season-intro-placeholder{
     display:flex; align-items:center; color:var(--muted); font-size:15px;
   }
+  /* Tall box with the sentence itself sticky inside it: the table is
+     held by the list column's height, and the sentence pins alongside it
+     for the same stretch, so the final sentence and the final table are
+     on screen together for a long scroll (box height minus one screen)
+     rather than the sentence sliding past while the table is still held. */
   .season-exit-placeholder{
-    display:flex; align-items:center; min-height:50vh; color:var(--muted);
+    min-height:160vh; color:var(--muted);
     font-size:15px; opacity:0; transition:opacity .3s ease;
+  }
+  .season-exit-placeholder p{
+    position:sticky; top:calc(var(--header-h, 0px) + 30vh); margin:0;
   }
   .season-exit-placeholder.revealed{ opacity:1; }
 
@@ -732,7 +740,12 @@
     transition:transform .1s ease, opacity .2s ease;
   }
   .sim-run-btn:hover{ transform:translateY(-1px); }
-  .sim-run-btn:disabled{ opacity:.6; cursor:default; transform:none; }
+  /* Colour on click (and while the season is "rolling"): the ink button
+     turns the page's positive green, then settles back once it's done. */
+  .sim-run-btn:active,
+  .sim-run-btn.running{ background:var(--positive-step); color:#fff; transform:none; }
+  .sim-run-btn:disabled{ cursor:default; transform:none; }
+  .sim-run-btn:disabled:not(.running){ opacity:.6; }
   .sim-status{ font-size:13px; color:var(--muted); margin-top:12px; }
 
   .sim-results{ margin-top:32px; opacity:0; transition:opacity .3s ease; }
@@ -745,7 +758,8 @@
   }
   .sim-banner.upset{ border-left-color:var(--negative-step); }
 
-  .sim-grid{ display:grid; grid-template-columns: 1.3fr 1fr; gap:32px; align-items:start; }
+  .sim-grid{ display:grid; grid-template-columns: 1fr; gap:32px; align-items:start; max-width:640px; }
+  .sim-storylines{ margin-bottom:28px; }
 
   .sim-table{ width:100%; border-collapse:collapse; font-size:13px; }
   .sim-table th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:6px 8px; border-bottom:1px solid #E5E5E5; }
@@ -760,6 +774,11 @@
   .sim-storylines h3{ font-size:15px; margin-bottom:10px; }
   .sim-storylines ul{ margin:0; padding-left:20px; font-size:14px; }
   .sim-storylines li{ margin-bottom:8px; }
+  .sim-info{
+    margin-top:8px; padding:10px 14px; background:var(--surface);
+    border-left:3px solid var(--muted); border-radius:0 8px 8px 0;
+    font-size:13px; color:var(--muted); list-style:none;
+  }
 
   @media (max-width:640px){
     .sim-grid{ grid-template-columns: 1fr; }
@@ -955,7 +974,6 @@
       </div>
       <div class="treemap-caption">
         <span id="treemap-caption-left"></span>
-        <span id="treemap-caption-right"></span>
       </div>
     </div>
 
@@ -968,11 +986,15 @@
 
   <section id="simulator-section">
     <!-- HEADING/COPY: TBD -- user to fill in -->
-    <button type="button" class="sim-run-btn" id="sim-run-btn">▶ Simulate a season</button>
+    <button type="button" class="sim-run-btn" id="sim-run-btn">Simulate a season</button>
     <div class="sim-status" id="sim-status"></div>
 
     <div class="sim-results" id="sim-results">
       <div class="sim-banner" id="sim-banner"></div>
+      <div class="sim-storylines">
+        <h3>From this replay</h3>
+        <ul id="sim-storylines-list"></ul>
+      </div>
       <div class="sim-grid">
         <div>
           <table class="sim-table" id="sim-table">
@@ -981,10 +1003,6 @@
             </thead>
             <tbody id="sim-table-body"></tbody>
           </table>
-        </div>
-        <div class="sim-storylines">
-          <h3>From this replay</h3>
-          <ul id="sim-storylines-list"></ul>
         </div>
       </div>
     </div>
@@ -1402,6 +1420,11 @@
       // rather than trying to fit into the shot table's own per-column
       // shape -- styled distinctly (.comment-row / .kickoff-row) so it
       // reads as an aside, not another shot.
+      // Understat labels a miss "MissedShots" (plural); in a per-shot row
+      // it's one shot, so singularise before splitting the camel case.
+      function realResultLabel(r){
+        return r.replace(/Shots$/, 'Shot').replace(/([A-Z])/g, ' $1').trim();
+      }
       function noteRow(cls, text){
         var tr = document.createElement('tr');
         tr.className = cls;
@@ -1424,7 +1447,7 @@
 
       game.shots.forEach(function(shot, i){
         var tr = document.createElement('tr');
-        var realCell = shot.real_goal ? '<span class="real-goal">Goal</span>' : shot.real_result.replace(/([A-Z])/g, ' $1').trim();
+        var realCell = shot.real_goal ? '<span class="real-goal">Goal</span>' : realResultLabel(shot.real_result);
         var simCell = shot.sim_goal ? '<span class="sim-goal">Goal</span>' : 'No goal';
         tr.innerHTML = '<td>' + shot.minute + '\'</td><td>' + shot.player + '</td>'
           + '<td class="num">' + shot.xg.toFixed(2) + '</td><td>' + realCell + '</td><td>' + simCell + '</td>';
@@ -2804,9 +2827,7 @@
   }
 
   document.getElementById('treemap-caption-left').textContent =
-    data.meta.n_sims.toLocaleString() + ' simulated seasons · ' + nonZero.length + ' different champions';
-  document.getElementById('treemap-caption-right').textContent =
-    'Same champion as reality in ' + (data.same_champion_odds * 100).toFixed(1) + '% of simulations';
+    data.meta.n_sims.toLocaleString() + ' simulated seasons. Click or tab to zoom in. Each small rectangle represents a league win.';
 
   /* =========================================================
      4. ZOOM / GRID ENGINE
@@ -3600,7 +3621,7 @@
     if (!shots || !shots.length) { block.style.display = 'none'; return; }
     block.style.display = 'block';
     document.getElementById('modal-fullshots-body').innerHTML = shots.map(function(s){
-      var realCell = s.real_goal ? '<span class="real-goal">Goal</span>' : s.real_result.replace(/([A-Z])/g, ' $1').trim();
+      var realCell = s.real_goal ? '<span class="real-goal">Goal</span>' : s.real_result.replace(/Shots$/, 'Shot').replace(/([A-Z])/g, ' $1').trim();
       var simCell = s.sim_goal ? '<span class="sim-goal">Goal</span>' : 'No goal';
       return '<tr class="revealed' + (s.sim_goal ? ' is-goal' : '') + '"><td>' + s.minute + "'</td><td>" + s.player
         + (s.penalty ? ' (p)' : '') + '</td><td class="num">' + s.xg.toFixed(2) + '</td><td>' + realCell
@@ -4023,7 +4044,7 @@
 
   function simulateOnce(){
     var t = DATA.teams.map(function(name){ return { team:name, pts:0, gf:0, ga:0 }; });
-    var thrillers = 0, bigHauls = [], biggestWin = null, totalGoals = 0;
+    var thrillers = 0, bigHauls = [], biggestWin = null, totalGoals = 0, seasonGoals = {};
     var THRILLER_THRESHOLD = 7, HAUL_THRESHOLD = 3;
 
     DATA.matches.forEach(function(m){
@@ -4034,12 +4055,16 @@
         if(Math.random() < m.xh[i]){
           hg++;
           homePlayerGoals[m.ph[i]] = (homePlayerGoals[m.ph[i]] || 0) + 1;
+          var hk = m.ph[i] + '|' + DATA.teams[m.h];
+          seasonGoals[hk] = (seasonGoals[hk] || 0) + 1;
         }
       }
       for(var j=0;j<m.xa.length;j++){
         if(Math.random() < m.xa[j]){
           ag++;
           awayPlayerGoals[m.pa[j]] = (awayPlayerGoals[m.pa[j]] || 0) + 1;
+          var ak = m.pa[j] + '|' + DATA.teams[m.a];
+          seasonGoals[ak] = (seasonGoals[ak] || 0) + 1;
         }
       }
 
@@ -4068,7 +4093,7 @@
 
     bigHauls.sort(function(a,b){ return b.goals - a.goals; });
 
-    return { table: rank(t), thrillers: thrillers, bigHauls: bigHauls, biggestWin: biggestWin, totalGoals: totalGoals };
+    return { table: rank(t), thrillers: thrillers, bigHauls: bigHauls, biggestWin: biggestWin, totalGoals: totalGoals, seasonGoals: seasonGoals };
   }
 
   function fmtScoreline(home, hg, away, ag){ return home + ' ' + hg + '–' + ag + ' ' + away; }
@@ -4110,25 +4135,41 @@
       bannerEl.innerHTML = '🏆 <strong>' + champion + '</strong> are champions this time — real season winners ' + real[0].team + ' finished ' + ordinal(sim.table.findIndex(function(r){return r.team===real[0].team;}) + 1) + ' here.';
     }
 
-    var stories = [];
-    if(sim.biggestWin){
-      stories.push('Biggest win: ' + fmtScoreline(sim.biggestWin.home, sim.biggestWin.hg, sim.biggestWin.away, sim.biggestWin.ag) + ' (' + sim.biggestWin.margin + '-goal margin).');
-    }
-    if(sim.bigHauls.length){
-      var top = sim.bigHauls.slice(0, 3).map(function(h){ return h.player + ' — ' + h.goals + ' vs. ' + h.opponent; });
-      stories.push((sim.bigHauls.length === 1 ? 'One big individual haul: ' : sim.bigHauls.length + ' big individual hauls, including: ') + top.join('; ') + '.');
-    } else {
-      stories.push('No hat-tricks this time — every game stayed relatively contained, player-wise.');
-    }
-    stories.push(sim.thrillers + ' game' + (sim.thrillers === 1 ? '' : 's') + ' finished with 7 or more total goals.');
-    stories.push('Total goals scored across the season: ' + sim.totalGoals + ' (the real season had ' + realGoalsTotal(real) + ').');
+    // Golden boot: top scorer(s) in this replay, tied scorers all named.
+    var topGoals = 0, topScorers = [];
+    Object.keys(sim.seasonGoals).forEach(function(k){
+      var g = sim.seasonGoals[k], parts = k.split('|');
+      if(g > topGoals){ topGoals = g; topScorers = []; }
+      if(g === topGoals) topScorers.push(parts[0] + ' (' + parts[1] + ')');
+    });
+
+    // Most different position to real life: biggest gap either way.
+    var bigMove = null;
+    sim.table.forEach(function(r){
+      var gap = Math.abs(realPos[r.team] - r.position);
+      if(!bigMove || gap > bigMove.gap) bigMove = { team: r.team, gap: gap, simPos: r.position, realPos: realPos[r.team] };
+    });
+
+    var expectedGoals = DATA.matches.reduce(function(sum, m){
+      return sum + m.xh.reduce(function(a, b){ return a + b; }, 0) + m.xa.reduce(function(a, b){ return a + b; }, 0);
+    }, 0);
 
     storyList.innerHTML = '';
-    stories.forEach(function(s){
+    function addStory(html, cls){
       var li = document.createElement('li');
-      li.textContent = s;
+      if(cls) li.className = cls;
+      li.innerHTML = html;
       storyList.appendChild(li);
-    });
+    }
+    addStory('<strong>Golden boot winner:</strong> ' + topScorers.join(', ') + ' — ' + topGoals + ' goals.');
+    addStory('<strong>Most different position to real life:</strong> ' + bigMove.team + ' finish '
+      + ordinal(bigMove.simPos) + ' here, compared with ' + ordinal(bigMove.realPos) + ' in reality'
+      + (bigMove.gap ? ' (' + bigMove.gap + ' places ' + (bigMove.simPos < bigMove.realPos ? 'higher' : 'lower') + ')' : '') + '.');
+    addStory('<strong>Total goals across the season:</strong> ' + sim.totalGoals.toLocaleString()
+      + ' (the real season had ' + realGoalsTotal(real).toLocaleString() + ').');
+    addStory('Why does this run high? Every shot in the season, added up by xG, is worth '
+      + Math.round(expectedGoals).toLocaleString() + ' expected goals, so that is what a replay averages. '
+      + 'The real season delivered ' + realGoalsTotal(real).toLocaleString() + ', fewer than the chances alone suggested.', 'sim-info');
 
     resultsEl.classList.add('visible');
   }
@@ -4147,6 +4188,7 @@
   runBtn.addEventListener('click', function(){
     if(!DATA) return;
     runBtn.disabled = true;
+    runBtn.classList.add('running');
     runBtn.textContent = 'Rolling ' + DATA.matches.reduce(function(s,m){ return s+m.xh.length+m.xa.length; }, 0).toLocaleString() + ' shots…';
     if(!real) real = realTable();
 
@@ -4157,7 +4199,8 @@
       var sim = simulateOnce();
       render(sim, real);
       runBtn.disabled = false;
-      runBtn.textContent = '↻ Simulate again';
+      runBtn.classList.remove('running');
+      runBtn.textContent = 'Simulate again';
     }, 350);
   });
 })();
