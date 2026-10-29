@@ -1035,7 +1035,18 @@
     // distance" (which is track height minus one viewport height) was
     // another source of unevenness, subtly misplacing each handoff point.
     var totalScrollable = rect.height - vh;
-    var scrolled = Math.max(0, Math.min(totalScrollable, 0 - rect.top));
+    var scrolledRaw = Math.min(totalScrollable, 0 - rect.top);
+    var scrolled = Math.max(0, scrolledRaw);
+    // The chart starts driving once the track's top is 45% down the screen
+    // (the guard above), but `scrolled` stays 0 until the track reaches the
+    // very top -- so for the first ~0.45*vh of scroll the chart sat frozen
+    // on 35w + 0d while 'return' scrolled up to its pinned position
+    // (reported: "too long to get the chart to animate"). The pin phase
+    // below now counts that approach as part of itself, so the day starts
+    // advancing the moment 'return' becomes the active step. Its end point
+    // (day 265 at the real release) is unchanged, so every later handoff
+    // stays aligned with its text.
+    var approach = vh*0.45;
     // #pin-wrap's full rendered height isn't how long 'return' actually
     // stays visually pinned for -- see calibrateScrubTiming()'s comment.
     // pinReleaseGap (the sticky child's own height) is the same padding
@@ -1052,7 +1063,7 @@
     var day;
     if(pinHeight > 0 && scrolled <= pinHeight){
       // 'return' is pinned here — the chart alone moves as the reader scrolls.
-      day = SCRUB_DAY_START + (scrolled/pinHeight) * (SCRUB_DAY_PIN_END - SCRUB_DAY_START);
+      day = SCRUB_DAY_START + ((scrolledRaw + approach)/(pinHeight + approach)) * (SCRUB_DAY_PIN_END - SCRUB_DAY_START);
     } else if(runupHeight > 0 && scrolled <= pinHeight+runupHeight){
       // pin has released — normal scroll the rest of the way to 38w0d.
       var pr = (scrolled-pinHeight)/runupHeight;

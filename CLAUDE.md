@@ -3045,3 +3045,19 @@ for the actual text and visual direction before drafting either.
   total goals, plus a small info box on why the total runs high. **The info
   box wording is Claude's draft** (computed live: season xG sums to 1,184
   vs. 1,045 real goals) -- the user's to rewrite.
+
+  **2026-10-29, later — due-date chart now animates as soon as "Now, back to
+  the due date" becomes the active step.** Reported as "too sticky... I
+  have to scroll for too long to get the chart to animate". Measured: the
+  scrub guard starts driving the chart when the track top is 45% down the
+  screen, but the pin phase's `scrolled` stayed 0 until the track reached
+  the header, so the chart sat on 35w + 0d for ~460px (desktop) / ~400px
+  (mobile) of scroll. The pin phase now counts that approach
+  (`scrolledRaw + 0.45*vh`) as part of itself; its end point (day 265 at the
+  real sticky release) is unchanged. After: label moves to 35w + 1d within
+  ~60px on both viewports; day monotonic through to 40w + 0d; the 38w
+  handoff matches the original code exactly (compared via git stash); zero
+  errors. Pace through the pin is slightly slower per day (~108 vs 88 px/day
+  on desktop) since the same 20 days now span a longer distance -- if the
+  pinned stretch still feels long, shortening it means changing the shared
+  px/day rate, which would break text/chart sync with the milestone steps.
