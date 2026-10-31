@@ -3092,3 +3092,16 @@ for the actual text and visual direction before drafting either.
   1920x1080, 1024x768, 800x900, 390x844: no horizontal scroll, zero page
   errors, log/season right edges match the track; screenshots of the
   mid-reveal game log, mid-season table and the simulator results.
+
+  **2026-10-31, later — per-pitch scores, a divider between the pitches,
+  and the four never-won cards un-greyed.** Desktop (>=861px): Real and
+  Simulated scores now sit directly above their own pitch (reusing the
+  existing synced `.pitch-single-score` elements via `column-reverse`,
+  rather than a second copy), the shared scoreboard is reduced to the two
+  crest+name sides, the redundant "Real"/"Simulated" pitch labels are
+  hidden, and a faint `#E5E5E5` rule separates the pitches. Card height
+  re-measured against the viewport (611/693 at 1280x800, 736/973 at
+  1920x1080); mobile/tablet untouched. `.roster-card.zero` lost its
+  `opacity:.65` and transparent background -- it keeps the dashed outline
+  as the only marker. Verified opacity computes to 1; screenshots of the
+  game card mid-reveal and the roster.

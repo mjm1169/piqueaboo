@@ -241,13 +241,33 @@
      capped by what the *viewport height* can hold, so the whole card
      (scoreboard + two pitches + legend) always fits under the header
      without the bottom pitch being cut off on a short laptop window.
-     270px is the card's non-pitch chrome (padding, scoreboard, labels,
-     gap, legend). Below 861px the track is a single stacked column and
+     300px is the card's non-pitch chrome (padding, crest row, two score
+     rows, gap, divider, legend). Below 861px the track is a single stacked column and
      the existing side-by-side/mobile rules apply instead. */
   @media (min-width:861px){
-    .pitch-pair{ flex-direction:column; gap:10px; }
+    /* Each pitch carries its own score *above* it (Real above the real
+       pitch, Simulated above the simulated one) instead of both living in
+       the shared scoreboard -- so which score belongs to which pitch is
+       never in doubt. The shared scoreboard shrinks to just the two
+       crest+name sides, and a faint rule separates the two pitches. */
+    .game-scoreboard{ justify-content:center; gap:28px; margin-bottom:12px; }
+    .scoreboard-side{ flex-direction:row; flex:none; gap:8px; }
+    .scoreboard-scores{ display:none; }
+    .pitch-pair{ flex-direction:column; gap:12px; }
+    .pitch-single{ display:flex; flex-direction:column-reverse; }
+    .pitch-single + .pitch-single{ border-top:1px solid #E5E5E5; padding-top:12px; }
+    .pitch-single-label{ display:none; }
+    .pitch-single-score{
+      display:flex; flex-direction:row; align-items:baseline; justify-content:center;
+      gap:8px; margin-bottom:6px;
+    }
+    .pitch-single-score .scoreboard-label{
+      font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+    }
+    .pitch-single-score .scoreboard-score{ font-size:20px; font-weight:500; font-variant-numeric:tabular-nums; }
+    .pitch-single-score .gr-score-sim{ color:var(--accent-step); }
     .pitch-chart{
-      max-width:min(100%, calc((100vh - var(--header-h, 0px) - 270px) * 0.75));
+      max-width:min(100%, calc((100vh - var(--header-h, 0px) - 300px) * 0.75));
       margin:0 auto;
     }
   }
@@ -522,11 +542,9 @@
     gap:6px;
     position:relative;
   }
-  .roster-card.zero{
-    background:none;
-    border:1px dashed #D8D8D8;
-    opacity:.65;
-  }
+  /* Same fill and full-strength text as every other card; only the dashed
+     outline marks the four clubs that never won it. */
+  .roster-card.zero{ border:1px dashed #D8D8D8; }
   .roster-crest{ width:36px; height:36px; object-fit:contain; }
   .roster-name{ font-size:13px; font-weight:500; }
   .roster-stat{ font-size:12px; color:var(--muted); font-weight:300; }
