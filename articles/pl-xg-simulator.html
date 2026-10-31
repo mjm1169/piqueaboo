@@ -12,7 +12,7 @@
 
   .wrap{ max-width:1100px; margin:0 auto; padding:0 24px; }
 
-  .intro{ padding:14vh 0 6vh 0; max-width:720px; }
+  .intro{ padding:14vh 0 6vh 0; max-width:720px; margin:0 auto; }
   .eyebrow{
     text-transform:uppercase; letter-spacing:.08em; font-size:12px;
     font-weight:500; color:var(--accent-step); margin-bottom:12px;
@@ -34,6 +34,13 @@
 
   section{ margin:0 0 10vh 0; }
   h2{ font-size:26px; }
+  /* Prose is one centred 720px column; only the widgets (scroll tracks,
+     treemap, roster) use the full 1100px wrap. Previously the intro was
+     720px *left*-aligned while every section's own paragraphs ran the
+     full 1052px, so text sat off-centre and line lengths jumped between
+     sections. */
+  section > h2, section > p{ max-width:720px; margin-left:auto; margin-right:auto; }
+  #simulator-section{ max-width:720px; margin-left:auto; margin-right:auto; }
 
   .stat-line{ font-size:15px; color:var(--muted); font-weight:300; margin:4px 0 0 0; }
   .stat-line strong{ color:var(--ink); font-weight:500; }
@@ -47,7 +54,7 @@
      maps directly to "how many items are revealed", no calibration. ---------- */
 
   .reveal-track{
-    display:grid; grid-template-columns: 42% 58%; gap:32px; align-items:start;
+    display:grid; grid-template-columns: minmax(0,42fr) minmax(0,58fr); gap:32px; align-items:start;
     margin-top:28px;
   }
   /* top:var(--header-h) -- not a bare offset -- matters here: the site
@@ -229,38 +236,19 @@
     .game-log tr.kickoff-row td{ padding:13px 5px; }
   }
 
-  /* On a big, tall window there's room to let the two pitch maps grow
-     well past the ~200px each they're capped to inside the reveal-track's
-     normal 42%-wide sticky column. Rather than inventing a new layout,
-     this reuses the same single-column stack the mobile breakpoint
-     already relies on (sticky visual on top spanning the full content
-     width, shot log below in normal flow) -- proven already to pin/
-     release correctly -- just gated the opposite way, on "plenty of
-     space" instead of "too little". Both min-width AND min-height are
-     required so a merely-wide-but-short laptop window (where stacking
-     would just mean more scrolling for no visual gain) stays on the
-     regular side-by-side layout; 1400x900 comfortably excludes ordinary
-     laptop screens while catching a real external monitor. Scoped to
-     #game-reroll-track specifically -- the season section's own sticky
-     table/results-feed pairing wasn't part of this ask. */
-  @media (min-width:1400px) and (min-height:900px){
-    #game-reroll-track{ grid-template-columns:1fr; gap:28px; }
-    /* Mirrors the mobile stacked layout's own z-index/opaque-background
-       treatment on the wrap itself (beyond .reveal-visual's own already-
-       unconditional background) -- needed once the sticky card and the
-       scrolling list share one column instead of sitting in two. */
-    /* top:var(--header-h) with no extra gap, unlike the base rule's
-       header-h + 20px: in this stacked layout the shot log scrolls up
-       *behind* the pitch card rather than beside it, and any clear space
-       between the site header and the top of the (opaque) sticky wrap is
-       a window the log's own rows are visible through on their way out --
-       a sliver of a row sitting above the pitch maps, reported directly.
-       Sticking the wrap flush under the header closes it; the breathing
-       room moves inside the wrap as padding-top instead, where it scrolls
-       nothing through. */
-    #game-reroll-track .reveal-sticky-wrap{
-      top:var(--header-h, 0px);
-      z-index:2; background:var(--canvas); padding:14px 0 14px 0;
+  /* Desktop: the two pitches stack vertically inside the sticky column
+     (Real above Simulated), each as wide as the column allows -- but
+     capped by what the *viewport height* can hold, so the whole card
+     (scoreboard + two pitches + legend) always fits under the header
+     without the bottom pitch being cut off on a short laptop window.
+     270px is the card's non-pitch chrome (padding, scoreboard, labels,
+     gap, legend). Below 861px the track is a single stacked column and
+     the existing side-by-side/mobile rules apply instead. */
+  @media (min-width:861px){
+    .pitch-pair{ flex-direction:column; gap:10px; }
+    .pitch-chart{
+      max-width:min(100%, calc((100vh - var(--header-h, 0px) - 270px) * 0.75));
+      margin:0 auto;
     }
   }
 
@@ -4167,9 +4155,8 @@
       + (bigMove.gap ? ' (' + bigMove.gap + ' places ' + (bigMove.simPos < bigMove.realPos ? 'higher' : 'lower') + ')' : '') + '.');
     addStory('<strong>Total goals across the season:</strong> ' + sim.totalGoals.toLocaleString()
       + ' (the real season had ' + realGoalsTotal(real).toLocaleString() + ').');
-    addStory('Why does this run high? Every shot in the season, added up by xG, is worth '
-      + Math.round(expectedGoals).toLocaleString() + ' expected goals, so that is what a replay averages. '
-      + 'The real season delivered ' + realGoalsTotal(real).toLocaleString() + ', fewer than the chances alone suggested.', 'sim-info');
+    addStory('This season has fewer real goals (' + realGoalsTotal(real).toLocaleString() + ') than the xG would suggest ('
+      + Math.round(expectedGoals).toLocaleString() + '). So your simulation likely produced more goals than the real season.', 'sim-info');
 
     resultsEl.classList.add('visible');
   }

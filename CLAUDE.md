@@ -3061,3 +3061,34 @@ for the actual text and visual direction before drafting either.
   on desktop) since the same 20 days now span a longer distance -- if the
   pinned stretch still feels long, shortening it means changing the shared
   px/day rate, which would break text/chart sync with the milestone steps.
+
+  **2026-10-31, done — replay info-box copy, vertically stacked pitches on
+  desktop, and the desktop centring/overflow fix.** **Copy**: the user's
+  own wording for the "why does this run high" box ("This season has fewer
+  real goals (1,045) than the xG would suggest (1,184). So your simulation
+  likely produced more goals than the real season."), both numbers live.
+  Note 1,045 is match-level and includes ~41 own goals the shot data (and
+  so the simulator) can't produce; like-for-like is 1,004 -- offered, not
+  changed. **Pitches**: stacked Real-above-Simulated at >=861px, each
+  sized by `min(100%, (100vh - header - 270px) * 0.75)` so the whole card
+  fits under the header on any window height (cardH 624/693 available at
+  1280x800, 719/973 at 1920x1080). The old `min-width:1400 and
+  min-height:900` full-width stacked-track rule is deleted -- it existed
+  only because side-by-side pitches were tiny in the 42% column; stacked
+  pitches fill that column, so every desktop width now gets the same
+  sticky-left/log-right layout. **Centring, assessed before fixing, two
+  real causes**: (1) `.reveal-track` used `grid-template-columns:42% 58%`
+  plus a 32px gap = 100% + 32px, so the right column (shot log, season
+  results feed) overflowed its container by 32px on every desktop width --
+  log right edge 1198 vs. 1166 for everything else. Now `minmax(0,42fr)
+  minmax(0,58fr)`; log edge == track edge at all widths. (2) the intro
+  was a 720px *left*-aligned column while every section's own h2/p ran the
+  full 1052px and the simulator block was left-aligned too, so prose sat
+  off-centre and line length jumped between sections. Prose (intro,
+  `section > h2/p`, simulator section) is now one centred 720px column;
+  widgets keep the 1100px wrap. Left alone: the site header's own 900px
+  container (shared by every page), so its logo still sits inboard of the
+  1100px widgets by design. Verified at 1280x800, 1440x900, 1600x1000,
+  1920x1080, 1024x768, 800x900, 390x844: no horizontal scroll, zero page
+  errors, log/season right edges match the track; screenshots of the
+  mid-reveal game log, mid-season table and the simulator results.
