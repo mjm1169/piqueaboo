@@ -3120,3 +3120,11 @@ for the actual text and visual direction before drafting either.
   the first sample where the table lets go the sentence top is within one
   40px scroll step of the table top (125 vs 126, 89 vs 90, 73 vs 73) and
   they move in lockstep afterwards; zero page errors.
+
+  **2026-10-31, later still — the four never-won cards now match every
+  other card exactly.** Removed the last `.roster-card.zero` rule (the
+  dashed outline). The class stays on the markup as a hook but has no
+  styling; computed border, background, opacity, radius and padding verified
+  identical to a normal card. Side effect: without the 1px border the
+  "Never won it in 1,000,000 tries" line wraps with "tries" alone on the
+  second line at desktop width -- cosmetic, left as is.
