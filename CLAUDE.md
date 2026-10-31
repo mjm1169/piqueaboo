@@ -3105,3 +3105,18 @@ for the actual text and visual direction before drafting either.
   `opacity:.65` and transparent background -- it keeps the dashed outline
   as the only marker. Verified opacity computes to 1; screenshots of the
   game card mid-reveal and the roster.
+
+  **2026-10-31, later still — the season's closing sentence now scrolls up
+  with the results, and the sentence + table leave together.** Reverses the
+  2026-10-29 sticky-sentence approach per the user's ask. The sentence is
+  ordinary flow content again; `#season-exit-placeholder` is sized in JS
+  (`sizeExitBox`, via a ResizeObserver on the sticky wrap) to exactly the
+  sticky table's own height. Because a sticky child releases when its
+  container's bottom reaches its own bottom, a last-in-column box of that
+  height puts the sentence's top at the table's top at the instant of
+  release -- so the table is held until the sentence reaches the top, then
+  both scroll away into the next section. Measured on 1280x800, 1600x1000
+  and 390x844: box height == wrap height (657/657, 657/657, 743/743); at
+  the first sample where the table lets go the sentence top is within one
+  40px scroll step of the table top (125 vs 126, 89 vs 90, 73 vs 73) and
+  they move in lockstep afterwards; zero page errors.

@@ -421,18 +421,17 @@
   .season-intro-placeholder{
     display:flex; align-items:center; color:var(--muted); font-size:15px;
   }
-  /* Tall box with the sentence itself sticky inside it: the table is
-     held by the list column's height, and the sentence pins alongside it
-     for the same stretch, so the final sentence and the final table are
-     on screen together for a long scroll (box height minus one screen)
-     rather than the sentence sliding past while the table is still held. */
+  /* The closing sentence scrolls up with the gameweek results like any
+     other item. Its box is sized (in JS, to the sticky table's own
+     height) so that the moment the sentence reaches the top of the screen
+     is exactly the moment the table's sticky hold ends -- from there the
+     sentence and the table scroll away together into the next section.
+     min-height here is only the pre-JS fallback. */
   .season-exit-placeholder{
-    min-height:160vh; color:var(--muted);
+    min-height:60vh; color:var(--muted);
     font-size:15px; opacity:0; transition:opacity .3s ease;
   }
-  .season-exit-placeholder p{
-    position:sticky; top:calc(var(--header-h, 0px) + 30vh); margin:0;
-  }
+  .season-exit-placeholder p{ margin:0; }
   .season-exit-placeholder.revealed{ opacity:1; }
 
   /* ---------- treemap ---------- */
@@ -1736,6 +1735,18 @@
         tableBody.innerHTML = sorted.map(function(r){ return rowHtml(r, championTeam, compact); }).join('');
       }
       renderTable(zeroTable, null);
+
+      // A sticky child releases once its container's bottom edge reaches
+      // the child's own bottom edge. The exit box is the last thing in the
+      // container, so giving it the sticky wrap's own height puts its top
+      // edge (where the sentence starts) exactly at the wrap's top edge at
+      // that moment: sentence at the top of the screen == table lets go.
+      var stickyWrap = track.querySelector('.reveal-sticky-wrap');
+      function sizeExitBox(){
+        exitPlaceholderEl.style.minHeight = Math.round(stickyWrap.getBoundingClientRect().height) + 'px';
+      }
+      sizeExitBox();
+      if(window.ResizeObserver) new ResizeObserver(sizeExitBox).observe(stickyWrap);
       compactQuery.addEventListener('change', function(){ renderTable(lastRows, lastChampion); });
 
       padUntilPinnedIsBlank(track, document.getElementById('season-intro-placeholder'));
