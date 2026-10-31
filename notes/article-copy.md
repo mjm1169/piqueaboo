@@ -163,7 +163,7 @@ The same {{total_shots}} shots in the season, each with the same chance of going
 A million alternate Premier League realities
 
 [pl.treemap.p1]
-That was one season. It turned out very differently, but still, a 'big' team won it. So let's go a step further, or rather, 999,999 step further.
+That was one season. It turned out very differently, but still, a 'big' team won it. So let's go a step further, or rather, 999,999 steps further.
 
 [pl.treemap.p2]
 Many simulated shots, games and seasons later, here is how the league ended up all 1,000,000 times.
