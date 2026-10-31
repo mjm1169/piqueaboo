@@ -60,7 +60,7 @@ A quick note on the data
 Data is taken from Understat.
 
 [pl.intro.datainfo.li2]
-Shots are treated as independent of each other. In real life, game-management would come into play, but for a bit of fun such as this we will suspend disbelief.
+Shots are treated as independent of each other. In real life, game management would come into play, but for a bit of fun such as this we will suspend disbelief.
 
 [pl.intro.datainfo.li3]
 Own goals don't get an xG in Understat, sparing the blushes of millions of players in this article.
@@ -106,16 +106,16 @@ Two good chances for both sides. In our simulation, Tavernier puts Bournemouth 0
 Gakpo converts a 0.10 xG chance to double Liverpool's real-life advantage.
 
 [pl.game.comment.63-Antoine Semenyo]
-Semenyo scores a high (0.43 xG) probability chance in both real-life and the simulation.
+Semenyo scores a high-probability (0.43 xG) chance in both real life and the simulation.
 
 [pl.game.comment.75-Antoine Semenyo]
-And again! Not a great chance, but Semenyo equalises in real-life, and completes a hat-trick in our re-run.
+And again! Not a great chance, but Semenyo equalises in real life, and completes a hat-trick in our re-run.
 
 [pl.game.comment.87-Cody Gakpo]
 Gakpo grabs a simulated consolation goal.
 
 [pl.game.comment.93-Mohamed Salah]
-A grandstand finish in real-life. Liverpool score two late on through Chiesa and Salah to walk out 4-2 winners.
+A grandstand finish in real life. Liverpool score two late on through Chiesa and Salah to walk out 4-2 winners.
 
 ### Closing summary
 
@@ -138,7 +138,7 @@ Let's go a step further and replay every shot from every game for the entire sea
 After 5 games, there are a few surprises at the top of the table with Bournemouth having a 100% record and Leeds in the Champions League spots.
 
 [pl.season.midskip]
-A further {{n_gameweeks}} gameweeks pass, taking us to the business end of the season. As the season nears a close, Chelsea move into top spot....
+A further {{n_gameweeks}} gameweeks pass, taking us to the business end of the season. As the season nears a close, Chelsea move into top spot...
 
 *Currently reads: 28 gameweeks. This is the block the table pauses on while the skipped middle of the season scrolls past.*
 
@@ -151,7 +151,7 @@ A further {{n_gameweeks}} gameweeks pass, taking us to the business end of the s
 ...and after a battle with Manchester City, win the league on the last day of the season, despite losing 4-1 away to Sunderland.
 
 [pl.season.summary]
-The same {{total_shots}} shots in the season, each with the same chance of going in (depending how much faith you have in xG) but a very different result. This is the nature of a low-scoring sport like football, games can pivot on just a few things playing out differently. Of the {{n_matches}} games played in the season {{same_scoreline_pct}}% had the same exact scoreline and {{same_result_pct}}% had the same W/D/L outcome.
+The same {{total_shots}} shots in the season, each with the same chance of going in (depending on how much faith you have in xG) but a very different result. This is the nature of a low-scoring sport like football, where games can pivot on just a few things playing out differently. Of the {{n_matches}} games played in the season, {{same_scoreline_pct}}% had the exact same scoreline and {{same_result_pct}}% had the same W/D/L outcome.
 
 *Currently reads: 9,524 shots; 380 games; 10.5% same scoreline; 48.9% same result.*
 
@@ -244,37 +244,37 @@ possessive that doesn't double the "s" — "Wolves' best-ever finish", not
 ## Club highlight cards — the write-ups
 
 [pl.note.Arsenal.before]
-Arsenal won the most titles, {{arsenal_titles}}. One was this season where they strung together a remarkable {{arsenal_streak}} wins in a row
+Arsenal won the most titles, {{arsenal_titles}}. One was this season where they strung together a remarkable {{arsenal_streak}} wins in a row.
 
 *Currently reads: 716,922 and 27. Sits above the full final table and Arsenal's 38-game campaign (sim #833,296: 100pts, 32W/4D/2L, 27 wins in a row from games 6 to 32). Your wording, with "the strung" corrected to "they strung". The old two-paragraph final-day story is retired, so there is no "after" paragraph any more.*
 
 [pl.note.Manchester City]
-{{player}} won the Golden Boot (most league goals in the season) award in real-life with {{real_goals}} for the season. In this simulation, City ran out winners thanks to {{sim_goals}} goals from the Norwegian. He had his shooting boots amassing {{hat_tricks}} hat-tricks (including {{four_goal}} four-goal haul and {{five_goal}} five-goal matches). With a shot conversion rate of {{conversion_pct}}% he exceeded his xG by {{xg_excess}}.
+{{player}} won the Golden Boot (most league goals in the season) award in real life with {{real_goals}} goals. In this simulation, City ran out winners thanks to {{sim_goals}} goals from the Norwegian. He had his shooting boots on, amassing {{hat_tricks}} hat-tricks (including {{four_goal}} four-goal haul and {{five_goal}} five-goal matches). With a shot conversion rate of {{conversion_pct}}%, he exceeded his xG by {{xg_excess}}.
 
-*Currently reads: Erling Haaland / 27 real goals / 50 sim goals / 7 hat-tricks / 1 four-goal / 2 five-goal / 40.0% / +21.18. The plurals on "hat-tricks", "haul" and "matches" adjust themselves to the numbers.*
+*Currently reads: Erling Haaland / 27 real goals / 50 sim goals / 7 hat-tricks / 1 four-goal / 2 five-goal / 40.0% / +21.18. The counts are spelled out as words from one to nine ("seven hat-tricks"), and the plurals on "hat-tricks", "haul" and "matches" adjust themselves to the numbers.*
 
 [pl.note.Manchester City.footnote]
-Footnote: interestingly, {{team}} suffered a shock relegation in one of our 1 million simulations, despite having better shot quality in most of their games. [See it in the treemap →]
+Footnote: interestingly, {{team}} suffered a shock relegation in one of our million simulations, despite having better shot quality in most of their games. [See it in the treemap →]
 
 *The bracketed part is a clickable link that zooms the treemap to that exact simulation.*
 
 [pl.note.Manchester United]
-Though Man United won {{manutd_pct}}% of the simulations, they did get relegated in {{manutd_relegations}} replays, including this 19th placed finish. Despite winning 4 of their last five games, 39pts wasn't enough to save them
+Though Manchester United won {{manutd_pct}}% of the simulations, they did get relegated in {{manutd_relegations}} replays, including this 19th-placed finish. Despite winning four of their last five games, they finished on 39 points, which wasn't enough to save them.
 
 *Currently reads: 3.4% / 70 replays.*
 
 [pl.note.Liverpool]
-Liverpool won the title in {{liverpool_pct}}% of simulations, including this particularly tight one. It was a three-way tie at the top. Unable to be separated from Man City on goal difference, head-to-head record was used to split them, giving Liverpool the title.
+Liverpool won the title in {{liverpool_pct}}% of simulations, including this particularly tight one. It was a three-way tie at the top. Liverpool and Manchester City could not be separated on goal difference, so head-to-head record was used to split them, giving Liverpool the title.
 
 *Currently reads: 0.9%.*
 
 [pl.note.Chelsea]
-Chelsea managed over 3,000 league wins. Perhaps the closest was this one. A three-way tie on points with Man City and Man United, and the same goal difference and goals scored as City, the season went to head-to-head record. Since this was tied on aggregate, away goals was used to split them, handing Chelsea a title.
+Chelsea managed over 3,000 league wins. Perhaps the closest was this one. Chelsea finished in a three-way tie on points with Manchester City and Manchester United, and had the same goal difference and goals scored as City, so the season went to head-to-head record. Since that was also tied on aggregate, away goals were used to split them, handing Chelsea the title.
 
 Footnote: there were simulations closer than this. Two of Arsenals simulated win came as a result of a virtual coin toss. Tied on point, goal difference, goals for, and with unsplitable on head-to-head, they were split randomly. In real life, a play-off would have determined the winner. See it in the treemap.
 
 [pl.note.Bournemouth]
-{{team}} won {{title_odds_pct}}% of our simulations (more than perhaps you'd think). One surprise was this simulation, where they didn't win the title but {{player}} took a surprise Golden Boot, with a {{goals}}-goal haul for the season, {{diff}} more than he managed to amass in real-life and outperforming his xG by {{xg_excess}}.
+{{team}} won {{title_odds_pct}}% of our simulations (more than perhaps you'd think). One surprise was this simulation, where they didn't win the title but {{player}} took an unlikely Golden Boot, with a {{goals}}-goal haul for the season, {{diff}} more than he managed to amass in real life, while outperforming his xG by {{xg_excess}}.
 
 *Currently reads: Bournemouth / 0.8% / Evanilson / 24 goals / 18 more / +12.18.*
 
@@ -282,7 +282,7 @@ Footnote: there were simulations closer than this. Two of Arsenals simulated win
 Everton came out on top 20 times. They won this season by 4 points, despite hitting a rocky patch mid-campaign.
 
 [pl.note.Chelsea.footnote]
-Footnote: there were simulations closer than this. Two of Arsenal's simulated wins came as a result of a virtual coin toss. Tied on points, goal difference, goals for, and unsplittable on head-to-head, they were split randomly. In real life, a play-off would have determined the winner. [See it in the treemap →]
+Footnote: there were simulations closer than this. Two of Arsenal's simulated wins came as a result of a virtual coin toss. Tied on points, goal difference, goals for, and inseparable on head-to-head, they were split randomly. In real life, a play-off would have determined the winner. [See it in the treemap →]
 
 *Your wording, with four plain typos fixed in transcription: "Arsenals" →
 "Arsenal's", "simulated win" → "simulated wins", "Tied on point" → "Tied on
@@ -301,50 +301,50 @@ regenerated.*
 Brighton may not have won many of our simulations but they won this iteration comfortably after a remarkable string of results in the first half of the season.
 
 [pl.note.Brentford]
-Brentford won 12 in a row after losing their opener in the season, amassing 91pts in this one of their 0.1% of titles.
+Brentford won 12 in a row after losing their opener of the season, amassing 91 points in this, one of their 0.1% of titles.
 
 [pl.note.Leeds]
-Leeds' most remarkable simulated league win came when they managed to clinch the title with only 70pts and a negative goal difference. A bunched top five helped them as well as winning by narrow margins. Their average margin of victory was {{avg_win_margin}} goals while their average margin of defeat was {{avg_loss_margin}}.
+Leeds' most remarkable simulated league win came when they managed to clinch the title with only 70 points and a negative goal difference. A bunched top five helped, as did winning by narrow margins. Their average margin of victory was {{avg_win_margin}} goals while their average margin of defeat was {{avg_loss_margin}}.
 
 *Currently reads: 1.4 goals / 3.2.*
 
 [pl.note.Newcastle United]
-Another away goals rule win here. This time Newcastle edging out Liverpool.
+Another away-goals-rule win here. This time Newcastle edged out Liverpool.
 
 [pl.note.Tottenham]
-Tottenham danced dangerously close to relegation in real-life but ran out as winners on {{tottenham_titles}} occasions here. In real life their GD was {{real_gd}}, against an xGD of {{expected_gd}}.
+Tottenham danced dangerously close to relegation in real life but ran out as winners on {{tottenham_titles}} occasions here. In real life their GD was {{real_gd}}, against an xGD of {{expected_gd}}.
 
 *Currently reads: 60 occasions / GD -9 / xGD -8.2.*
 
 [pl.note.Fulham]
-Fulham took 3 titles. Although they suffered 10 defeats, they took the title from Arsenal here.
+Fulham won three titles. Although they suffered 10 defeats, they took the title from Arsenal here.
 
 [pl.note.Nottingham Forest]
 A true one in a million. Nottingham Forest took this close title race with just 70 points.
 
 [pl.note.Crystal Palace]
-{{palace_titles}} of our simulations but the highlight here was in a season Manchester City won. At home to Bournemouth, Mateta notched up the biggest individual haul across the 380,000,000 games that were played out. He scored {{mateta_goals}} from {{mateta_shots}} shots.
+Crystal Palace won {{palace_titles}} of our simulations, but the highlight here was in a season Manchester City won. At home to Bournemouth, Mateta notched up the biggest individual haul across the 380,000,000 games that were played out. He scored {{mateta_goals}} from {{mateta_shots}} shots.
 
 *Currently reads: 414 / 10 goals / 11 shots. This card also lists every shot in the match underneath.*
 
 [pl.note.Aston Villa]
-{{villa_titles}} of the million simulations, but their highlight was this win over eventual champions Arsenal. A 15-goal thriller: Villa led 4-2 at half-time, only for Arsenal to level it at 4-4 through a quickfire Trossard brace, before Villa's late surge — six goals in the final half hour — saw them romp out 10-5 winners.
+Aston Villa won {{villa_titles}} of the million simulations, but their highlight was this win over eventual champions Arsenal. A 15-goal thriller: Villa led 4-2 at half-time, only for Arsenal to level it at 4-4 through a quickfire Trossard brace, before Villa's late surge — six goals in the final half hour — saw them romp out 10-5 winners.
 
 *Currently reads: 268. Worth knowing: your original note had Villa 5-3 up at half-time before Trossard's brace. I checked this sim's own minute-by-minute scorers and it was 4-2 at the break, with Trossard levelling at 4-4 — so I wrote the real numbers in. Happy to word it differently.*
 
 [pl.note.Burnley]
-With an xGD of {{burnley_xgd}}, Burnley were never going to stand much of a chance. The best they did was a 9th placed finish.
+With an xGD of {{burnley_xgd}}, Burnley were never going to stand much of a chance. The best they did was a 9th-placed finish.
 
 *Currently reads: -46.8.*
 
 [pl.note.Sunderland]
-Sunderland had a surprisingly good real-life season on their return to the Premier League. Their best simulated finish was when they finished runners up to Manchester City with 74pts (which would have been enough to win in other simulated seasons).
+Sunderland had a surprisingly good real-life season on their return to the Premier League. Their best simulated finish came as runners-up to Manchester City with 74 points (which would have been enough to win in other simulated seasons).
 
 [pl.note.West Ham]
-West Ham managed a 2nd place finish here as they were beaten to the title by Arsenal, returning a very respectable 76pts.
+West Ham managed a 2nd-place finish here as they were beaten to the title by Arsenal, returning a very respectable 76 points.
 
 [pl.note.Wolverhampton Wanderers]
-Wolves finished in the Champions League places in this season with an even goal difference (real-life {{wolves_gd}}; expected {{wolves_xgd}}).
+Wolves finished in the Champions League places this season with an even goal difference (real life {{wolves_gd}}; expected {{wolves_xgd}}).
 
 *Currently reads: -41 / -30.3.*
 
@@ -368,10 +368,10 @@ Worst-ever finish
 Shock relegation
 
 [pl.tag.golden_boot]
-Highest-scoring golden boot
+Highest-scoring Golden Boot
 
 [pl.tag.unexpected_golden_boot]
-Most unexpected golden boot
+Most unexpected Golden Boot
 
 [pl.tag.closest_final_week]
 Closest race into the final day
@@ -405,10 +405,10 @@ A rare title for {{team}}
 A tiebreak title for {{team}}
 
 [pl.tagline.golden_boot]
-A golden boot for {{team}}
+A Golden Boot for {{team}}
 
 [pl.tagline.unexpected_golden_boot]
-A surprise golden boot for {{team}}
+A surprise Golden Boot for {{team}}
 
 [pl.tagline.worst_finish]
 A relegation for {{team}}
@@ -476,7 +476,7 @@ What is a due date?
 prose is 3.0 minutes at ~230wpm — so I left the number alone.*
 
 [dd.aboutdata]
-About the data. The curve shown is an approximation of the probability of spontaneous labour with a few tweaks and simplifying assumptions made. It's roughly the right shape and good enough for a bit of fun, but obviously not clinical advice.
+About the data. The curve shown is an approximation of the probability of spontaneous labour, with a few tweaks and simplifying assumptions made. It's roughly the right shape and good enough for a bit of fun, but obviously not clinical advice.
 
 [dd.intro.p]
 I didn't know either. But if you think about it for a moment, you'll probably land close to the real answer.
@@ -492,7 +492,7 @@ The due date is a median
 A due date is the date on which the baby is 50% likely to have been born, on or before. In other words, it's the median of the distribution of when spontaneous labour begins.
 
 [dd.step.intro.p2]
-The curve on the left shows that distribution. The higher the line is, the greater chance that the baby will be born on that day.
+The curve shows that distribution. The higher the line is, the greater the chance that the baby will be born on that day.
 
 [dd.step.regions]
 We can visualise the due date using this probability curve. The blue area on the left represents the 50% chance of the baby arriving on or before the due date, and the pink area on the right is the other 50% (the chance of it arriving after the due date).
@@ -517,7 +517,7 @@ Before we go further, let's talk about conditional probability. That's maths-spe
 Imagine a die has been rolled. You haven't seen the result yet, but want to know the median (or due date) of the die.
 
 [dd.step.dice-half]
-Each face is equally likely, so there's a 50% chance the roll was at least 4 and, consequently a 50% chance it wasn't.
+Each face is equally likely, so there's a 50% chance the roll was at least 4 and, consequently, a 50% chance it wasn't.
 
 [dd.step.dice-condition]
 Now imagine you're given new information. Someone tells you the roll wasn't a 1 or a 2. Now we can rule those two options out entirely.

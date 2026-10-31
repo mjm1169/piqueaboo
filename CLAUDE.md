@@ -3128,3 +3128,31 @@ for the actual text and visual direction before drafting either.
   identical to a normal card. Side effect: without the 1px border the
   "Never won it in 1,000,000 tries" line wraps with "tries" alone on the
   second line at desktop width -- cosmetic, left as is.
+
+  **2026-10-31, later still — the SPAG scan applied in full (user: "agree
+  with all the grammar stuff, correct it all").** Both articles plus
+  `notes/article-copy.md` kept in sync. **Errors**: missing full stops
+  (Arsenal, Man United); Palace/Villa notes now open with the club ("Crystal
+  Palace won 414 of our simulations, but…"); Man United, Liverpool, Chelsea,
+  Brentford, Newcastle, Leeds, Haaland and Bournemouth sentences rewritten
+  to fix dangling modifiers/subject-verb/parallelism (e.g. "away goals
+  were", "handing Chelsea the title", "Newcastle edged out Liverpool");
+  season summary ("depending on", "where games can pivot", comma, "exact
+  same"); due-date ("the greater the chance", "consequently,", a comma
+  before "with a few tweaks"). **Consistency**: "real life" as a noun
+  (kept "real-life" as an adjective); 19th-placed / 9th-placed / 2nd-place /
+  runners-up; "pts" -> "points"; Manchester United/City in full; "Golden
+  Boot" capitalised everywhere (pills, tag phrases, titles, simulator
+  panel); one-to-nine spelled out via a new `numWord()` helper so interpolated
+  counts (Haaland's hat-tricks, Fulham's titles, Everton's margin) stay
+  live; true minus signs in prose via `minusSign()` (tables untouched);
+  "spot...." -> "spot..."; "unsplittable" -> "inseparable"; "game
+  management"; "Surprise" repetition in Bournemouth's note ("an unlikely
+  Golden Boot"); due-date prose now curly apostrophes/quotes with the full
+  stop outside "today". **Wording**: "Most different position to real life"
+  -> "Biggest difference from real life"; due-date's "The curve on the
+  left" -> "The curve" (wrong on mobile, where the chart is a top band).
+  **Deliberately left**: "Data is taken from Understat", the "neither/
+  nor" triple in the due-date outro, "Leeds'" possessive. Verified by
+  re-rendering all 20 card modals and grepping for every old phrase (none
+  remain), full-page sweeps of both articles at 1280 and 390 (zero errors).
